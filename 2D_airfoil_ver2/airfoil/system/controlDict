@@ -1,0 +1,76 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5                                     |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     simpleFoam;
+startFrom       startTime;
+startTime       0;
+stopAt          endTime;
+endTime         2000;
+deltaT          1;
+writeControl    timeStep;
+writeInterval   2000;
+purgeWrite      0;
+writeFormat     binary;
+writePrecision  6;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+runTimeModifiable true;
+
+functions
+{
+	#includeFunc residuals
+
+    forceCoeffs
+    {
+        type            forceCoeffs;
+        libs            (forces);
+        writeControl    timeStep;
+        writeinterval   1;
+        log             true;
+
+        patches         (aerofoil);
+        p               p;
+        U               U;
+        rho             rhoInf;
+        rhoInf          1.0;
+        CofR            (0.25 0 0.5);
+        liftDir         (-0.0980171403295606 0.9951847266721969 0);
+        dragDir         (0.9951847266721969 0.0980171403295606 0);
+        pitchAxis       (0 0 1);
+        magUInf         10.0;
+        lRef            1;
+        Aref            1;
+    }
+
+    pressure
+    {
+        type            pressure;
+        libs            (fieldFunctionObjects);
+        writeControl    onEnd;
+        mode            staticCoeff;
+
+        p               p;
+        U               U;
+        rho             rhoInf;
+        rhoInf          1.0;    
+        pInf            0.0;
+        UInf            (9.95184726672197 0.980171403295606 0);
+    }
+}
+
+// ************************************************************************* //
