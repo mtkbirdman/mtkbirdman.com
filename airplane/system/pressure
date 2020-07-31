@@ -1,0 +1,27 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2006                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+
+pressure1
+{
+    type            pressure;
+    libs            ("libfieldFunctionObjects.so");
+    writeControl    onEnd;
+    mode            staticCoeff;
+    //calcTotal       false;  //v1812
+    //calcCoeff       true;   //v1812
+
+    p               p;
+    U               U;
+    rho             rhoInf;
+    rhoInf          1.0;    
+    pInf            0.0;
+    UInf            (9.6 0.0 0.0);
+}
+
+
+// ************************************************************************* //
