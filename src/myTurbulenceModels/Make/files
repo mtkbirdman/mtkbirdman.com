@@ -1,0 +1,2 @@
+AJL2005/AJL2005.C
+LIB = $(FOAM_USER_LIBBIN)/libmyTurbulenceModels

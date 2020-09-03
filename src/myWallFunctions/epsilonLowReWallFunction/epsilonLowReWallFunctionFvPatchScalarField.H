@@ -1,0 +1,385 @@
+/*---------------------------------------------------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     |
+    \\  /    A nd           | www.openfoam.com
+     \\/     M anipulation  |
+-------------------------------------------------------------------------------
+    Copyright (C) 2011-2016, 2019 OpenFOAM Foundation
+    Copyright (C) 2019-2020 OpenCFD Ltd.
+-------------------------------------------------------------------------------
+License
+    This file is part of OpenFOAM.
+
+    OpenFOAM is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+
+Class
+    Foam::epsilonLowReWallFunctionFvPatchScalarField
+
+Group
+    grpWallFunctions
+
+Description
+    This boundary condition provides a wall constraint on the turbulent kinetic
+    energy dissipation rate, i.e. \c epsilon, and the turbulent kinetic
+    energy production contribution, i.e. \c G, for low- and high-Reynolds
+    number turbulence models.
+
+    Reference:
+    \verbatim
+        Binomial blending of the viscous and inertial sublayers (tag:ME):
+            Menter, F., & Esch, T. (2001).
+            Elements of industrial heat transfer prediction.
+            In Proceedings of the 16th Brazilian Congress of Mechanical
+            Engineering (COBEM), November 2001. vol. 20, p. 117-127.
+
+        Exponential/Max blending of the viscous and inertial sublayers (tag:PH):
+            Popovac, M., & Hanjalić, K. (2007).
+            Compound wall treatment for RANS computation of complex
+            turbulent flows and heat transfer.
+            Flow, turbulence and combustion, 78(2), 177-202.
+            DOI:10.1007/s10494-006-9067-x
+    \endverbatim
+
+Usage
+    Example of the boundary condition specification:
+    \verbatim
+    <patchName>
+    {
+        // Mandatory entries (unmodifiable)
+        type             epsilonWallFunction;
+
+        // Optional entries (unmodifiable)
+        lowReCorrection  false;
+        blending         stepwise;
+        n                2.0;
+
+        // Optional (inherited) entries
+        ...
+    }
+    \endverbatim
+
+    where the entries mean:
+    \table
+      Property  | Description                       | Type | Req'd  | Dflt
+      type      | Type name: epsilonWallFunction    | word | yes    | -
+      lowReCorrection | Flag: apply low-Re correction | bool |  no  | false
+      blending  | Viscous/inertial sublayer blending method <!--
+                                                --> | word |  no    | stepwise
+      n         | Binomial blending exponent        | scalar | no   | 2.0
+    \endtable
+
+    The inherited entries are elaborated in:
+      - \link fixedValueFvPatchField.H \endlink
+      - \link nutWallFunctionFvPatchScalarField.H \endlink
+
+    Options for the \c blending entry:
+    \verbatim
+      stepwise    | Stepwise switch (discontinuous)
+      max         | Maximum value switch (discontinuous)
+      binomial    | Binomial blending (smooth)
+      exponential | Exponential blending (smooth)
+    \endverbatim
+
+    wherein \c epsilon predictions for the viscous and inertial sublayers are
+    blended according to the following expressions:
+
+    - \c stepwise (default):
+
+    \f[
+        \epsilon = \epsilon_{vis} \qquad if \quad y^+ < y^+_{lam}
+    \f]
+    \f[
+        \epsilon = \epsilon_{log} \qquad if \quad y^+ >= y^+_{lam}
+    \f]
+
+    where
+    \vartable
+      \epsilon       | \f$\epsilon\f$ at \f$y^+\f$
+      \epsilon_{vis} | \f$\epsilon\f$ computed by viscous subl. assumptions
+      \epsilon_{log} | \f$\epsilon\f$ computed by inertial subl. assumptions
+      y^+    | estimated wall-normal height of the cell centre in wall units
+      y^+_{lam} | estimated intersection of the viscous and inertial sublayers
+    \endvartable
+
+
+    - \c max (PH:Eq. 27):
+
+    \f[
+        \epsilon = max(\epsilon_{vis}, \epsilon_{log})
+    \f]
+
+
+    - \c binomial (ME:Eqs. 15-16):
+
+    \f[
+        \epsilon = ((\epsilon_{vis})^n + (\epsilon_{log})^n)^{1/n}
+    \f]
+    where
+    \vartable
+      n               | Binomial blending exponent
+    \endvartable
+
+
+    - \c exponential (PH:Eq. 32):
+
+    \f[
+        \epsilon = \epsilon_{vis} \exp[-\Gamma] +\epsilon_{log} \exp[-1/\Gamma]
+    \f]
+    where (PH:p. 193)
+    \vartable
+      \Gamma_\epsilon | \f$\Gamma = 0.001 (y^+)^4 / (1.0 + y^+)\f$
+      \Gamma_G        | \f$\Gamma = 0.01  (y^+)^4 / (1.0 + 5.0 y^+)\f$
+      \Gamma_\epsilon | Blending expression for \f$\epsilon\f$
+      \Gamma_G        | Blending expression for \f$G\f$
+    \endvartable
+
+
+    \c G predictions for the viscous and inertial sublayers are blended
+    in a stepwise manner, and \c G below \f$y^+_{lam}\f$ (i.e. in the viscous
+    sublayer) is presumed to be zero.
+
+Note
+  - The coefficients \c Cmu, \c kappa, and \c E are obtained from
+    the specified \c nutWallFunction in order to ensure that each patch
+    possesses the same set of values for these coefficients.
+  - \c lowReCorrection operates with only \c stepwise blending treatment to
+    ensure the backward compatibility.
+  - If \c lowReCorrection is \c on, \c stepwise blending treatment is fully
+    active.
+  - If \c lowReCorrection is \c off, only the inertial sublayer prediction
+    is used in the wall function, hence high-Re mode operation.
+
+See also
+    - Foam::omegaWallFunctionFvPatchScalarField
+
+SourceFiles
+    epsilonLowReWallFunctionFvPatchScalarField.C
+
+\*---------------------------------------------------------------------------*/
+
+#ifndef epsilonLowReWallFunctionFvPatchScalarField_H
+#define epsilonLowReWallFunctionFvPatchScalarField_H
+
+#include "fixedValueFvPatchField.H"
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+namespace Foam
+{
+
+class turbulenceModel;
+
+/*---------------------------------------------------------------------------*\
+           Class epsilonLowReWallFunctionFvPatchScalarField Declaration
+\*---------------------------------------------------------------------------*/
+
+class epsilonLowReWallFunctionFvPatchScalarField
+:
+    public fixedValueFvPatchField<scalar>
+{
+protected:
+
+    // Protected data
+
+        //- Tolerance used in weighted calculations
+        static scalar tolerance_;
+
+        //- Cmu coefficient
+        //scalar Cmu_;
+
+        //- Von Karman constant
+        //scalar kappa_;
+
+        //- E coefficient
+        //scalar E_;
+
+        //- y+ at the edge of the laminar sublayer
+        //scalar yPlusLam_;
+
+        //- Local copy of turbulence epsilon field
+        scalarField epsilon_;
+
+        //- Initialised flag
+        bool initialised_;
+
+        //- Master patch ID
+        label master_;
+
+        //- List of averaging corner weights
+        List<List<scalar>> cornerWeights_;
+
+
+    // Protected Member Functions
+
+        //- Check the type of the patch
+        virtual void checkType();
+
+        //- Write local wall function variables
+        virtual void writeLocalEntries(Ostream&) const;
+
+        //- Set the master patch - master is responsible for updating all
+        //  wall function patches
+        virtual void setMaster();
+
+        //- Create the averaging weights for cells which are bounded by
+        //  multiple wall function faces
+        virtual void createAveragingWeights();
+
+        //- Helper function to return non-const access to an epsilon patch
+        virtual epsilonLowReWallFunctionFvPatchScalarField& epsilonPatch
+        (
+            const label patchi
+        );
+
+        //- Main driver to calculate the turbulence fields
+        virtual void calculateTurbulenceFields
+        (
+            const turbulenceModel& turbulence,
+            //scalarField& G0,
+            scalarField& epsilon0
+        );
+
+        //- Calculate the epsilon and G
+        virtual void calculate
+        (
+            const turbulenceModel& turbulence,
+            const List<scalar>& cornerWeights,
+            const fvPatch& patch,
+            scalarField& epsilon
+        );
+
+        //- Return non-const access to the master patch ID
+        virtual label& master()
+        {
+            return master_;
+        }
+
+
+public:
+
+    //- Runtime type information
+    TypeName("epsilonLowReWallFunction");
+
+
+    // Constructors
+
+        //- Construct from patch and internal field
+        epsilonLowReWallFunctionFvPatchScalarField
+        (
+            const fvPatch&,
+            const DimensionedField<scalar, volMesh>&
+        );
+
+        //- Construct from patch, internal field and dictionary
+        epsilonLowReWallFunctionFvPatchScalarField
+        (
+            const fvPatch&,
+            const DimensionedField<scalar, volMesh>&,
+            const dictionary&
+        );
+
+        //- Construct by mapping given
+        //  epsilonLowReWallFunctionFvPatchScalarField
+        //  onto a new patch
+        epsilonLowReWallFunctionFvPatchScalarField
+        (
+            const epsilonLowReWallFunctionFvPatchScalarField&,
+            const fvPatch&,
+            const DimensionedField<scalar, volMesh>&,
+            const fvPatchFieldMapper&
+        );
+
+        //- Construct as copy
+        epsilonLowReWallFunctionFvPatchScalarField
+        (
+            const epsilonLowReWallFunctionFvPatchScalarField&
+        );
+
+        //- Construct and return a clone
+        virtual tmp<fvPatchScalarField> clone() const
+        {
+            return tmp<fvPatchScalarField>
+            (
+                new epsilonLowReWallFunctionFvPatchScalarField(*this)
+            );
+        }
+
+        //- Construct as copy setting internal field reference
+        epsilonLowReWallFunctionFvPatchScalarField
+        (
+            const epsilonLowReWallFunctionFvPatchScalarField&,
+            const DimensionedField<scalar, volMesh>&
+        );
+
+        //- Construct and return a clone setting internal field reference
+        virtual tmp<fvPatchScalarField> clone
+        (
+            const DimensionedField<scalar, volMesh>& iF
+        ) const
+        {
+            return tmp<fvPatchScalarField>
+            (
+                new epsilonLowReWallFunctionFvPatchScalarField(*this, iF)
+            );
+        }
+
+    //- Destructor
+    virtual ~epsilonLowReWallFunctionFvPatchScalarField()
+    {}
+
+
+    // Member functions
+
+        // Access
+
+            //- Return non-const access to the master's epsilon field
+            scalarField& epsilon(bool init = false);
+
+
+        // Evaluation functions
+
+            //- Update the coefficients associated with the patch field
+            virtual void updateCoeffs();
+
+            //- Update the coefficients associated with the patch field
+            //virtual void updateWeightedCoeffs(const scalarField& weights);
+
+            //- Manipulate matrix
+            virtual void manipulateMatrix(fvMatrix<scalar>& matrix);
+
+            //- Manipulate matrix with given weights
+            virtual void manipulateMatrix
+            (
+                fvMatrix<scalar>& matrix,
+                const scalarField& weights
+            );
+
+
+        // I-O
+
+            //- Write
+            virtual void write(Ostream&) const;
+};
+
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+} // End namespace Foam
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#endif
+
+// ************************************************************************* //
