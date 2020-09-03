@@ -1,0 +1,30 @@
+type            sets;
+libs            ("libsampling.so");
+
+writeControl    writeTime;
+interpolationScheme cellPoint;
+setFormat       raw;
+
+sets
+(
+    sets1
+    {
+        type    face;
+        axis    y;
+        start   (2.0 0.0 1.0);
+        end     (2.0 1.0 1.0);
+    }
+);
+
+fields          
+(
+    p
+    U
+    epsilon
+    k
+    nu
+    nut
+    turbulenceProperties:R
+    turbulenceProperties:devReff
+    wallShearStress
+);
