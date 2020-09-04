@@ -1,0 +1,4 @@
+type            wallShearStress;
+libs            ("libfieldFunctionObjects.so");
+
+writeControl    writeTime;
