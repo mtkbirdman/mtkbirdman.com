@@ -145,6 +145,7 @@ void Foam::epsilonLowReWallFunctionFvPatchScalarField::createAveragingWeights()
         cornerWeights_[patchi] = 1.0/wf.patchInternalField();
     }
 
+    //G_.setSize(internalField().size(), 0.0);
     epsilon_.setSize(internalField().size(), 0.0);
 
     initialised_ = true;
@@ -169,6 +170,7 @@ Foam::epsilonLowReWallFunctionFvPatchScalarField::epsilonPatch(const label patch
 void Foam::epsilonLowReWallFunctionFvPatchScalarField::calculateTurbulenceFields
 (
     const turbulenceModel& turbulence,
+    //scalarField& G0,
     scalarField& epsilon0
 )
 {
@@ -204,6 +206,7 @@ void Foam::epsilonLowReWallFunctionFvPatchScalarField::calculate
     const turbulenceModel& turbModel,
     const List<scalar>& cornerWeights,
     const fvPatch& patch,
+    //scalarField& G0,
     scalarField& epsilon0
 )
 {
@@ -211,8 +214,12 @@ void Foam::epsilonLowReWallFunctionFvPatchScalarField::calculate
 
     const scalarField& y = turbModel.y()[patchi];
 
+    //const scalar Cmu25 = pow025(Cmu_);
+    //const scalar Cmu75 = pow(Cmu_, 0.75);
+
     const tmp<volScalarField> tk = turbModel.k();
     const volScalarField& k = tk();
+    //const volScalarField& sqrtk = sqrt(tk());
 
     const tmp<scalarField> tnuw = turbModel.nu(patchi);
     const scalarField& nuw = tnuw();
@@ -223,14 +230,26 @@ void Foam::epsilonLowReWallFunctionFvPatchScalarField::calculate
     const fvPatchVectorField& Uw = turbModel.U().boundaryField()[patchi];
 
     const scalarField magGradUw(mag(Uw.snGrad()));
-    
+    //const scalarField gradSqrtk = grad(sqrtk).y();
+
+    // Set epsilon and G
     forAll(nutw, facei)
     {
         const label celli = patch.faceCells()[facei];
 
         const scalar w = cornerWeights[facei];
 
+        //epsilon0[celli] += w*Cmu75*pow(k[celli], 1.5)/(kappa_*y[facei]);
         epsilon0[celli] += w*2.0*k[celli]*nuw[facei]/sqr(y[facei]);
+        //epsilon0[celli] += w*2*nuw[facei]*sqr(gradSqrtk);
+        /*
+        G0[celli] +=
+            w
+            *(nutw[facei] + nuw[facei])
+            *magGradUw[facei]
+            *Cmu25*sqrt(k[celli])
+            /(kappa_*y[facei]);
+        */
     }
 }
 
@@ -249,6 +268,7 @@ epsilonLowReWallFunctionFvPatchScalarField
     kappa_(0.41),
     E_(9.8),
     yPlusLam_(nutWallFunctionFvPatchScalarField::yPlusLam(kappa_, E_)),
+    //G_(),
     epsilon_(),
     initialised_(false),
     master_(-1),
@@ -272,6 +292,7 @@ epsilonLowReWallFunctionFvPatchScalarField
     kappa_(ptf.kappa_),
     E_(ptf.E_),
     yPlusLam_(ptf.yPlusLam_),
+    //G_(),
     epsilon_(),
     initialised_(false),
     master_(-1),
@@ -294,6 +315,7 @@ epsilonLowReWallFunctionFvPatchScalarField
     kappa_(dict.lookupOrDefault<scalar>("kappa", 0.41)),
     E_(dict.lookupOrDefault<scalar>("E", 9.8)),
     yPlusLam_(nutWallFunctionFvPatchScalarField::yPlusLam(kappa_, E_)),
+    //G_(),
     epsilon_(),
     initialised_(false),
     master_(-1),
@@ -317,6 +339,7 @@ epsilonLowReWallFunctionFvPatchScalarField
     kappa_(ewfpsf.kappa_),
     E_(ewfpsf.E_),
     yPlusLam_(ewfpsf.yPlusLam_),
+    //G_(),
     epsilon_(),
     initialised_(false),
     master_(-1),
@@ -338,6 +361,7 @@ epsilonLowReWallFunctionFvPatchScalarField
     kappa_(ewfpsf.kappa_),
     E_(ewfpsf.E_),
     yPlusLam_(ewfpsf.yPlusLam_),
+    //G_(),
     epsilon_(),
     initialised_(false),
     master_(-1),
@@ -348,6 +372,22 @@ epsilonLowReWallFunctionFvPatchScalarField
 
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
+/*
+Foam::scalarField& Foam::epsilonLowReWallFunctionFvPatchScalarField::G(bool init)
+{
+    if (patch().index() == master_)
+    {
+        if (init)
+        {
+            G_ = 0.0;
+        }
+
+        return G_;
+    }
+
+    return epsilonPatch(master_).G();
+}
+*/
 
 Foam::scalarField& Foam::epsilonLowReWallFunctionFvPatchScalarField::epsilon
 (
@@ -389,24 +429,96 @@ void Foam::epsilonLowReWallFunctionFvPatchScalarField::updateCoeffs()
     if (patch().index() == master_)
     {
         createAveragingWeights();
+        //calculateTurbulenceFields(turbModel, G(true), epsilon(true));
         calculateTurbulenceFields(turbModel, epsilon(true));
     }
 
+    //const scalarField& G0 = this->G();
     const scalarField& epsilon0 = this->epsilon();
 
     typedef DimensionedField<scalar, volMesh> FieldType;
-    
+    /*
+    FieldType& G =
+        const_cast<FieldType&>
+        (
+            db().lookupObject<FieldType>(turbModel.GName())
+        );
+    */
     FieldType& epsilon = const_cast<FieldType&>(internalField());
 
     forAll(*this, facei)
     {
         label celli = patch().faceCells()[facei];
 
+        //G[celli] = G0[celli];
         epsilon[celli] = epsilon0[celli];
     }
 
     fvPatchField<scalar>::updateCoeffs();
 }
+
+
+void Foam::epsilonLowReWallFunctionFvPatchScalarField::updateWeightedCoeffs
+(
+    const scalarField& weights
+)
+{
+    if (updated())
+    {
+        return;
+    }
+
+    const turbulenceModel& turbModel = db().lookupObject<turbulenceModel>
+    (
+        IOobject::groupName
+        (
+            turbulenceModel::propertiesName,
+            internalField().group()
+        )
+    );
+
+    setMaster();
+
+    if (patch().index() == master_)
+    {
+        createAveragingWeights();
+        //calculateTurbulenceFields(turbModel, G(true), epsilon(true));
+        calculateTurbulenceFields(turbModel, epsilon(true));
+    }
+
+    //const scalarField& G0 = this->G();
+    const scalarField& epsilon0 = this->epsilon();
+
+    typedef DimensionedField<scalar, volMesh> FieldType;
+    /*
+    FieldType& G =
+        const_cast<FieldType&>
+        (
+            db().lookupObject<FieldType>(turbModel.GName())
+        );
+    */
+
+    FieldType& epsilon = const_cast<FieldType&>(internalField());
+    scalarField& epsilonf = *this;
+
+    // Only set the values if the weights are > tolerance
+    forAll(weights, facei)
+    {
+        scalar w = weights[facei];
+
+        if (w > tolerance_)
+        {
+            label celli = patch().faceCells()[facei];
+
+            //G[celli] = (1.0 - w)*G[celli] + w*G0[celli];
+            epsilon[celli] = (1.0 - w)*epsilon[celli] + w*epsilon0[celli];
+            epsilonf[facei] = epsilon[celli];
+        }
+    }
+
+    fvPatchField<scalar>::updateCoeffs();
+}
+
 
 void Foam::epsilonLowReWallFunctionFvPatchScalarField::manipulateMatrix
 (

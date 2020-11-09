@@ -1,4 +1,6 @@
 SOURCE = \
-AJL2005/AJL2005.C \
+SMM/SMM.C \
+maxSqrtFaceDelta/maxSqrtFaceDelta.C \
+boxFilter/boxFilter.C \
 
 # sources

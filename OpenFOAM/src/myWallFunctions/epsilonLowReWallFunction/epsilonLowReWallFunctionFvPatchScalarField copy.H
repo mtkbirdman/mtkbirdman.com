@@ -109,6 +109,9 @@ protected:
         //- y+ at the edge of the laminar sublayer
         scalar yPlusLam_;
 
+        //- Local copy of turbulence G field
+        //scalarField G_;
+
         //- Local copy of turbulence epsilon field
         scalarField epsilon_;
 
@@ -158,6 +161,7 @@ protected:
             const turbulenceModel& turbulence,
             const List<scalar>& cornerWeights,
             const fvPatch& patch,
+            //scalarField& G,
             scalarField& epsilon
         );
 
@@ -245,6 +249,9 @@ public:
 
         // Access
 
+            //- Return non-const access to the master's G field
+            //scalarField& G(bool init = false);
+
             //- Return non-const access to the master's epsilon field
             scalarField& epsilon(bool init = false);
 
@@ -255,7 +262,7 @@ public:
             virtual void updateCoeffs();
 
             //- Update the coefficients associated with the patch field
-            //virtual void updateWeightedCoeffs(const scalarField& weights);
+            virtual void updateWeightedCoeffs(const scalarField& weights);
 
             //- Manipulate matrix
             virtual void manipulateMatrix(fvMatrix<scalar>& matrix);

@@ -63,4 +63,4 @@ EXE_INC = -I$(LIB_SRC)/finiteVolume/lnInclude -I$(LIB_SRC)/meshTools/lnInclude -
 
 
 
-LIB_LIBS = -lincompressibleTurbulenceModels -lturbulenceModels -lfvOptions -lfiniteVolume -lmeshTools
+LIB_LIBS = -lincompressibleTransportModels -lincompressibleTurbulenceModels -lturbulenceModels -lfvOptions -lfiniteVolume -lmeshTools
