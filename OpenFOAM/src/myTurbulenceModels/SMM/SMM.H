@@ -84,11 +84,8 @@ protected:
         
         // Filters
 
-            //simpleFilter simpleFilter_;
             autoPtr<LESfilter> filterPtr_;
             LESfilter& filter_;
-
-
 
     // Protected Member Functions
 
@@ -143,17 +140,20 @@ public:
         virtual tmp<volScalarField> omega() const
         {
             volScalarField epsilon_(Ce_*k_*sqrt(k_)/delta());
-            return tmp<volScalarField>::New
+            return tmp<volScalarField>
             (
-                IOobject
+                new volScalarField
                 (
-                    IOobject::groupName("omega", this->alphaRhoPhi_.group()),
-                    this->runTime_.timeName(),
-                    this->mesh_,
-                    IOobject::NO_READ,
-                    IOobject::AUTO_WRITE
-                ),
-                epsilon_/(0.09*k_)
+                    IOobject
+                    (
+                        IOobject::groupName("omega", this->alphaRhoPhi_.group()),
+                        this->runTime_.timeName(),
+                        this->mesh_,
+                        IOobject::NO_READ,
+                        IOobject::AUTO_WRITE
+                    ),
+                    epsilon_/(0.09*k_)
+                )
             );
         }
 

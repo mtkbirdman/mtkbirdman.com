@@ -2,11 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | www.openfoam.com
+    \\  /    A nd           | Copyright (C) 2011-2016 OpenFOAM Foundation
      \\/     M anipulation  |
--------------------------------------------------------------------------------
-    Copyright (C) 2011-2016 OpenFOAM Foundation
-    Copyright (C) 2019-2020 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -31,25 +28,6 @@ Group
     grpIcoRASTurbulence
 
 Description
-    Lien cubic non-linear low-Reynolds k-epsilon turbulence models for
-    incompressible flows.
-
-    This turbulence model is described in:
-    \verbatim
-        Lien, F.S., Chen, W.L. & Leschziner, M.A. (1996).
-        Low-Reynolds-number eddy-viscosity modeling based on non-linear
-        stress-strain/vorticity relations.
-        Engineering Turbulence Modelling and Experiments 3, 91-100.
-    \endverbatim
-
-    Implemented according to the specification in:
-    <a href=
-    "http://personalpages.manchester.ac.uk/staff/david.d.apsley/specturb.pdf"
-    >Apsley: Turbulence Models 2002</a>
-
-    In addition to the low-Reynolds number damping functions support for
-    wall-functions is also included to allow for low- and high-Reynolds number
-    operation.
 
 See also
     Foam::incompressible::RASModels::ShihQuadraticKE
@@ -142,14 +120,15 @@ public:
 
 
     //- Destructor
-    virtual ~AJL2005() = default;
+    virtual ~AJL2005()
+    {}
 
 
     // Member Functions
 
         //- Re-read model coefficients if they have changed
         virtual bool read();
-
+        
         //- Return the effective diffusivity for k
         tmp<volScalarField> DkEff() const
         {
@@ -185,22 +164,27 @@ public:
         {
             return epsilon_;
         }
-
+        
         //- Return the (estimated) specific dissipation rate
         virtual tmp<volScalarField> omega() const
         {
-            return tmp<volScalarField>::New
+            return tmp<volScalarField>
             (
+                new volScalarField
+                (
                 IOobject
                 (
                     IOobject::groupName("omega", this->alphaRhoPhi_.group()),
                     this->runTime_.timeName(),
-                    this->mesh_
+                    this->mesh_,
+                    IOobject::NO_READ,
+                    IOobject::AUTO_WRITE
                 ),
                 epsilon_/(Cmu_*k_)
+                )
             );
         }
-
+        
         //- Solve the turbulence equations and correct the turbulence viscosity
         virtual void correct();
 };

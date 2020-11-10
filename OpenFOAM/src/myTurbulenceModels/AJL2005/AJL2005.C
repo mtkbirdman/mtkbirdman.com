@@ -2,11 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | www.openfoam.com
+    \\  /    A nd           | Copyright (C) 2011-2016 OpenFOAM Foundation
      \\/     M anipulation  |
--------------------------------------------------------------------------------
-    Copyright (C) 2011-2017 OpenFOAM Foundation
-    Copyright (C) 2019-2020 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -30,6 +27,7 @@ License
 #include "wallDist.H"
 #include "bound.H"
 #include "addToRunTimeSelectionTable.H"
+
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -73,7 +71,6 @@ void AJL2005::correctNut()
 {
     correctNonlinearStress(fvc::grad(U_));
 }
-
 
 void AJL2005::correctNonlinearStress(const volTensorField& gradU)
 {
@@ -124,9 +121,8 @@ void AJL2005::correctNonlinearStress(const volTensorField& gradU)
     volScalarField ftau(exp(-3.0*(scalar(1) - fw(26.0))*(k_/epsilon_)*mag(S)));
     volSymmTensorField bw(ftau*bw1 + (scalar(1) - ftau)*bw2);
     
-    nonlinearStress_ = 
-        2.0*nut_*S // Cancel linear term
-        +2.0*(k_/CD_)*(
+    nonlinearStress_ = nut_*dev(twoSymm(gradU)) // Canecl linear term
+        + 2.0*(k_/CD_)*(
             - CB*(tau*CD_)*S //b1
             + (scalar(1) - fw(26.0))*(
                 2.0*CB*sqr(tau*CD_)*(-twoSymm(S&W) + dev(innerSqr(S))) //b2
@@ -231,7 +227,7 @@ AJL2005::AJL2005
     (
         IOobject
         (
-            IOobject::groupName("k", alphaRhoPhi.group()),
+            IOobject::groupName("k", U.group()),
             runTime_.timeName(),
             mesh_,
             IOobject::MUST_READ,
@@ -244,7 +240,7 @@ AJL2005::AJL2005
     (
         IOobject
         (
-            IOobject::groupName("epsilon", alphaRhoPhi.group()),
+            IOobject::groupName("epsilon", U.group()),
             runTime_.timeName(),
             mesh_,
             IOobject::MUST_READ,
@@ -281,8 +277,10 @@ bool AJL2005::read()
 
         return true;
     }
-
-    return false;
+    else
+    {
+        return false;
+    }
 }
 
 

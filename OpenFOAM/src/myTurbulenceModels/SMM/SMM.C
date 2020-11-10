@@ -132,7 +132,7 @@ SMM::SMM
         ),
         mesh_
     ),
-    
+
     LESDelta_
     (
         IOobject
@@ -145,7 +145,7 @@ SMM::SMM
         ),
         delta()
     ),
-
+    
     y_(wallDist::New(mesh_).y()),
     filterPtr_(LESfilter::New(mesh_, coeffDict())),
     filter_(filterPtr_())
@@ -192,12 +192,13 @@ tmp<volScalarField> SMM::epsilon() const
                 runTime_.timeName(),
                 mesh_,
                 IOobject::NO_READ,
-                IOobject::AUTO_WRITE
+                IOobject::NO_WRITE
             ),
             Ce_*k_*sqrt(k_)/delta() + 2.0*nu()*k_/sqr(y_) //eq.(12)
         )
     );
 }
+
 
 void SMM::correct()
 {
