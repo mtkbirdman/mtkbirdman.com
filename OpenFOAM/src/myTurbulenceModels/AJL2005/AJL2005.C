@@ -159,69 +159,13 @@ AJL2005::AJL2005
         propertiesName
     ),
 
-    Ceps1_
-    (
-        dimensioned<scalar>::lookupOrAddToDict
-        (
-            "Ceps1",
-            coeffDict_,
-            1.45
-        )
-    ),
-    Ceps2_
-    (
-        dimensioned<scalar>::lookupOrAddToDict
-        (
-            "Ceps2",
-            coeffDict_,
-            1.83
-        )
-    ),
-    sigmak_
-    (
-        dimensioned<scalar>::lookupOrAddToDict
-        (
-            "sigmak",
-            coeffDict_,
-            1.2
-        )
-    ),
-    sigmaEps_
-    (
-        dimensioned<scalar>::lookupOrAddToDict
-        (
-            "sigmaEps",
-            coeffDict_,
-            1.5
-        )
-    ),
-    Cmu_
-    (
-        dimensioned<scalar>::lookupOrAddToDict
-        (
-            "Cmu",
-            coeffDict_,
-            0.12
-        )
-    ),
-    CD_
-    (
-        dimensioned<scalar>::lookupOrAddToDict
-        (
-            "CD",
-            coeffDict_,
-            0.8
-        )
-    ),
-    Ceta_
-    (
-        dimensioned<scalar>::lookupOrAddToDict
-        (
-            "Ceta",
-            coeffDict_,
-            100.0
-        )
-    ),
+    Ceps1_(dimensioned<scalar>::lookupOrAddToDict("Ceps1",coeffDict_,1.45)),
+    Ceps2_(dimensioned<scalar>::lookupOrAddToDict("Ceps2",coeffDict_,1.83)),
+    sigmak_(dimensioned<scalar>::lookupOrAddToDict("sigmak",coeffDict_,1.2)),
+    sigmaEps_(dimensioned<scalar>::lookupOrAddToDict("sigmaEps",coeffDict_,1.5)),
+    Cmu_(dimensioned<scalar>::lookupOrAddToDict("Cmu",coeffDict_,0.12)),
+    CD_(dimensioned<scalar>::lookupOrAddToDict("CD",coeffDict_,0.8)),
+    Ceta_(dimensioned<scalar>::lookupOrAddToDict("Ceta",coeffDict_,100.0)),
     
     k_
     (
