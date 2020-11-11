@@ -10,11 +10,14 @@ void plot_results(int nmax,int nmin[nmax+1]);
 int main(void){
     clock_t s1,s2,e1,e2;
     int nmax=32,amax=10;
-    double A[nmax+1][nmax+1],b[nmax+1],b1[nmax+1],b2[nmax+1],x[nmax+1];
-    double *L,*L2;
+    double b[nmax+1],b2[nmax+1],x[nmax+1];
+    double *L,*L2,**A,*Ap,*b1;
     int nd[nmax+1],nmin[nmax+1]; //n_diagonal,n_min
     int i,j,k,j0,ssize; //skyline_size
     int ij,ji,n;
+
+    A=(double **)malloc(sizeof(double *)*(nmax+1));Ap=(double *)malloc(sizeof(double)*(nmax+1)*(nmax+1));for(n=0;n<=nmax;n++){A[n]=Ap+(nmax+1)*n;}
+    b1=(double *)malloc(sizeof(double)*(nmax+1));
 
     for(i=0;i<=nmax;i++){for(j=0;j<=nmax;j++){A[i][j]=0;}} //Initialize A
 

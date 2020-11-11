@@ -2,7 +2,7 @@
 #include<math.h>
 #include <stdlib.h>
 
-void Gaussian_Elimination(int nmax,double A[nmax+1][nmax+1],double b[nmax+1]){
+void Gaussian_Elimination(int nmax,double **A,double *b){
     double pivot,p;
     int i,j,ii,jj;
 

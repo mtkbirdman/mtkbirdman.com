@@ -1,4 +1,4 @@
-void Gaussian_Elimination(int nmax,double A[nmax+1][nmax+1],double b[nmax+1]);
+void Gaussian_Elimination(int nmax,double **A,double *b);
 void skyline_method(int nmax,int ssize,int nd[nmax+1],int jmin[nmax+1],double L[ssize+1],double b[nmax+1]);
 void Transpose(int imax,int jmax,double **A,double **AT);
 void Inverse(int nmax,double **A,double **Ainv);
