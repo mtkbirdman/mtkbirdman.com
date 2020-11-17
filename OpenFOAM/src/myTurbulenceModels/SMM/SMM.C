@@ -62,15 +62,17 @@ void SMM::correctNonlinearStress(const volTensorField& gradU)
     nut_ = CSGS_*fSGS()*sqrt(k_)*delta(); //eq.(10)
     nut_.correctBoundaryConditions();
     
+    dimensionedScalar smallValue1("smallValue1",dimensionSet(0,0,-2,0,0,0,0),SMALL);
+    dimensionedScalar smallValue2("smallValue2",dimensionSet(0,2,-2,0,0,0,0),SMALL);
+    
     volVectorField UHat_(filter_(U_));
     volSymmTensorField TauPrime(CB_*symm((U_ - UHat_)*(U_ - UHat_))); //eq.(4)
     volSymmTensorField TauPrimeA(dev(TauPrime));
     
     volSymmTensorField S(symm(gradU)); //eq.(2)
+    volScalarField nuPrime(-(TauPrimeA && S)/(2.0*max(magSqr(S),smallValue1))); //eq.(5)
 
-    volScalarField nuPrime(-(TauPrimeA && S)/(2.0*magSqr(S))); //eq.(5)
-
-    nonlinearStress_ = 2.0*k_*(TauPrimeA - (-2.0*nuPrime*S))/tr(TauPrime); //eq.(9)
+    nonlinearStress_ = 2.0*k_*(TauPrimeA - (-2.0*nuPrime*S))/max(tr(TauPrime),smallValue2); //eq.(9)
 }
 
 tmp<fvScalarMatrix> SMM::kSource() const
