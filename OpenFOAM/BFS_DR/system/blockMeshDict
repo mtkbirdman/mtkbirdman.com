@@ -1,0 +1,96 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+vertices
+(
+    (-9.4 0.0 0.0)
+    (-3.0 0.0 0.0)
+    (0.0 0.0 0.0)
+    (0.0 -1.0 0.0)
+    (30.0 -1.0 0.0)
+    (30.0 0.0 0.0)
+    (30.0 2.0 0.0)
+    (0.0 2.0 0.0)
+    (-3.0 2.0 0.0)
+    (-9.4 2.0 0.0)
+
+    (-9.4 0.0 3.2)
+    (-3.0 0.0 3.2)
+    (0.0 0.0 3.2)
+    (0.0 -1.0 3.2)
+    (30.0 -1.0 3.2)
+    (30.0 0.0 3.2)
+    (30.0 2.0 3.2)
+    (0.0 2.0 3.2)
+    (-3.0 2.0 3.2)
+    (-9.4 2.0 3.2)
+);
+
+blocks
+(
+    hex (0 1 8 9 10 11 18 19) (32 60 32) simpleGrading (1 ((0.5 0.5 50) (0.5 0.5 0.02)) 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+    // backwardFacingStep
+    bottomWall
+    {
+        type            wall;
+        faces           ((0 1 11 10));
+    }
+    topWall
+    {
+        type            wall;
+        faces           ((9 8 18 19));
+    }
+    sides1
+    {
+        type            cyclic;
+        neighbourPatch  sides2;
+        faces           ((0 1 8 9));
+    }
+    sides2
+    {
+        type            cyclic;
+        neighbourPatch  sides1;
+        faces           ((19 18 11 10));
+    }
+    outlet
+    {
+        type            cyclic;
+        neighbourPatch  inlet;
+        faces           ((11 1 8 18));
+    }
+    inlet
+    {
+        type            cyclic;
+        neighbourPatch  outlet;
+        faces           ((0 10 19 9));
+    }
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //

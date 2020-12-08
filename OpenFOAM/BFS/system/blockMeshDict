@@ -1,0 +1,101 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+vertices
+(
+    (-9.4 0.0 0.0)
+    (-3.0 0.0 0.0)
+    (0.0 0.0 0.0)
+    (0.0 -1.0 0.0)
+    (30.0 -1.0 0.0)
+    (30.0 0.0 0.0)
+    (30.0 2.0 0.0)
+    (0.0 2.0 0.0)
+    (-3.0 2.0 0.0)
+    (-9.4 2.0 0.0)
+
+    (-9.4 0.0 3.2)
+    (-3.0 0.0 3.2)
+    (0.0 0.0 3.2)
+    (0.0 -1.0 3.2)
+    (30.0 -1.0 3.2)
+    (30.0 0.0 3.2)
+    (30.0 2.0 3.2)
+    (0.0 2.0 3.2)
+    (-3.0 2.0 3.2)
+    (-9.4 2.0 3.2)
+);
+
+blocks
+(
+    hex (0 1 8 9 10 11 18 19) (32 60 32) simpleGrading (1 ((0.5 0.5 50) (0.5 0.5 0.02)) 1)
+    hex (1 2 7 8 11 12 17 18) (46 60 32) simpleGrading (0.02 ((0.5 0.5 50) (0.5 0.5 0.02)) 1)
+    hex (3 4 5 2 13 14 15 12) (256 60 32) simpleGrading (100 ((0.5 0.5 25) (0.5 0.5 0.04)) 1)
+    hex (2 5 6 7 12 15 16 17) (256 60 32) simpleGrading (100 ((0.5 0.5 50) (0.5 0.5 0.02)) 1)
+);
+
+edges
+(
+);
+
+boundary
+(
+    // backwardFacingStep
+    inlet
+    {
+        type            mappedPatch;
+        offset          (6.4 0 0);
+        sampleRegion    region0;
+        sampleMode      nearestCell;
+        samplePatch     none;
+        faces           ((0 10 19 9));
+    }
+    outlet
+    {
+        type            patch;
+        faces           ((4 14 15 5)(5 15 16 6));
+    }
+    bottomWall
+    {
+        type            wall;
+        faces           ((0 1 11 10)(1 2 12 11)(2 3 13 12)(3 4 14 13));
+    }
+    topWall
+    {
+        type            wall;
+        faces           ((9 8 18 19)(8 7 17 18)(7 6 16 17));
+    }
+    sides1
+    {
+        type            cyclic;
+        neighbourPatch  sides2;
+        faces           ((0 1 8 9)(1 2 7 8)(2 3 4 5)(2 5 6 7));
+    }
+    sides2
+    {
+        type            cyclic;
+        neighbourPatch  sides1;
+        faces           ((19 18 11 10)(18 17 12 11)(15 14 13 12)(17 16 15 12));
+    }
+);
+
+mergePatchPairs
+(
+);
+
+// ************************************************************************* //
