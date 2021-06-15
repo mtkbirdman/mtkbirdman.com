@@ -40,16 +40,12 @@ public class Setting : MonoBehaviour
     void RefreshText()
     {
         scoreText.text = 
-            "\n\t" + "SETTING" + "\t\t\t\t"
+            "\n\t"
             + "\n\t"
-            + "\n\t" + "AIRSPEED_TO" + "\t\t" + MyGameManeger.instance.Airspeed_TO.ToString("0.000") + "\t\t" + "UP/DOWN -> W/S"
-            + "\n\t" + "ALPHA_TO" + "\t\t\t\t" + MyGameManeger.instance.alpha_TO.ToString("0.000") + "\t\t" + "UP/DOWN -> A/D"
+            + "\n\t" + MyGameManeger.instance.Airspeed_TO.ToString("0.000")
+            + "\n\t" + MyGameManeger.instance.alpha_TO.ToString("0.000")
             + "\n\t"
-            + "\n\t" + "GUST" + "\t\t\t\t\t\t" + MyGameManeger.instance.GustMag.ToString("0.000") + "\t\t" + "UP/DOWN -> Shit + W/S"
-            + "\n\t" + "DIRECTION" + "\t\t\t\t" + MyGameManeger.instance.GustDirection.ToString("000") + "\t\t\t" + "LEFT/RIGHT -> Shit + A/D"
-            + "\n\t"
-            + "\n\t" + "Press R to apply the new value and restart."
-            + "\n\t" + "Press E to set the value to default and Restart."
-            + "\n\t" + "Press Q to reselect the model.";
+            + "\n\t" + MyGameManeger.instance.GustMag.ToString("0.000")
+            + "\n\t" + MyGameManeger.instance.GustDirection.ToString("0");
     }
 }

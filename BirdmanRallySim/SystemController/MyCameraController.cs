@@ -4,8 +4,6 @@ using UnityEngine;
 
 public class MyCameraController : MonoBehaviour
 {
-    //private GameObject HUD;
-    //private GameObject SETTING;
     private GameObject HorizontalLine;
     private Camera FPSCamera; // Camera
     private Camera TPSCamera; // Camera
@@ -17,8 +15,6 @@ public class MyCameraController : MonoBehaviour
     {
         FPSCamera = MyGameManeger.instance.Plane.transform.Find("FPSCamera").gameObject.GetComponent<Camera>();
         TPSCamera = MyGameManeger.instance.Plane.transform.Find("TPSCamera").gameObject.GetComponent<Camera>();
-        //HUD = GameObject.Find("HUD");
-        //SETTING = GameObject.Find("SETTING");
         HUDCanvas = GameObject.Find("HUD").GetComponent<Canvas>();
         SETTINGCanvas = GameObject.Find("SETTING").GetComponent<Canvas>();
         HorizontalLine = GameObject.Find("HUD").transform.Find("HorizontalLine").gameObject;

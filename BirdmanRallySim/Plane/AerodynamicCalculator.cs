@@ -180,9 +180,95 @@ public class AerodynamicCalculator : MonoBehaviour
     void InputSpecifications()
     {
         if(MyGameManeger.instance.PlaneName == "QX-18"){
-            // No imformation
+            // Plane
+            PlaneRigidbody.mass = 93.875f; // [kg]
+            PlaneRigidbody.centerOfMass = new Vector3(0f,0.221f,0f); // [m]
+            PlaneRigidbody.inertiaTensor = new Vector3(876f,947f,76f);
+            PlaneRigidbody.inertiaTensorRotation = Quaternion.AngleAxis(-4.833f, Vector3.forward);
+            // Specification At Cruise without Ground Effect
+            Airspeed0 = 9.700f; // Magnitude of ground speed [m/s]
+            alpha0 = 1.682f; // Angle of attack [deg]
+            CDp0 = 0.018f; // Parasitic drag [-]
+            Cmw0 = -0.164f; // Pitching momentum [-]
+            CLMAX = 1.700f;
+            // Wing
+            Sw = 18.042f; // Wing area of wing [m^2]
+            bw = 25.133f; // Wing span [m]
+            cMAC = 0.757f; // Mean aerodynamic chord [m]
+            aw = 0.108f; // Wing Lift Slope [1/deg]
+            hw = (0.323f-0.250f); // Length between Wing a.c. and c.g.
+            ew = 0.949f; // Wing efficiency
+            AR = (bw*bw)/Sw; // Aspect Ratio
+            // Tail
+            Downwash = true; // Conventional Tail: True, T-Tail: False
+            St = 1.375f; // Wing area of tail
+            at = 0.076f; // Tail Lift Slope [1/deg]
+            lt = 4.200f; // Length between Tail a.c. and c.g.
+            deMAX = 10.000f; // Maximum elevator angle
+            tau = 1.000f; // Control surface angle of attack effectiveness [-]
+            VH = (St*lt)/(Sw*cMAC); // Tail Volume
+            // Fin
+            drMAX = 10.000f; // Maximum rudder angle            
+            // Ground Effect
+            CGEMIN = 0.215f; // Minimum Ground Effect Coefficient [-]
+            // Stability derivatives
+            Cyb = -0.002410f; // [1/deg]
+            Cyp = -0.228437f; // [1/rad]
+            Cyr = 0.090542f; // [1/rad]
+            Cydr = 0.001908f; // [1/deg]
+            Clb = -0.002002f; // [1/deg]
+            Clp = -0.877559f; // [1/rad]
+            Clr = 0.237651f; // [1/rad]
+            Cldr = 0.000052f; // [1/deg]
+            Cnb = -0.000059f; // [1/deg]
+            Cnp = -0.142441f; // [1/rad]
+            Cnr = -0.000491f; // [1/rad]
+            Cndr = -0.000262f; // [1/deg]
         }else if(MyGameManeger.instance.PlaneName == "QX-19"){
-            // No imformation
+            // Plane
+            PlaneRigidbody.mass = 96.631f;
+            PlaneRigidbody.centerOfMass = new Vector3(0f,0.294f,0f);
+            PlaneRigidbody.inertiaTensor = new Vector3(991f,1032f,60f);
+            PlaneRigidbody.inertiaTensorRotation = Quaternion.AngleAxis(-9.134f, Vector3.forward);
+            // Specification At Cruise without Ground Effect
+            Airspeed0 = 8.800f; // Magnitude of ground speed [m/s]
+            alpha0 = 1.554f; // Angle of attack [deg]
+            CDp0 = 0.019f; // Parasitic drag [-]
+            Cmw0 = -0.170f; // Pitching momentum [-]
+            CLMAX = 1.700f;
+            // Wing
+            Sw = 18.275f; // Wing area of wing [m^2]
+            bw = 26.418f; // Wing span [m]
+            cMAC = 0.736f; // Mean aerodynamic chord [m]
+            aw = 0.105f; // Wing Lift Slope [1/deg]
+            hw = (0.323f-0.250f); // Length between Wing a.c. and c.g.
+            ew = 1.010f; // Wing efficiency
+            AR = (bw*bw)/Sw; // Aspect Ratio
+            // Tail
+            Downwash = true; // Conventional Tail: True, T-Tail: False
+            St = 1.548f; // Wing area of tail
+            at = 0.082f; // Tail Lift Slope [1/deg]
+            lt = 3.200f; // Length between Tail a.c. and c.g.
+            deMAX = 10.000f; // Maximum elevator angle
+            tau = 1.000f; // Control surface angle of attack effectiveness [-]
+            VH = (St*lt)/(Sw*cMAC); // Tail Volume
+            // Fin
+            drMAX = 10.000f; // Maximum rudder angle            
+            // Ground Effect
+            CGEMIN = 0.361f; // Minimum Ground Effect Coefficient [-]
+            // Stability derivatives
+            Cyb = -0.005300f; // [1/deg]
+            Cyp = -0.567798f; // [1/rad]
+            Cyr = 0.225280f; // [1/rad]
+            Cydr = 0.001721f; // [1/deg]
+            Clb = -0.005118f; // [1/deg]
+            Clp = -0.827488f; // [1/rad]
+            Clr = 0.296796f; // [1/rad]
+            Cldr = 0.000050f; // [1/deg]
+            Cnb = -0.000808f; // [1/deg]
+            Cnp = -0.165533f; // [1/rad]
+            Cnr = 0.001675f; // [1/rad]
+            Cndr = -0.000208f; // [1/deg]
         }else{ // MyGameManeger.instance.PlaneName == "QX-20"
             // Plane
             PlaneRigidbody.mass = 98.797f;
@@ -216,18 +302,18 @@ public class AerodynamicCalculator : MonoBehaviour
             // Ground Effect
             CGEMIN = 0.293f; // Minimum Ground Effect Coefficient [-]
             // Stability derivatives
-            Cyb = -0.003797f; // [1/deg]
-            Cyp = -0.456039f; // [1/rad]
-            Cyr = 0.146810f; // [1/rad]
-            Cydr = 0.001057f; // [1/deg]
-            Clb = -0.004054f; // [1/deg]
-            Clp = -0.829700f; // [1/rad]
-            Clr = 0.227824f; // [1/rad]
-            Cldr = 0.000020f; // [1/deg]
-            Cnb = -0.000471f; // [1/deg]
-            Cnp = -0.132273f; // [1/rad]
-            Cnr = 0.000548f; // [1/rad]
-            Cndr = -0.000127f; // [1/deg]
+            Cyb = -0.003555f; // [1/deg]
+            Cyp = -0.455493f; // [1/rad]
+            Cyr = 0.143466f; // [1/rad]
+            Cydr = 0.000888f; // [1/deg]
+            Clb = -0.004049f; // [1/deg]
+            Clp = -0.829690f; // [1/rad]
+            Clr = 0.227736f; // [1/rad]
+            Cldr = 0.000016f; // [1/deg]
+            Cnb = -0.000500f; // [1/deg]
+            Cnp = -0.132307f; // [1/rad]
+            Cnr = 0.000942f; // [1/rad]
+            Cndr = -0.000106f; // [1/deg]
         }
     }
 

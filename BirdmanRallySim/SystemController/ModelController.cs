@@ -14,11 +14,7 @@ public class ModelController : MonoBehaviour
             if(item.gameObject.name != MyGameManeger.instance.PlaneName){
                 item.gameObject.SetActive(false);
             }
-            if(item.gameObject.name == "WaterProDaytime"){
-                item.gameObject.SetActive(true);
-            }
         }
         MyGameManeger.instance.Plane = GameObject.Find(MyGameManeger.instance.PlaneName);
-        //Debug.Log(MyGameManeger.instance.Plane);
     }
 }

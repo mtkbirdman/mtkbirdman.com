@@ -11,7 +11,6 @@ public class HUDController : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        //HUD = GameObject.Find("HUD");
         HUDCanvas = GameObject.Find("HUD").GetComponent<Canvas>();
         HorizontalLine = GameObject.Find("HUD").transform.Find("HorizontalLine").gameObject;
 
