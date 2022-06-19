@@ -1,57 +1,35 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System;
 
 public class HUDController : MonoBehaviour
 {
     //private GameObject HUD;
     private GameObject HorizontalLine;
-    private Canvas HUDCanvas;
+    private GameObject HUDCanvas;
 
     // Start is called before the first frame update
     void Start()
     {
-        HUDCanvas = GameObject.Find("HUD").GetComponent<Canvas>();
+        HUDCanvas = GameObject.Find("HUD");
         HorizontalLine = GameObject.Find("HUD").transform.Find("HorizontalLine").gameObject;
-
-        if(MyGameManeger.instance.HUDActive){
-            HUDCanvas.planeDistance = 0.11f;
-            MyGameManeger.instance.HUDActive = true;
-            if(MyGameManeger.instance.HorizontalLineActive){
-                HorizontalLine.SetActive(true);
-                MyGameManeger.instance.HorizontalLineActive = true;
-            }else{
-                HorizontalLine.SetActive(false);
-                MyGameManeger.instance.HorizontalLineActive = false;
-            }
-        }else{
-            HUDCanvas.planeDistance = 0f;
-            MyGameManeger.instance.HUDActive = false;
-        }
+        
+        HUDCanvas.SetActive(MyGameManeger.instance.HUDActive);
+        HorizontalLine.SetActive(MyGameManeger.instance.HorizontalLineActive);
     }
 
     // Update is called once per frame
     void Update()
     {
-        if(MyGameManeger.instance.HUDActive){
-            if(Input.GetKeyDown("i")){
-                HUDCanvas.planeDistance = 0f;
-                MyGameManeger.instance.HUDActive = false;
-            }
-            if(MyGameManeger.instance.CameraSwitch && Input.GetKeyDown("h")){
-                if(MyGameManeger.instance.HorizontalLineActive){
-                    HorizontalLine.SetActive(false);
-                    MyGameManeger.instance.HorizontalLineActive = false;
-                }else{
-                    HorizontalLine.SetActive(true);
-                    MyGameManeger.instance.HorizontalLineActive = true;
-                }
-            }
-        }else{
-            if(Input.GetKeyDown("i")){
-                HUDCanvas.planeDistance = 0.11f;
-                MyGameManeger.instance.HUDActive = true;
-            }
+        if(Input.GetKeyDown("h")){
+            MyGameManeger.instance.HUDActive = !MyGameManeger.instance.HUDActive;
+            HUDCanvas.SetActive(MyGameManeger.instance.HUDActive);
+        }
+
+        if(MyGameManeger.instance.CameraSwitch && Input.GetKeyDown("l")){
+            HorizontalLine.SetActive(!MyGameManeger.instance.HorizontalLineActive);
+            MyGameManeger.instance.HorizontalLineActive = !MyGameManeger.instance.HorizontalLineActive;
         }
     }
 }

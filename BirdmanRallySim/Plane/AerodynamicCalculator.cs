@@ -10,6 +10,7 @@ public class AerodynamicCalculator : MonoBehaviour
     [System.NonSerialized] public float beta = 0.000f; // Side slip angle [deg]
     [System.NonSerialized] public float de = 0.000f; // Elevator angle [deg]
     [System.NonSerialized] public float dr = 0.000f; // Rudder angle [deg]
+    [System.NonSerialized] public float dh = 0.000f; // Movement of c.g. [-]
     [System.NonSerialized] public float LocalGustMag = 0.000f; // Magnitude of local gust [m/s]
     [System.NonSerialized] public float LocalGustDirection = 0.000f; // Magnitude of local gust [m/s]
     // Phisics
@@ -35,6 +36,7 @@ public class AerodynamicCalculator : MonoBehaviour
     static private float Cl = 0.000f; // Rolling momentum [-]
     static private float Cm = 0.000f; // Pitching momentum [-]
     static private float Cn = 0.000f; // Yawing momentum [-]
+    static private float dh0 = 0.000f; // Initial Mouse Position
     // Wing
     static private float Sw; // Wing area of wing [m^2]
     static private float bw; // Wing span [m]
@@ -72,6 +74,10 @@ public class AerodynamicCalculator : MonoBehaviour
     static private float Cldr; // [1/deg]
     // Gust
     static private Vector3 Gust = Vector3.zero; // Gust [m/s]
+    // Rotation
+    static private float phi; // [deg]
+    static private float theta;  // [deg]
+    static private float psi; // [deg]
 
     private Rigidbody PlaneRigidbody;
 
@@ -85,27 +91,29 @@ public class AerodynamicCalculator : MonoBehaviour
         InputSpecifications();
         
         // Set take-off speed
-        if(!MyGameManeger.instance.SettingChanged){ // Setting has not changed
-            MyGameManeger.instance.GustMag = 0.000f; // Magnitude of Gust [m/s]
-            MyGameManeger.instance.GustDirection = 0.000f; // Direction of Gust [deg]: -180~180
-            MyGameManeger.instance.Airspeed_TO = Airspeed0; // Airspeed at take-off [m/s]
-            MyGameManeger.instance.alpha_TO = alpha0; // Angle of attack at take-off [deg]
+        if(MyGameManeger.instance.FlightMode=="BirdmanRally"){
+            //MyGameManeger.instance.Airspeed_TO = 5.0f; // Airspeed at take-off [m/s]
+            PlaneRigidbody.velocity = Vector3.zero;
+        }else if(MyGameManeger.instance.FlightMode=="TestFlight"){ // 
+            PlaneRigidbody.velocity = new Vector3(
+                Airspeed0*Mathf.Cos(Mathf.Deg2Rad*alpha0),
+                -Airspeed0*Mathf.Sin(Mathf.Deg2Rad*alpha0),
+                0f
+            );
         }
-        PlaneRigidbody.velocity = new Vector3(
-            MyGameManeger.instance.Airspeed_TO*Mathf.Cos(Mathf.Deg2Rad*MyGameManeger.instance.alpha_TO),
-            -MyGameManeger.instance.Airspeed_TO*Mathf.Sin(Mathf.Deg2Rad*MyGameManeger.instance.alpha_TO),
-            0f
-        );
 
         // Calculate CL at cluise
         CL0 = (PlaneRigidbody.mass*Physics.gravity.magnitude)/(0.5f*rho*Airspeed0*Airspeed0*Sw);
         CLt0 = (Cmw0+CL0*hw)/(VH+(St/Sw)*hw);
         CLw0 = CL0-(St/Sw)*CLt0;
         if(Downwash){epsilon0 = (CL0/(Mathf.PI*ew*AR))*Mathf.Rad2Deg;}
+
+        dh0 = Screen.height/2f; // Initial Mouse Position
     }
     
     void FixedUpdate()
     {
+        
         // Velocity and AngularVelocity
         float u = transform.InverseTransformDirection(PlaneRigidbody.velocity).x;
         float v = -transform.InverseTransformDirection(PlaneRigidbody.velocity).z;
@@ -118,6 +126,7 @@ public class AerodynamicCalculator : MonoBehaviour
         // Force and Momentum
         Vector3 AerodynamicForce = Vector3.zero;
         Vector3 AerodynamicMomentum = Vector3.zero;
+        Vector3 TakeoffForce = Vector3.zero;
 
         // Hoerner and Borst (Modified)
         CGE = (CGEMIN+33f*Mathf.Pow((hE/bw),1.5f))/(1f+33f*Mathf.Pow((hE/bw),1.5f));
@@ -125,10 +134,18 @@ public class AerodynamicCalculator : MonoBehaviour
         // Get control surface angles
         de = 0.000f;
         dr = 0.000f;
-        if(Input.GetKey("down")){de = -deMAX;}
-        else if(Input.GetKey("up")){de = deMAX;}
-        if(Input.GetKey("left")){dr = drMAX;}
-        else if(Input.GetKey("right")){dr = -drMAX;}
+        if (MyGameManeger.instance.MousePitchControl){
+            dh = -(Input.mousePosition.y-dh0)*0.0001f*MyGameManeger.instance.MouseSensitivity;
+        }
+        //Debug.Log(dh);
+
+        de = Input.GetAxisRaw("Vertical")*deMAX;
+        dr = -Input.GetAxisRaw("Horizontal")*drMAX;
+
+        if(Input.GetMouseButton(0)){dr = drMAX;}
+        else if(Input.GetMouseButton(1)){dr = -drMAX;}
+
+        //Debug.Log(dh);
 
         // Gust
         LocalGustMag = MyGameManeger.instance.GustMag*Mathf.Pow((hE/hE0),1f/7f);
@@ -147,7 +164,7 @@ public class AerodynamicCalculator : MonoBehaviour
 
         // Wing and Tail
         CLw = CLw0+aw*(alpha-alpha0);
-        CLt = CLt0+at*((alpha-alpha0)+(1f-CGE*(CLw/CLw0))*epsilon0+de*tau+(lt/Airspeed)*q);
+        CLt = CLt0+at*((alpha-alpha0)+(1f-CGE*(CLw/CLw0))*epsilon0+de*tau+((lt-dh*cMAC)/Airspeed)*q);
         if(Mathf.Abs(CLw)>CLMAX){CLw = (CLw/Mathf.Abs(CLw))*CLMAX;} // Stall
         if(Mathf.Abs(CLt)>CLMAX){CLt = (CLt/Mathf.Abs(CLt))*CLMAX;} // Stall
 
@@ -162,7 +179,7 @@ public class AerodynamicCalculator : MonoBehaviour
 
         // Torque
         Cl = Clb*beta+Clp*(1f/Mathf.Rad2Deg)*((p*bw)/(2f*Airspeed))+Clr*(1f/Mathf.Rad2Deg)*((r*bw)/(2f*Airspeed))+Cldr*dr; // Cl        
-        Cm = Cmw0+CL*hw-VH*CLt; // Cm       
+        Cm = Cmw0+CLw*hw-VH*CLt+CL*dh; // Cm       
         Cn = Cnb*beta+Cnp*(1f/Mathf.Rad2Deg)*((p*bw)/(2f*Airspeed))+Cnr*(1f/Mathf.Rad2Deg)*((r*bw)/(2f*Airspeed))+Cndr*dr; // Cn
 
         AerodynamicForce.x = 0.5f*rho*Airspeed*Airspeed*Sw*Cx;
@@ -173,17 +190,142 @@ public class AerodynamicCalculator : MonoBehaviour
         AerodynamicMomentum.y = 0.5f*rho*Airspeed*Airspeed*Sw*bw*Cn;
         AerodynamicMomentum.z = 0.5f*rho*Airspeed*Airspeed*Sw*cMAC*Cm;
 
+
+        float Distance = (PlaneRigidbody.position-MyGameManeger.instance.PlatformPosition).magnitude-10f;
+        if(MyGameManeger.instance.FlightMode=="BirdmanRally" && Distance<-0.5f){
+            
+            CalculateRotation();
+            
+            float W = PlaneRigidbody.mass*Physics.gravity.magnitude;
+            float L = 0.5f*rho*Airspeed*Airspeed*Sw*(Cx*Mathf.Sin(Mathf.Deg2Rad*theta)-Cz*Mathf.Cos(Mathf.Deg2Rad*theta));
+            float N = (W-L)*Mathf.Cos(Mathf.Deg2Rad*3.5f); // N=(W-L)*cos(3.5deg)
+            float P = (PlaneRigidbody.mass*MyGameManeger.instance.Airspeed_TO*MyGameManeger.instance.Airspeed_TO)/(2f*10f); // P=m*Vto*Vto/2*L
+            
+            TakeoffForce.x = P;
+            TakeoffForce.y = N*Mathf.Cos(Mathf.Deg2Rad*3.5f);
+            TakeoffForce.z = 0f;
+            
+            AerodynamicForce.z = 0f;
+            AerodynamicMomentum.x = 0f;
+            AerodynamicMomentum.y = 0f;
+        }
+        //Debug.Log(Distance);
+
         PlaneRigidbody.AddRelativeForce(AerodynamicForce, ForceMode.Force);
         PlaneRigidbody.AddRelativeTorque(AerodynamicMomentum, ForceMode.Force);
+        PlaneRigidbody.AddForce(TakeoffForce, ForceMode.Force);
+    }
+
+    void CalculateRotation()
+    {
+        float q1 = MyGameManeger.instance.Plane.transform.rotation.x;
+        float q2 = -MyGameManeger.instance.Plane.transform.rotation.y;
+        float q3 = -MyGameManeger.instance.Plane.transform.rotation.z;
+        float q4 = MyGameManeger.instance.Plane.transform.rotation.w;
+        float C11 = q1*q1-q2*q2-q3*q3+q4*q4;
+        float C22 = -q1*q1+q2*q2-q3*q3+q4*q4;
+        float C12 = 2f*(q1*q2+q3*q4);
+        float C13 = 2f*(q1*q3-q2*q4);
+        float C32 = 2f*(q2*q3-q1*q4);
+
+        phi = -Mathf.Atan(-C32/C22)*Mathf.Rad2Deg;
+        theta = -Mathf.Asin(C12)*Mathf.Rad2Deg; 
+        psi = -Mathf.Atan(-C13/C11)*Mathf.Rad2Deg;
     }
 
     void InputSpecifications()
     {
         if(MyGameManeger.instance.PlaneName == "QX-18"){
-            // No Information
+            // Plane
+            PlaneRigidbody.mass = 93.875f; // [kg]
+            PlaneRigidbody.centerOfMass = new Vector3(0f,0.221f,0f); // [m]
+            PlaneRigidbody.inertiaTensor = new Vector3(876f,947f,76f);
+            PlaneRigidbody.inertiaTensorRotation = Quaternion.AngleAxis(-4.833f, Vector3.forward);
+            // Specification At Cruise without Ground Effect
+            Airspeed0 = 9.700f; // Magnitude of ground speed [m/s]
+            alpha0 = 1.682f; // Angle of attack [deg]
+            CDp0 = 0.018f; // Parasitic drag [-]
+            Cmw0 = -0.164f; // Pitching momentum [-]
+            CLMAX = 1.700f;
+            // Wing
+            Sw = 18.042f; // Wing area of wing [m^2]
+            bw = 25.133f; // Wing span [m]
+            cMAC = 0.757f; // Mean aerodynamic chord [m]
+            aw = 0.108f; // Wing Lift Slope [1/deg]
+            hw = (0.323f-0.250f); // Length between Wing a.c. and c.g.
+            ew = 0.949f; // Wing efficiency
+            AR = (bw*bw)/Sw; // Aspect Ratio
+            // Tail
+            Downwash = true; // Conventional Tail: True, T-Tail: False
+            St = 1.375f; // Wing area of tail
+            at = 0.076f; // Tail Lift Slope [1/deg]
+            lt = 4.200f; // Length between Tail a.c. and c.g.
+            deMAX = 10.000f; // Maximum elevator angle
+            tau = 1.000f; // Control surface angle of attack effectiveness [-]
+            VH = (St*lt)/(Sw*cMAC); // Tail Volume
+            // Fin
+            drMAX = 10.000f; // Maximum rudder angle            
+            // Ground Effect
+            CGEMIN = 0.215f; // Minimum Ground Effect Coefficient [-]
+            // Stability derivatives
+            Cyb = -0.002410f; // [1/deg]
+            Cyp = -0.228437f; // [1/rad]
+            Cyr = 0.090542f; // [1/rad]
+            Cydr = 0.001908f; // [1/deg]
+            Clb = -0.002002f; // [1/deg]
+            Clp = -0.877559f; // [1/rad]
+            Clr = 0.237651f; // [1/rad]
+            Cldr = 0.000052f; // [1/deg]
+            Cnb = -0.000059f; // [1/deg]
+            Cnp = -0.142441f; // [1/rad]
+            Cnr = -0.000491f; // [1/rad]
+            Cndr = -0.000262f; // [1/deg]
         }else if(MyGameManeger.instance.PlaneName == "QX-19"){
-            // No Information
-        }else{ // MyGameManeger.instance.PlaneName == "QX-20"
+            // Plane
+            PlaneRigidbody.mass = 96.631f;
+            PlaneRigidbody.centerOfMass = new Vector3(0f,0.294f,0f);
+            PlaneRigidbody.inertiaTensor = new Vector3(991f,1032f,60f);
+            PlaneRigidbody.inertiaTensorRotation = Quaternion.AngleAxis(-9.134f, Vector3.forward);
+            // Specification At Cruise without Ground Effect
+            Airspeed0 = 8.800f; // Magnitude of ground speed [m/s]
+            alpha0 = 1.554f; // Angle of attack [deg]
+            CDp0 = 0.019f; // Parasitic drag [-]
+            Cmw0 = -0.170f; // Pitching momentum [-]
+            CLMAX = 1.700f;
+            // Wing
+            Sw = 18.275f; // Wing area of wing [m^2]
+            bw = 26.418f; // Wing span [m]
+            cMAC = 0.736f; // Mean aerodynamic chord [m]
+            aw = 0.105f; // Wing Lift Slope [1/deg]
+            hw = (0.323f-0.250f); // Length between Wing a.c. and c.g.
+            ew = 1.010f; // Wing efficiency
+            AR = (bw*bw)/Sw; // Aspect Ratio
+            // Tail
+            Downwash = true; // Conventional Tail: True, T-Tail: False
+            St = 1.548f; // Wing area of tail
+            at = 0.082f; // Tail Lift Slope [1/deg]
+            lt = 3.200f; // Length between Tail a.c. and c.g.
+            deMAX = 10.000f; // Maximum elevator angle
+            tau = 1.000f; // Control surface angle of attack effectiveness [-]
+            VH = (St*lt)/(Sw*cMAC); // Tail Volume
+            // Fin
+            drMAX = 10.000f; // Maximum rudder angle            
+            // Ground Effect
+            CGEMIN = 0.361f; // Minimum Ground Effect Coefficient [-]
+            // Stability derivatives
+            Cyb = -0.005300f; // [1/deg]
+            Cyp = -0.567798f; // [1/rad]
+            Cyr = 0.225280f; // [1/rad]
+            Cydr = 0.001721f; // [1/deg]
+            Clb = -0.005118f; // [1/deg]
+            Clp = -0.827488f; // [1/rad]
+            Clr = 0.296796f; // [1/rad]
+            Cldr = 0.000050f; // [1/deg]
+            Cnb = -0.000808f; // [1/deg]
+            Cnp = -0.165533f; // [1/rad]
+            Cnr = 0.001675f; // [1/rad]
+            Cndr = -0.000208f; // [1/deg]
+        }else if(MyGameManeger.instance.PlaneName == "QX-20"){
             // Plane
             PlaneRigidbody.mass = 98.797f;
             PlaneRigidbody.centerOfMass = new Vector3(0f,0.29f,0f);
