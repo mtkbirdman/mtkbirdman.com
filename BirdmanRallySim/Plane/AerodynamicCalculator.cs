@@ -13,6 +13,7 @@ public class AerodynamicCalculator : MonoBehaviour
     [System.NonSerialized] public float dh = 0.000f; // Movement of c.g. [-]
     [System.NonSerialized] public float LocalGustMag = 0.000f; // Magnitude of local gust [m/s]
     [System.NonSerialized] public float LocalGustDirection = 0.000f; // Magnitude of local gust [m/s]
+    [System.NonSerialized] public float nz = 0.000f; // Load factor [-]
     // Phisics
     static private float rho = 1.164f;
     static private float hE0 = 10.500f; // Altitude at Take-off [m]
@@ -109,6 +110,8 @@ public class AerodynamicCalculator : MonoBehaviour
         if(Downwash){epsilon0 = (CL0/(Mathf.PI*ew*AR))*Mathf.Rad2Deg;}
 
         dh0 = Screen.height/2f; // Initial Mouse Position
+
+        Debug.Log(CLw0);
     }
     
     void FixedUpdate()
@@ -135,7 +138,7 @@ public class AerodynamicCalculator : MonoBehaviour
         de = 0.000f;
         dr = 0.000f;
         if (MyGameManeger.instance.MousePitchControl){
-            dh = -(Input.mousePosition.y-dh0)*0.0001f*MyGameManeger.instance.MouseSensitivity;
+            dh = -(Input.mousePosition.y-dh0)*0.0002f*MyGameManeger.instance.MouseSensitivity;
         }
         //Debug.Log(dh);
 
@@ -214,6 +217,8 @@ public class AerodynamicCalculator : MonoBehaviour
         PlaneRigidbody.AddRelativeForce(AerodynamicForce, ForceMode.Force);
         PlaneRigidbody.AddRelativeTorque(AerodynamicMomentum, ForceMode.Force);
         PlaneRigidbody.AddForce(TakeoffForce, ForceMode.Force);
+
+        nz = AerodynamicForce.y/(PlaneRigidbody.mass*Physics.gravity.magnitude);
     }
 
     void CalculateRotation()
@@ -235,7 +240,7 @@ public class AerodynamicCalculator : MonoBehaviour
 
     void InputSpecifications()
     {
-        if(MyGameManeger.instance.PlaneName == "QX-18"){
+                if(MyGameManeger.instance.PlaneName == "QX-18"){
             // Plane
             PlaneRigidbody.mass = 93.875f; // [kg]
             PlaneRigidbody.centerOfMass = new Vector3(0f,0.221f,0f); // [m]
@@ -370,6 +375,96 @@ public class AerodynamicCalculator : MonoBehaviour
             Cnp = -0.132307f; // [1/rad]
             Cnr = 0.000942f; // [1/rad]
             Cndr = -0.000106f; // [1/deg]
+        }else if(MyGameManeger.instance.PlaneName == "ARG-2"){
+            // Plane
+            PlaneRigidbody.mass = 103.100f;
+            PlaneRigidbody.centerOfMass = new Vector3(0f,-0.019f,0f);
+            PlaneRigidbody.inertiaTensor = new Vector3(961f,1024f,80f); //Ixx, Izz, Iyy
+            PlaneRigidbody.inertiaTensorRotation = Quaternion.AngleAxis(-3.929f, Vector3.forward);
+            // Specification At Cruise without Ground Effect
+            Airspeed0 = 10.500f; // Magnitude of ground speed [m/s]
+            alpha0 = 1.407f; // Angle of attack [deg] : L/D =42
+            CDp0 = 0.014f; // Parasitic drag [-]
+            Cmw0 = -0.165f; // Pitching momentum [-]
+            CLMAX = 1.700f;
+            // Wing
+            Sw = 18.009f; // Wing area of wing [m^2]
+            bw = 23.350f; // Wing span [m]
+            cMAC = 0.813f; // Mean aerodynamic chord [m]
+            aw = 0.103f; // Wing Lift Slope [1/deg]
+            hw = (0.3375f-0.250f); // Length between Wing a.c. and c.g.
+            ew = 0.986f; // Wing efficiency
+            AR = (bw*bw)/Sw; // Aspect Ratio
+            // Tail
+            Downwash = true; // Conventional Tail: True, T-Tail: False
+            St = 1.651f; // Wing area of tail
+            at = 0.074f; // Tail Lift Slope [1/deg]
+            lt = 3.200f; // Length between Tail a.c. and c.g.
+            deMAX = 10.000f; // Maximum elevator angle
+            tau = 1.000f; // Control surface angle of attack effectiveness [-]
+            VH = (St*lt)/(Sw*cMAC); // Tail Volume
+            // Fin
+            drMAX = 10.000f; // Maximum rudder angle            
+            // Ground Effect
+            CGEMIN = 0.215f; // Minimum Ground Effect Coefficient [-]
+            // Stability derivatives
+            Cyb = -0.002461f; // [1/deg]
+            Cyp = -0.245086f; // [1/rad]
+            Cyr = 0.098830f; // [1/rad]
+            Cydr = 0.001846f; // [1/deg]
+            Clb = -0.002139f; // [1/deg]
+            Clp = -0.828184f; // [1/rad]
+            Clr = 0.218961f; // [1/rad]
+            Cldr = 0.000032f; // [1/deg]
+            Cnb = 0.000031f; // [1/deg]
+            Cnp = -0.108573f; // [1/rad]
+            Cnr = -0.008108f; // [1/rad]
+            Cndr = -0.000308f; // [1/deg]
+        }else if(MyGameManeger.instance.PlaneName == "UL01B"){
+            // Plane
+            PlaneRigidbody.mass = 87.000f;
+            PlaneRigidbody.centerOfMass = new Vector3(0f,0.290f,0f);
+            PlaneRigidbody.inertiaTensor = new Vector3(886f,975f,113f); //Ixx, Izz, Iyy
+            PlaneRigidbody.inertiaTensorRotation = Quaternion.AngleAxis(-5.581f, Vector3.forward);
+            // Specification At Cruise without Ground Effect
+            Airspeed0 = 8.500f; // Magnitude of ground speed [m/s]
+            alpha0 = 1.521f; // Angle of attack [deg] : L/D =42
+            CDp0 = 0.015f; // Parasitic drag [-]
+            Cmw0 = -0.122f; // Pitching momentum [-]
+            CLMAX = 1.700f;
+            // Wing
+            Sw = 21.873f; // Wing area of wing [m^2]
+            bw = 25.200f; // Wing span [m]
+            cMAC = 0.911f; // Mean aerodynamic chord [m]
+            aw = 0.103f; // Wing Lift Slope [1/deg]
+            hw = (0.330f-0.250f); // Length between Wing a.c. and c.g.
+            ew = 0.986f; // Wing efficiency
+            AR = (bw*bw)/Sw; // Aspect Ratio
+            // Tail
+            Downwash = true; // Conventional Tail: True, T-Tail: False
+            St = 2.160f; // Wing area of tail
+            at = 0.074f; // Tail Lift Slope [1/deg]
+            lt = 4.500f; // Length between Tail a.c. and c.g.
+            deMAX = 10.000f; // Maximum elevator angle
+            tau = 1.000f; // Control surface angle of attack effectiveness [-]
+            VH = (St*lt)/(Sw*cMAC); // Tail Volume
+            // Fin
+            drMAX = 10.000f; // Maximum rudder angle            
+            // Ground Effect
+            CGEMIN = 0.360f; // Minimum Ground Effect Coefficient [-]
+            // Stability derivatives
+            Cyb = -0.012806f; // [1/deg]
+            Cyp = -0.878730f; // [1/rad]
+            Cyr = 0.374259f; // [1/rad]
+            Cydr = 0.003872f; // [1/deg]
+            Clb = -0.007668f; // [1/deg]
+            Clp = -0.744130f; // [1/rad]
+            Clr = 0.241332f; // [1/rad]
+            Cldr = 0.000061f; // [1/deg]
+            Cnb = -0.000407f; // [1/deg]
+            Cnp = -0.118436f; // [1/rad]
+            Cnr = -0.022591f; // [1/rad]
+            Cndr = -0.000817f; // [1/deg]
         }
     }
 
