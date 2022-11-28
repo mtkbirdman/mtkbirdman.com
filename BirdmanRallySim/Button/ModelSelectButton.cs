@@ -38,6 +38,21 @@ public class ModelSelectButton : MonoBehaviour
                 case 4:
                     MyGameManeger.instance.PlaneName = "UL01B";
                     break;
+                case 5:
+                    MyGameManeger.instance.PlaneName = "ORCA18";
+                    break;
+                case 6:
+                    MyGameManeger.instance.PlaneName = "ORCA22";
+                    break;
+                case 7:
+                    MyGameManeger.instance.PlaneName = "Gardenia";
+                    break;
+                case 8:
+                    MyGameManeger.instance.PlaneName = "Aria";
+                    break;
+                case 9:
+                    MyGameManeger.instance.PlaneName = "Camellia";
+                    break;
                 default:
                     break;
             }
