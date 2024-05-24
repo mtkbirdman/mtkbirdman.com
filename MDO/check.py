@@ -16,7 +16,7 @@ def _update_left(i, ax_left, res, airfoil):
     - airfoil: 翼型形状データ
     """
     ax_left.clear()  # 現在描写されているグラフを消去
-    ax_left.set_title("cd = {:.4f} cm = {:.4f}".format(res['cd'].iloc[i], -res['cm'].iloc[i]))  # タイトルに現在のcdとcmの値を表示
+    ax_left.set_title("airfoil{} cd = {:.4f} cm = {:.4f}".format(i, res['cd'].iloc[i], -res['cm'].iloc[i]))  # タイトルに現在のcdとcmの値を表示
     ax_left.set_xlim(0, 1)  # x軸の範囲を設定
     ax_left.set_ylim(-0.5, 0.5)  # y軸の範囲を設定
     ax_left.plot(airfoil.x[i], airfoil.y[i], color='blue')  # 翼型形状をプロット
@@ -58,7 +58,7 @@ def gif_animation(res, airfoil):
     # 保存
     ani.save("./MDO/sample.gif", writer="pillow")  # アニメーションをGIFとして保存
 
-def objective_space(res):
+def objective_space(res,N=None):
     """
     目的空間のプロットを表示する関数
     Args:
@@ -74,6 +74,8 @@ def objective_space(res):
     plt.xticks([-0.20, -0.16, -0.12, -0.08, -0.04, 0.00, 0.04])  # x軸の目盛りを設定
     plt.grid()  # グリッドを表示
     plt.plot(-res['cm'], res['cd'], '.', color='blue')  # cd vs cmのプロット
+    if N is not None:
+        plt.plot(-res['cm'].values[N], res['cd'].values[N], '*', color='red', markersize=10)  # 現在のフレームのデータを強調表示
 
     # 表示
     plt.show()  # プロットを表示
@@ -93,9 +95,15 @@ n_wu = int(res_X.shape[1]/2)
 wu = res_np[:, :n_wu].tolist()
 wl = res_np[:, n_wu:].tolist()
 dz = np.zeros(len(wu)).tolist()
-airfoil.create_airfoil(wu=wu, wl=wl, dz=dz, Node=100)
+airfoil.create_airfoil(wu=wu, wl=wl, dz=dz, Node=200)
 
 # 目的空間のプロットを表示
 objective_space(res)
 # GIFアニメーションを作成
 gif_animation(res, airfoil)
+
+Ntgt = 2
+objective_space(res,N=Ntgt)
+print(res_np[Ntgt,-2:])
+airfoil.plot(N=Ntgt)
+airfoil.write_to_file(file_name = './NACA4412_mod'+str(Ntgt)+'.csv',N=Ntgt)
