@@ -14,6 +14,8 @@ from pymoo.visualization.scatter import Scatter  # 散布図の可視化
 from pymoo.util.display.column import Column  # 表示用カラム
 from pymoo.util.display.output import Output  # 表示用出力
 from pymoo.config import Config  # Pymooの設定
+from multiprocessing import Pool
+import os
 
 # Pymooの警告を無効化
 Config.warnings['not_compiled'] = False
@@ -31,43 +33,15 @@ class MyProblem(Problem):
 
     def _evaluate(self, X, out, *args, **kwargs):
         # Xを丸める
-        X = np.round(X,5)
-        # 目的関数のリスト
-        f1_list = []
-        f2_list = []
-        f3_list = []
-        g3_list = []
-        g4_list = []
-        for i in range(X.shape[0]):
-            theta0 = X[i, 13]  # 初期ピッチ角
-            initial_state = [0, 0, 0, self.u0, 0, self.w0, 0, theta0, 0, 0, 0, 0, 0, 0]  # 初期状態
-            airplane = Airplane(uvw_gE=self.uvw_gE, X=X[i, :13])  # Airplaneクラスのインスタンス作成
-            solution = airplane.simulate(initial_state=initial_state)  # シミュレーション実行
-            XE, YE, ZE = solution.y[:3]  # 結果の取得
-            Distance = np.sqrt(XE[-1]**2 + YE[-1]**2)  # 飛行距離
-
-            # 時間差分と速度成分の計算
-            dt = np.diff(solution.t)
-            uE = np.diff(XE) / dt
-            wE = np.diff(ZE) / dt
-            gamma = np.degrees(np.arctan(wE / uE))  # 経路角の計算
-
-            # 目的関数1の計算
-            target = np.where(solution.t <= X[i, 3], X[i, 0], np.where(solution.t >= X[i, 4], 0, X[i, 1]))
-            diff1 = np.sum(np.abs(gamma - target[1:])) / solution.t[-1]
-
-            # 目的関数2の計算
-            phi = solution.y[6]
-            target = np.where(solution.t <= X[i, 5], phi, np.where(solution.t >= X[i, 6], 0, X[i, 2]))
-            diff2 = np.sum(np.abs(phi - target))/ np.abs(solution.t[-1]-X[i,5])
-
-            # 目的関数リストに追加
-            f1_list.append(diff1)
-            f2_list.append(diff2)
-            f3_list.append(-Distance)
-            g3_list.append(X[i,4]-solution.t[-1]) # time_flare < flight time
-            g4_list.append(X[i,6]-solution.t[-1]) # time_break < flight time
-
+        X = np.round(X, 5)
+        
+        # マルチプロセスプールの作成
+        with Pool(processes=os.cpu_count()) as pool:
+            results = pool.map(self._calculate, [(X[i], i) for i in range(X.shape[0])])
+        
+        # 結果の分解
+        f1_list, f2_list, f3_list, g3_list, g4_list = zip(*results)
+        
         # 目的関数の結果をnumpy配列に変換
         f1 = np.array(f1_list)
         f2 = np.array(f2_list)
@@ -82,6 +56,36 @@ class MyProblem(Problem):
         # 出力として目的関数と制約条件を設定
         out["F"] = np.column_stack([f1, f2, f3])
         out["G"] = np.column_stack([g1, g2, g3, g4])
+
+    def _calculate(self, args):
+        X_i, i = args
+        theta0 = X_i[13]  # 初期ピッチ角
+        initial_state = [0, 0, 0, self.u0, 0, self.w0, 0, theta0, 0, 0, 0, 0, 0, 0]  # 初期状態
+        airplane = Airplane(uvw_gE=self.uvw_gE, X=X_i[:13])  # Airplaneクラスのインスタンス作成
+        solution = airplane.simulate(initial_state=initial_state)  # シミュレーション実行
+        XE, YE, ZE = solution.y[:3]  # 結果の取得
+        Distance = np.sqrt(XE[-1]**2 + YE[-1]**2)  # 飛行距離
+
+        # 時間差分と速度成分の計算
+        dt = np.diff(solution.t)
+        uE = np.diff(XE) / dt
+        wE = np.diff(ZE) / dt
+        gamma = np.degrees(np.arctan(wE / uE))  # 経路角の計算
+
+        # 目的関数1の計算
+        target = np.where(solution.t <= X_i[3], X_i[0], np.where(solution.t >= X_i[4], 0, X_i[1]))
+        diff1 = np.sum(np.abs(gamma - target[1:])) / solution.t[-1]
+
+        # 目的関数2の計算
+        phi = solution.y[6]
+        target = np.where(solution.t <= X_i[5], phi, np.where(solution.t >= X_i[6], 0, X_i[2]))
+        diff2 = np.sum(np.abs(phi - target)) / np.abs(solution.t[-1] - X_i[5])
+
+        # 制約条件の計算
+        g3 = X_i[4] - solution.t[-1]  # time_flare < flight time
+        g4 = X_i[6] - solution.t[-1]  # time_break < flight time
+
+        return diff1, diff2, -Distance, g3, g4
 
 # 出力表示用のカスタムクラス
 class MyOutput(Output):
@@ -105,6 +109,7 @@ class MyOutput(Output):
 
 if __name__ == '__main__':
     start_time = time.time()  # 開始時刻を記録
+    print(f"プロセス数: {os.cpu_count()}")
 
     # 最適化問題の設定
     problem = MyProblem(
@@ -132,6 +137,10 @@ if __name__ == '__main__':
         verbose=True,
         output=MyOutput(),
     )
+
+    # 終了時刻を記録し、実行時間を計算
+    end_time = time.time()
+    print(f"Run time: {end_time - start_time} s")
     
     res_X = pd.DataFrame(np.round(res.X,5), columns=[f'X{i}' for i in range(14)])
     res_F = pd.DataFrame(res.F, columns=['diff1', 'diff2', 'Distance'])
@@ -143,7 +152,3 @@ if __name__ == '__main__':
     res[[f'X{i}' for i in range(14)]].to_csv('./res_X.csv', index=False)
     res[['Distance','diff1', 'diff2']].to_csv('./res_F.csv', index=False)
     res[['Time_Cruise', 'Time_Turn', 'Time_Flare', 'Time_NoBank']].to_csv('./res_G.csv', index=False)
-
-    # 終了時刻を記録し、実行時間を計算
-    end_time = time.time()
-    print(f"Run time: {end_time - start_time} s")
