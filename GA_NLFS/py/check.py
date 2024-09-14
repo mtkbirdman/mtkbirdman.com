@@ -1,5 +1,5 @@
 # 必要なモジュールのインポート
-from NLFS import Plane  # NLFSモジュールからPlaneクラスをインポート
+from NLFS import Airplane  # NLFSモジュールからAirplaneクラスをインポート
 import math  # 数学関数用のmathモジュール
 import numpy as np  # 数値計算用のnumpyモジュール
 import pandas as pd  # データ操作用のpandasモジュール
@@ -72,7 +72,7 @@ def plot_2Ds(solutions):
         initial_state = [0, 0, 0, u0, 0, w0, 0, theta0, 0, 0, 0, 0, 0, 0]  # 初期状態
 
         # 最も飛距離に優れた個体のシミュレーションの実行
-        plane = Plane(uvw_gE=uvw_gE, X=X)  # Planeクラスのインスタンスを作成
+        plane = Airplane(uvw_gE=uvw_gE, X=X)  # Airplaneクラスのインスタンスを作成
         solution = plane.simulate(initial_state=initial_state)  # シミュレーションを実行
         XE, YE, ZE = solution.y[:3,-1]  # 結果の取得
         print('Distance {:6.3f} Time {:6.3f}'.format(math.sqrt(XE**2 + YE**2), solution.t[-1]))
@@ -111,19 +111,20 @@ def plot_results(df):
 
 # CSVファイルからデータを読み込み
 res_X = pd.read_csv('./res_X.csv')  # 最適化結果の変数データ
-res_F = pd.read_csv('./res_F.csv')  # 最適化結果の目的関数データ
 
 # 初期条件の設定
-N = 0
 u0 = 5.5  # 初期速度
-w0 = u0 * math.tan(math.radians(3.5))  # 初期降下率
-uvw_gE=np.array([2*math.sqrt(2), 0, 0])  # 風速
+gamma0 = 3.5
+uvw_gE=np.array([0, 0, 0])  # 風速
+
+N = 0
+w0 = u0 * math.tan(math.radians(gamma0))  # 初期降下率
 X = res_X.values[N]
 theta0 = X[13]  # 最適化結果から初期ピッチ角を取得
 initial_state = [0, 0, 0, u0, 0, w0, 0, theta0, 0, 0, 0, 0, 0, 0]  # 初期状態
 
 # 最も飛距離に優れた個体のシミュレーションの実行
-plane = Plane(uvw_gE=uvw_gE, X=X)  # Planeクラスのインスタンスを作成
+plane = Airplane(uvw_gE=uvw_gE, X=X)  # Airplaneクラスのインスタンスを作成
 solution = plane.simulate(initial_state=initial_state)  # シミュレーションを実行
 XE, YE, ZE = solution.y[:3,-1]  # 結果の取得
 

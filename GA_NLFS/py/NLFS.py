@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt  # グラフ描画のためのライブラリ
 from mpl_toolkits.mplot3d import Axes3D  # 3Dプロットのためのライブラリ
 
 # 飛行機クラスの定義
-class Plane:
+class Airplane:
     def __init__(self, uvw_gE=np.array([0, 0, 0]), X=np.zeros(13)):
         # 機体の基本的なパラメータ
         self.mass = 100  # 期待質量 [kg]
@@ -119,7 +119,8 @@ class Plane:
         CL = CLw+(self.St/self.Sw)*CLt # CL 
 
         # 抗力係数の計算
-        CD = (self.CDp0*(1+(4*2.5)/(math.pi*0.6)*(1/0.04)*math.tan(math.radians(alpha-self.alpha0))**2)+((CL*CL)/(math.pi*self.ew*self.AR))*CGE) # CD 
+        CD = (self.CDp0*(math.cos(math.radians(alpha-self.alpha0))**2+(4*2.5)/(math.pi*0.6)*(1/0.04)*math.sin(math.radians(alpha-self.alpha0))**2)
+              +((CL*CL)/(math.pi*self.ew*self.AR))*CGE) # CD 
         
         # 動微係数を安定軸から機体軸へ変換
         cosA = math.cos(math.radians(alpha))
@@ -289,8 +290,8 @@ if __name__ == "__main__":
     # シミュレーションの開始時刻を記録
     start_time = time.time()
     
-    # Planeクラスのインスタンスを作成し、外部風速をゼロに設定
-    plane = Plane(uvw_gE=np.array([0, 0, 0]))
+    # Airplaneクラスのインスタンスを作成し、外部風速をゼロに設定
+    plane = Airplane(uvw_gE=np.array([0, 0, 0]))
     
     # シミュレーションを実行し、初期状態を設定
     # 初期状態: [XE, YE, ZE, u, v, w, phi, theta, psi, p, q, r, el, rd]

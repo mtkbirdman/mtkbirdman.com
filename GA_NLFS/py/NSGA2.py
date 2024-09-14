@@ -1,5 +1,5 @@
 # 必要なモジュールのインポート
-from NLFS import Plane  # PlaneクラスをNLFSモジュールからインポート
+from NLFS import Airplane  # AirplaneクラスをNLFSモジュールからインポート
 import time  # 時間計測のためのtimeモジュール
 import numpy as np  # 数値計算用のnumpyモジュール
 import pandas as pd  # データ操作用のpandasモジュール
@@ -41,7 +41,7 @@ class MyProblem(Problem):
         for i in range(X.shape[0]):
             theta0 = X[i, 13]  # 初期ピッチ角
             initial_state = [0, 0, 0, self.u0, 0, self.w0, 0, theta0, 0, 0, 0, 0, 0, 0]  # 初期状態
-            airplane = Plane(uvw_gE=self.uvw_gE, X=X[i, :13])  # Planeクラスのインスタンス作成
+            airplane = Airplane(uvw_gE=self.uvw_gE, X=X[i, :13])  # Airplaneクラスのインスタンス作成
             solution = airplane.simulate(initial_state=initial_state)  # シミュレーション実行
             XE, YE, ZE = solution.y[:3]  # 結果の取得
             Distance = np.sqrt(XE[-1]**2 + YE[-1]**2)  # 飛行距離
@@ -87,21 +87,21 @@ class MyProblem(Problem):
 class MyOutput(Output):
     def __init__(self):
         super().__init__()
-        self.Dist_max = Column("Dist_max", width=13)
-        self.Dist_ave = Column("Dist_ave", width=13)
-        self.diff1 = Column("diff1", width=13)
-        self.diff2 = Column("diff2", width=13)
+        self.Dist_max = Column("Dist_max", width=10)
+        self.Dist_ave = Column("Dist_ave", width=10)
+        self.diff1 = Column("diff1", width=10)
+        self.diff2 = Column("diff2", width=10)
         self.RunTime = Column("RunTime", width=13)
         self.columns += [self.Dist_max, self.Dist_ave, self.diff1, self.diff2, self.RunTime]
         self.start_time = time.time()  # 開始時刻を記録
 
     def update(self, algorithm):
         super().update(algorithm)
-        self.diff1.set(np.min(algorithm.pop.get("F"), axis=0)[0])
-        self.diff2.set(np.min(algorithm.pop.get("F"), axis=0)[1])
-        self.Dist_max.set(-np.min(algorithm.pop.get("F"), axis=0)[2])
-        self.Dist_ave.set(-np.average(algorithm.pop.get("F"), axis=0)[2])
-        self.RunTime.set(time.time()-self.start_time)
+        self.diff1.set(f'{np.min(algorithm.pop.get("F"), axis=0)[0]:.3f}')
+        self.diff2.set(f'{np.min(algorithm.pop.get("F"), axis=0)[1]:.3f}')
+        self.Dist_max.set(f'{-np.min(algorithm.pop.get("F"), axis=0)[2]:.3f}')
+        self.Dist_ave.set(f'{-np.average(algorithm.pop.get("F"), axis=0)[2]:.3f}')
+        self.RunTime.set(f'{time.time()-self.start_time:.3f}')
 
 if __name__ == '__main__':
     start_time = time.time()  # 開始時刻を記録
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     problem = MyProblem(
         u0=5.5,
         gamma0=3.5,
-        uvw_gE=np.array([0, 2*math.sqrt(2), 0]),
+        uvw_gE=np.array([0, 0, 0]),
     )
 
     # NSGA-IIアルゴリズムの設定
@@ -135,7 +135,7 @@ if __name__ == '__main__':
     
     res_X = pd.DataFrame(np.round(res.X,5), columns=[f'X{i}' for i in range(14)])
     res_F = pd.DataFrame(res.F, columns=['diff1', 'diff2', 'Distance'])
-    res_G = pd.DataFrame(res.G, columns=['Time_Cruise', 'Time_Turn'])
+    res_G = pd.DataFrame(res.G, columns=['Time_Cruise', 'Time_Turn', 'Time_Flare', 'Time_NoBank'])
 
     # 結果をCSVファイルに保存
     res = pd.concat([res_X, res_F, res_G], axis=1)  # 変数データと目的関数データを結合
