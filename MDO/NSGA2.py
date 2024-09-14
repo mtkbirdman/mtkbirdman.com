@@ -4,6 +4,7 @@ import sys
 import time
 import numpy as np
 import pandas as pd
+import asyncio
 
 from xfoil import XFoil
 from xfoil.model import Airfoil
@@ -75,16 +76,11 @@ class MyProblem(Problem):
         section_area = airfoil.get_section_area()
         w_LE = np.abs(np.abs(airfoil.wu[:,0])-np.abs(airfoil.wl[:,0]))
         
-        f1_list = []  # List to store drag coefficients
-        f2_list = []  # List to store pitching moments
-        g1_list = []  # List to store lift coefficients (for constraints)
+        loop = asyncio.get_event_loop()
+        tasks = [self._calculate(airfoil, i) for i in range(X.shape[0])]
+        results = loop.run_until_complete(asyncio.gather(*tasks))
         
-        for i in range(X.shape[0]):
-            # Calculate aerodynamic properties for each airfoil shape
-            f1, f2, g1 = self._calculate(airfoil=airfoil, idx=i)
-            f1_list.append(f1)
-            f2_list.append(f2)
-            g1_list.append(g1)
+        f1_list, f2_list, g1_list = zip(*results)
         
         f1 = np.array(f1_list)
         f2 = np.array(f2_list)
@@ -102,7 +98,7 @@ class MyProblem(Problem):
         out["F"] = np.column_stack([f1, f2])
         out["G"] = np.column_stack([g1, g2, g3, g4, g5, g6]) #, g7])
 
-    def _calculate(self, airfoil, idx):
+    async def _calculate(self, airfoil, idx):
         # Assign airfoil coordinates to XFoil
         xf.airfoil = Airfoil(airfoil.x[idx], airfoil.y[idx])
         
@@ -158,10 +154,10 @@ if __name__ == '__main__':
     pd.DataFrame(res.G, columns=['cl0', 't/c', 'w_LE', 'section_area', 'TE_angle', 'ler']).to_csv('./MDO/res_G.csv', index=False)
     #pd.DataFrame(res.G, columns=['cl0', 't/c', 'w_LE', 'section_area', 'TE_angle', 'ler', 'x_tmax', ]).to_csv('./MDO/res_G.csv', index=False)
     
+    end_time = time.time()
+    print(f"Run time: {end_time - start_time} s")
+
     # Plot the objective space
     plot = Scatter(title="Objective Space")
     plot.add(res.F)
     plot.show()
-
-    end_time = time.time()
-    print(f"Run time: {end_time - start_time} s")
