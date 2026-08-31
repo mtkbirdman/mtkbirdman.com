@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "winch-launch-simulator"
+version = "1.0.0"
+description = "Research simulator for G103A winch launch dynamics"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "matplotlib>=3.7",
+  "imageio-ffmpeg>=0.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+]
+notebook = [
+  "ipython>=8.0",
+  "nbformat>=5.9",
+  "pandas>=2.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["winch_launch_simulator*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

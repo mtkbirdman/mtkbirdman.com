@@ -1,0 +1,255 @@
+{
+  "simulation": {
+    "dt_s": 0.01,
+    "max_time_s": 60.0,
+    "post_release_duration_s": 2.0
+  },
+  "aircraft": {
+    "mass_kg": 580.0,
+    "iyy_kg_m2": 2500.0
+  },
+  "aerodynamics": {
+    "reference_area_m2": 17.8819,
+    "reference_chord_m": 0.996386,
+    "reference_span_m": 17.5366,
+    "reference_alpha_deg": 2.0,
+    "CL_ref": 0.5321151,
+    "CD_ref": 0.0149235,
+    "Cm_ref": -0.0578052,
+    "CL_alpha_per_rad": 5.6873282,
+    "CL_qhat": 9.0915253,
+    "CL_elevator_per_rad": 0.3279602,
+    "CD_alpha_per_rad": 0.1491309,
+    "CD_qhat": -0.6089485,
+    "CD_elevator_per_rad": 0.0072277,
+    "Cm_alpha_per_rad": -0.9929549,
+    "Cm_qhat": -24.1286907,
+    "Cm_elevator_per_rad": -1.5039185,
+    "state": {
+      "aerodynamic_dataset_id": "g103a_stab_wake15_alpha2",
+      "source_file": "G103A.stab",
+      "openvsp_version": "unresolved",
+      "vspaero_version": "unresolved",
+      "vspaero_stability_type": 1,
+      "reference_alpha_deg": 2.0,
+      "reference_mach": 0.0,
+      "reference_reynolds": 4400000.0,
+      "reference_vinf_m_s": 30.0,
+      "reference_area_m2": 17.8819,
+      "reference_chord_m": 0.996386,
+      "reference_span_m": 17.5366,
+      "moment_reference_xyz_m": [
+        2.87,
+        0.0,
+        0.164
+      ],
+      "wake_num_iter": 15,
+      "num_wake_nodes": 64,
+      "fixed_wake_flag": "unresolved",
+      "control_group_name": "ELEVATOR_GROUP",
+      "control_group_index": 2,
+      "elevator_sign_convention": "positive = trailing-edge down = nose-down moment",
+      "rate_derivative_convention": "qhat = q*Cref/(2*Va)"
+    }
+  },
+  "hook": {
+    "x_from_cg_m": 0.535,
+    "z_from_cg_m": 0.366,
+    "release_model": "TOST Europa G72/G73",
+    "max_cable_load_n": 11700.0,
+    "max_cable_angle_up_deg": -60.0,
+    "max_cable_angle_down_deg": 83.0,
+    "max_lateral_cable_angle_deg": 85.0,
+    "automatic_release_angle_nominal_deg": 83.0,
+    "automatic_release_angle_tolerance_deg": 7.0,
+    "automatic_release_min_cable_load_n": 200.0,
+    "automatic_release_enabled": false
+  },
+  "cable": {
+    "model": "secant",
+    "stiffness_n_m": 18181.81818181818,
+    "damping_n_s_m": 2272.7272727272725,
+    "unstrained_length_m": 1100.0
+  },
+  "pilot": {
+    "elevator_min_deg": -15.0,
+    "elevator_max_deg": 10.0,
+    "pitch_rate_gain_s": 2.4,
+    "initial_climb": {
+      "mode": "takeoff_attitude",
+      "pitch_target_deg": 20.0,
+      "elevator_bias_deg": -1.5,
+      "pitch_kp": 0.84
+    },
+    "rotation": {
+      "start_eas_m_s": 26.5,
+      "min_eas_rate_m_s2": 0.05,
+      "start_min_agl_m": 0.0,
+      "min_duration_s": 7.4,
+      "full_climb_min_agl_m": 60.96,
+      "pitch_target_deg": 40.0,
+      "pitch_kp": 1.5
+    },
+    "full_climb": {
+      "target_eas_m_s": 27.8,
+      "elevator_bias_deg": -5.0,
+      "eas_kp": 0.7
+    },
+    "release_preparation": {
+      "start_ground_angle_deg": 44.5,
+      "end_ground_angle_deg": 76.0,
+      "pitch_target_deg": 8.4,
+      "elevator_bias_deg": -5.0,
+      "pitch_kp": 1.35
+    },
+    "release": {
+      "max_tension_n": 500.0,
+      "min_ground_angle_deg": 77.5,
+      "max_abs_pitch_rate_deg_s": 1.5,
+      "pitch_reference_deg": 8.4,
+      "max_pitch_error_deg": 2.5
+    },
+    "sop": "standard"
+  },
+  "atmosphere": {
+    "model": "isa",
+    "wind_x_m_s": 0.0,
+    "wind_z_m_s": 0.0,
+    "wind_x_gradient_per_m": 0.0,
+    "wind_z_gradient_per_m": 0.0
+  },
+  "limits": {
+    "weak_link_break_load_n": 7000.0,
+    "max_winch_eas_m_s": 33.333333333333336,
+    "stall_speed_1g_eas_m_s": 20.833333333333332,
+    "aero_alpha_min_deg": -4.0,
+    "aero_alpha_max_deg": 14.0,
+    "stop_on_overspeed": true,
+    "stop_on_stall": true,
+    "stop_on_aero_validity": true,
+    "initial_phase_max_winch_speed_factor": 1.1
+  },
+  "output": {
+    "save_animation": false
+  },
+  "case_id": "g103a_dynamic_winch",
+  "winch": {
+    "model": "dynamic",
+    "x_m": 1100.0,
+    "z_m": 0.0,
+    "drum_radius_m": 0.5,
+    "equivalent_inertia_kg_m2": 20.0,
+    "loss_torque_nm": 120.0,
+    "control": {
+      "mode": "tension_control",
+      "kp_nm_per_n": 0.5,
+      "ki_nm_per_n_s": 0.02,
+      "target_tension_schedule": {
+        "initial_rise_rate_n_s": 500.0,
+        "rotation_rise_rate_n_s": 560.0,
+        "max_tension_n": 6200.0,
+        "release_prepare_angle_deg": 58.0,
+        "release_angle_deg": 70.0,
+        "release_target_n": 400.0
+      }
+    },
+    "drive": {
+      "model": "equivalent_full_throttle_torque_curve",
+      "full_throttle_torque_curve": [
+        {
+          "drum_rate_rad_s": 0.0,
+          "drive_torque_nm": 2880.0
+        },
+        {
+          "drum_rate_rad_s": 15.0,
+          "drive_torque_nm": 3200.0
+        },
+        {
+          "drum_rate_rad_s": 25.0,
+          "drive_torque_nm": 3200.0
+        },
+        {
+          "drum_rate_rad_s": 35.0,
+          "drive_torque_nm": 2700.0
+        },
+        {
+          "drum_rate_rad_s": 45.0,
+          "drive_torque_nm": 1900.0
+        },
+        {
+          "drum_rate_rad_s": 50.0,
+          "drive_torque_nm": 1300.0
+        },
+        {
+          "drum_rate_rad_s": 60.0,
+          "drive_torque_nm": 800.0
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "specification": "docs/implementation_spec.md",
+    "source_confirmed": [
+      "G103A VSPAERO canonical coefficients",
+      "G72/G73 11700 N load limit",
+      "G103A 120 km/h winch-launch speed limit",
+      "G103A weak-link manual maximum 7540 N"
+    ],
+    "analysis_baseline": [
+      "mass=580 kg and Iyy=2500 kg m^2 analysis case",
+      "canonical ground-start geometry uses winch.x_m=1100 m and launch pretension=2500 N",
+      "measured G103A representative geometry: belly hook=(+0.535,+0.366) m, nosewheel=(+2.029,+0.508) m, mainwheel=(-0.169,+0.366) m",
+      "tailwheel z, tire radii, aircraft ground stiffness/damping and rolling resistance remain engineering baselines",
+      "VSPAERO local linear aerodynamic model is unchanged; aerodynamic ground effect is not included",
+      "weak-link analysis limit=7000 N; G72/G73 automatic-angle release remains disabled pending installation-axis mapping",
+      "Dynamic winch uses tension_control with target cap=6200.0 N and the shared engineering full-throttle torque curve",
+      "Standard SOP: pitch-rate gain=2.4 s, initial target=20.0 deg, rotation target=40.0 deg",
+      "full-climb is EAS control at 27.8 m/s with Kp=0.7; no pilot integral state is used",
+      "Secant cable natural length=1100.0 m, stiffness=18181.8 N/m, damping=2272.73 N s/m",
+      "1100 m Secant stiffness/damping preserve the previous equivalent axial property by inverse-length scaling"
+    ],
+    "validation_reference": "validation/reference/canonical_regression.json",
+    "warning": "Ground-contact stiffness/damping, tire loaded radius, rolling resistance, cable-ground friction, and the equivalent winch torque-speed curve are engineering baselines. The Club controller gains, tailwheel-load cue and winch-operator response are modeling parameters, not measured operational values."
+  },
+  "launch_setup": {
+    "mode": "ground_start",
+    "x_m": 0.0,
+    "pretension_n": 2500.0,
+    "ground_pitch_guess_deg": 1.4
+  },
+  "ground": {
+    "z_m": 0.0,
+    "aircraft": {
+      "normal_stiffness_n_m": 300000.0,
+      "normal_damping_n_s_m": 18000.0,
+      "rolling_resistance_coefficient": 0.08,
+      "velocity_regularization_m_s": 0.5,
+      "contacts": [
+        {
+          "name": "nosewheel",
+          "x_from_cg_m": 2.029,
+          "z_from_cg_m": 0.508,
+          "radius_m": 0.13
+        },
+        {
+          "name": "mainwheel",
+          "x_from_cg_m": -0.169,
+          "z_from_cg_m": 0.366,
+          "radius_m": 0.22
+        },
+        {
+          "name": "tailwheel",
+          "x_from_cg_m": -4.537,
+          "z_from_cg_m": 0.061,
+          "radius_m": 0.105
+        }
+      ]
+    },
+    "cable": {
+      "normal_stiffness_n_m2": 100.0,
+      "normal_damping_n_s_m2": 2.0,
+      "sliding_friction_coefficient": 0.2,
+      "velocity_regularization_m_s": 0.5
+    }
+  }
+}

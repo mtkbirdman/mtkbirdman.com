@@ -1,0 +1,112 @@
+{
+  "purpose": "Club launch-power ramp sensitivity and early-transient FEM dt/dt2/dt4 convergence",
+  "canonical_ramp_duration_s": 3.5,
+  "secant_ramp_sweep": [
+    {
+      "dt_s": 0.01,
+      "liftoff_time_s": 4.632223112652833,
+      "liftoff_distance_m": 61.54543486336054,
+      "liftoff_eas_m_s": 26.171806342623604,
+      "liftoff_ground_speed_m_s": 26.1701891319221,
+      "mean_ground_acceleration_m_s2": 5.649595992135765,
+      "max_tension_to_end_n": 5134.833598017801,
+      "max_eas_to_end_m_s": 29.69277252341115,
+      "warnings": [],
+      "stops": [],
+      "ramp_duration_s": 2.5
+    },
+    {
+      "dt_s": 0.01,
+      "liftoff_time_s": 4.780328337058492,
+      "liftoff_distance_m": 62.81642290524955,
+      "liftoff_eas_m_s": 26.173594656444156,
+      "liftoff_ground_speed_m_s": 26.17196644469224,
+      "mean_ground_acceleration_m_s2": 5.474930715909107,
+      "max_tension_to_end_n": 4807.441292095817,
+      "max_eas_to_end_m_s": 29.614932378683104,
+      "warnings": [],
+      "stops": [],
+      "ramp_duration_s": 3.0
+    },
+    {
+      "dt_s": 0.01,
+      "liftoff_time_s": 4.927141328911889,
+      "liftoff_distance_m": 64.28129325228902,
+      "liftoff_eas_m_s": 26.1712511309656,
+      "liftoff_ground_speed_m_s": 26.1696376011712,
+      "mean_ground_acceleration_m_s2": 5.311322703006473,
+      "max_tension_to_end_n": 4557.63337303841,
+      "max_eas_to_end_m_s": 29.523574146669972,
+      "warnings": [],
+      "stops": [],
+      "ramp_duration_s": 3.5
+    },
+    {
+      "dt_s": 0.01,
+      "liftoff_time_s": 5.075191503323816,
+      "liftoff_distance_m": 65.99584947655408,
+      "liftoff_eas_m_s": 26.171894329041823,
+      "liftoff_ground_speed_m_s": 26.170276289668394,
+      "mean_ground_acceleration_m_s2": 5.156510108540555,
+      "max_tension_to_end_n": 4359.982531045943,
+      "max_eas_to_end_m_s": 29.416798631947067,
+      "warnings": [],
+      "stops": [],
+      "ramp_duration_s": 4.0
+    },
+    {
+      "dt_s": 0.01,
+      "liftoff_time_s": 5.223512371718999,
+      "liftoff_distance_m": 67.91959283802191,
+      "liftoff_eas_m_s": 26.171449047380225,
+      "liftoff_ground_speed_m_s": 26.16983378246884,
+      "mean_ground_acceleration_m_s2": 5.010007045098018,
+      "max_tension_to_end_n": 4198.912119072296,
+      "max_eas_to_end_m_s": 29.29376714638275,
+      "warnings": [],
+      "stops": [],
+      "ramp_duration_s": 4.5
+    }
+  ],
+  "fem_early_transient_dt_convergence": [
+    {
+      "dt_s": 0.005,
+      "liftoff_time_s": 4.7618785694473225,
+      "liftoff_distance_m": 58.91705679007634,
+      "liftoff_eas_m_s": 26.48603003212879,
+      "liftoff_ground_speed_m_s": 26.48419509187841,
+      "mean_ground_acceleration_m_s2": 5.5617115610220695,
+      "max_tension_to_end_n": 4568.87171426717,
+      "max_eas_to_end_m_s": 28.737129349869043,
+      "warnings": [],
+      "stops": []
+    },
+    {
+      "dt_s": 0.0025,
+      "liftoff_time_s": 4.761986461038397,
+      "liftoff_distance_m": 58.91995528118319,
+      "liftoff_eas_m_s": 26.486447769843686,
+      "liftoff_ground_speed_m_s": 26.4846105173157,
+      "mean_ground_acceleration_m_s2": 5.561672788028145,
+      "max_tension_to_end_n": 4568.878809014918,
+      "max_eas_to_end_m_s": 28.73710646875734,
+      "warnings": [],
+      "stops": []
+    },
+    {
+      "dt_s": 0.00125,
+      "liftoff_time_s": 4.762000165353498,
+      "liftoff_distance_m": 58.920257915134194,
+      "liftoff_eas_m_s": 26.486494611053647,
+      "liftoff_ground_speed_m_s": 26.48465708794853,
+      "mean_ground_acceleration_m_s2": 5.561666562013337,
+      "max_tension_to_end_n": 4568.890405080022,
+      "max_eas_to_end_m_s": 28.73710116848585,
+      "warnings": [],
+      "stops": []
+    }
+  ],
+  "scope_note": "FEM dt refinement is evaluated through 6 s, covering the full 3.5 s command ramp and liftoff. Full-launch canonical release metrics are stored separately in canonical_regression_v0.17.json.",
+  "record_name": "launch_power_ramp",
+  "source_version": "v0.17"
+}

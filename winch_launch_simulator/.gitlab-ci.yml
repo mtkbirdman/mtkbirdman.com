@@ -1,0 +1,36 @@
+stages:
+  - test
+  - validation
+
+default:
+  image: python:3.11
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install -e ".[dev]"
+
+pytest:
+  stage: test
+  script:
+    - python -m pytest -q
+
+canonical-regression:
+  stage: validation
+  when: manual
+  allow_failure: false
+  script:
+    - python -m validation.run_regression --output validation_artifacts/canonical_regression.json
+  artifacts:
+    when: always
+    paths:
+      - validation_artifacts/canonical_regression.json
+
+fem-convergence:
+  stage: validation
+  when: manual
+  allow_failure: false
+  script:
+    - python -m validation.run_fem_convergence --output validation_artifacts/fem_convergence.json
+  artifacts:
+    when: always
+    paths:
+      - validation_artifacts/fem_convergence.json

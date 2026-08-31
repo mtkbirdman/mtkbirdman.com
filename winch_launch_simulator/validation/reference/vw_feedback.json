@@ -1,0 +1,18 @@
+{
+  "case_id": "g103a_club_sop_dynamic_winch",
+  "wind_x_m_s": -4.5,
+  "request_time_s": 25.992986033056237,
+  "reduced_throttle_active_time_s": 26.492986033056315,
+  "operator_delay_s": 0.5,
+  "normal_release": true,
+  "release_time_s": 45.84298603305442,
+  "max_eas_below_200ft_m_s": 33.41004001014695,
+  "max_eas_at_or_above_200ft_m_s": 32.69311996666781,
+  "vw_m_s": 33.333333333333336,
+  "min_airborne_stall_margin_m_s": 0.23605518833231187,
+  "warnings": [
+    "MAX_WINCH_SPEED_EXCEEDED"
+  ],
+  "stops": [],
+  "source_version": "v0.17"
+}
