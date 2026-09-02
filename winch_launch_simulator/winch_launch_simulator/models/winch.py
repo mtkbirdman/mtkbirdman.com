@@ -11,40 +11,70 @@ def full_throttle_drive_torque(winch, drum_rate_rad_s):
     return float(np.interp(drum_rate_rad_s, rates, torques))
 
 
-def scheduled_tension(settings, pretension_n, time_s, ground_angle_rad, liftoff_time_s, rotation_start_time_s):
-    """Return the prescribed/controlled tension target for the standard launch sequence."""
+def _angle_fade(value, ground_angle_rad, start_deg, end_deg, final_value):
+    start = math.radians(start_deg)
+    end = math.radians(end_deg)
+    if ground_angle_rad <= start:
+        return float(value), 0.0
+    fraction = min(max((ground_angle_rad - start) / (end - start), 0.0), 1.0)
+    return float(value + fraction * (final_value - value)), float(fraction)
+
+
+def prescribed_tension(settings, pretension_n, time_s, ground_angle_rad, liftoff_time_s):
+    """Common open-loop tension excitation used by both ideal-Secant pilot cases.
+
+    The profile is an analysis input rather than a winch-operator SOP.  It is defined
+    relative to each case's LIFTOFF so the RWTH-reference and Club-pilot cases use the same prescribed forcing law.
+    """
+    points = settings["time_points_after_liftoff"]
+    times = [float(point["time_s"]) for point in points]
+    values = [float(point["tension_n"]) for point in points]
+    if liftoff_time_s is None:
+        elapsed = 0.0
+        target = float(pretension_n)
+    else:
+        elapsed = max(0.0, time_s - liftoff_time_s)
+        target = float(np.interp(elapsed, times, values))
+    terminal = settings["terminal_fade"]
+    target, progress = _angle_fade(
+        target,
+        ground_angle_rad,
+        terminal["start_ground_angle_deg"],
+        terminal["end_ground_angle_deg"],
+        terminal["final_tension_n"],
+    )
+    if abs(values[0] - pretension_n) > 1.0e-9:
+        raise ValueError("First prescribed-tension point must equal launch pretension.")
+    return max(0.0, target), progress
+
+
+def rwth_target_tension(settings, pretension_n, time_s, ground_angle_rad, liftoff_time_s):
+    """G103A-adapted RWTH reference force-control target.
+
+    Source-derived structure: moderate initial force, approximately linear rise after
+    liftoff, force cap, and terminal reduction with cable angle.  The numerical cap is
+    a G103A analysis setting rather than the ASK-21 value from the RWTH reference.
+    """
     if liftoff_time_s is None:
         target = pretension_n
-    elif rotation_start_time_s is None or time_s <= rotation_start_time_s:
-        target = pretension_n + settings["initial_rise_rate_n_s"] * max(
-            0.0, time_s - liftoff_time_s
-        )
     else:
-        tension_at_rotation = pretension_n + settings["initial_rise_rate_n_s"] * max(
-            0.0, rotation_start_time_s - liftoff_time_s
-        )
-        target = tension_at_rotation + settings["rotation_rise_rate_n_s"] * (
-            time_s - rotation_start_time_s
-        )
-
+        target = pretension_n + settings["rise_rate_n_s"] * max(0.0, time_s - liftoff_time_s)
     target = min(target, settings["max_tension_n"])
-
-    start = math.radians(settings["release_prepare_angle_deg"])
-    end = math.radians(settings["release_angle_deg"])
-    if ground_angle_rad > start:
-        fraction = min(1.0, (ground_angle_rad - start) / (end - start))
-        target += fraction * (settings["release_target_n"] - target)
-
-    return max(0.0, target)
+    terminal = settings["terminal_fade"]
+    target, progress = _angle_fade(
+        target,
+        ground_angle_rad,
+        terminal["start_ground_angle_deg"],
+        terminal["end_ground_angle_deg"],
+        terminal["final_tension_n"],
+    )
+    return max(0.0, target), progress
 
 
 def club_winch_throttle(winch, pretension_n, time_s, cable_los_ground_angle_rad, pilot_state):
     """Return the continuous Club launch command, speed reduction and terminal fade."""
     control = winch["control"]
 
-    # t=0 is ALL OUT with pretension already established.  Start from the
-    # equivalent command that balances that pretension at zero drum speed,
-    # then ramp to the selected launch command without using LIFTOFF as a switch.
     pretension_drive_torque = (
         pretension_n * winch["drum_radius_m"] + winch["loss_torque_nm"]
     )

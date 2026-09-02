@@ -1,18 +1,20 @@
 {
-  "case_id": "g103a_club_sop_dynamic_winch",
+  "version": "v1.3.0",
+  "physics_change": "Iyy=2000 kg m^2 from AMC 22.481-derived estimate; mainwheel+tailwheel two-point prelaunch equilibrium",
+  "case_id": "g103a_club_dynamic_winch_fem",
   "wind_x_m_s": -4.5,
-  "request_time_s": 25.992986033056237,
-  "reduced_throttle_active_time_s": 26.492986033056315,
+  "request_time_s": 23.093959862262334,
+  "reduced_throttle_active_time_s": 23.598959862262234,
   "operator_delay_s": 0.5,
   "normal_release": true,
-  "release_time_s": 45.84298603305442,
-  "max_eas_below_200ft_m_s": 33.41004001014695,
-  "max_eas_at_or_above_200ft_m_s": 32.69311996666781,
+  "release_time_s": 43.16895986226628,
+  "max_eas_below_200ft_m_s": 33.39915680434708,
+  "max_eas_at_or_above_200ft_m_s": 32.76063757609772,
   "vw_m_s": 33.333333333333336,
-  "min_airborne_stall_margin_m_s": 0.23605518833231187,
+  "min_airborne_stall_margin_m_s": 3.0072890777716452,
   "warnings": [
     "MAX_WINCH_SPEED_EXCEEDED"
   ],
   "stops": [],
-  "source_version": "v0.17"
+  "source_version": "v1.3.0"
 }

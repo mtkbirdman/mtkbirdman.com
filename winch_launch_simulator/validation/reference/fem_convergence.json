@@ -1,221 +1,86 @@
 {
-  "version": "v1.0",
-  "scope": "Full-launch FEM time-step and mesh convergence after restoring unilateral cable-ground contact semantics.",
+  "version": "v1.3.0",
+  "scope": "Targeted numerical checks after the plant/policy architecture change. FEM plant equations are unchanged from v1.1.0; the full v1.1.0 mesh matrix is archived separately.",
   "canonical_fem": {
     "node_count": 20,
     "dt_s": 0.005
   },
-  "mesh_comparison_dt_s": 0.0025,
-  "standard": {
-    "time_step_convergence_20_nodes": [
-      {
-        "node_count": 20,
-        "dt_s": 0.005,
-        "release_time_s": 40.61832840850707,
-        "release_altitude_m": 322.4141175646005,
-        "release_eas_m_s": 27.71134794957822,
-        "max_tension_n": 5148.449252950137,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 3.9455802984512047,
-        "stops": []
-      },
-      {
-        "node_count": 20,
-        "dt_s": 0.0025,
-        "release_time_s": 40.61839816894608,
-        "release_altitude_m": 322.42183334038066,
-        "release_eas_m_s": 27.71141813874735,
-        "max_tension_n": 5148.443067349187,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 3.924425139948653,
-        "stops": []
-      },
-      {
-        "node_count": 20,
-        "dt_s": 0.00125,
-        "release_time_s": 40.61843831353031,
-        "release_altitude_m": 322.4257194236536,
-        "release_eas_m_s": 27.71144493936383,
-        "max_tension_n": 5148.442963541227,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 3.912637647883912,
-        "stops": []
-      }
-    ],
-    "mesh_convergence_common_dt_0p0025_s": [
-      {
-        "node_count": 20,
-        "dt_s": 0.0025,
-        "release_time_s": 40.61839816894608,
-        "release_altitude_m": 322.42183334038066,
-        "release_eas_m_s": 27.71141813874735,
-        "max_tension_n": 5148.443067349187,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 3.924425139948653,
-        "stops": []
-      },
-      {
-        "node_count": 22,
-        "dt_s": 0.0025,
-        "release_time_s": 40.566008338863334,
-        "release_altitude_m": 322.2000968022737,
-        "release_eas_m_s": 27.743319837082637,
-        "max_tension_n": 5148.9490180769435,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 5.9818874634615895,
-        "stops": []
-      },
-      {
-        "node_count": 40,
-        "dt_s": 0.0025,
-        "release_time_s": 40.47013115224934,
-        "release_altitude_m": 321.6749742252608,
-        "release_eas_m_s": 27.642286118926965,
-        "max_tension_n": 5149.168134020552,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 2.983765144631434,
-        "stops": []
-      }
-    ],
-    "forty_node_time_step_check": {
-      "dt_0p0025": {
-        "node_count": 40,
-        "dt_s": 0.0025,
-        "release_time_s": 40.47013115224934,
-        "release_altitude_m": 321.6749742252608,
-        "release_eas_m_s": 27.642286118926965,
-        "max_tension_n": 5149.168134020552,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 2.983765144631434,
-        "stops": []
-      },
-      "dt_0p00125": {
-        "node_count": 40,
-        "dt_s": 0.00125,
-        "release_time_s": 40.470128560639715,
-        "release_altitude_m": 321.67498610185487,
-        "release_eas_m_s": 27.642284278176504,
-        "max_tension_n": 5149.167246316876,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 2.982147343404904,
-        "stops": []
-      }
+  "rwth_reference_full_launch_time_step": [
+    {
+      "node_count": 20,
+      "dt_s": 0.005,
+      "release_time_s": 40.486147773455926,
+      "release_altitude_m": 241.34427934091667,
+      "release_eas_m_s": 28.938124357536132,
+      "max_tension_n": 5306.47455178885,
+      "min_stall_margin_m_s": 3.6662175981644687,
+      "max_remesh_winch_tension_jump_n": 3.951088573922334,
+      "stops": []
     },
-    "mesh_20_to_40_delta": {
-      "release_altitude_m": -0.7468591151198325,
-      "release_altitude_percent": -0.23164036609498884,
-      "max_tension_n": 0.7250666713653118,
-      "max_tension_percent": 0.01408322209025867
+    {
+      "node_count": 20,
+      "dt_s": 0.0025,
+      "release_time_s": 40.483444836980965,
+      "release_altitude_m": 241.33769145812053,
+      "release_eas_m_s": 28.94126456278073,
+      "max_tension_n": 5306.501138525312,
+      "min_stall_margin_m_s": 3.6662081655384924,
+      "max_remesh_winch_tension_jump_n": 3.931296718747035,
+      "stops": []
     }
-  },
-  "club": {
-    "time_step_convergence_20_nodes": [
+  ],
+  "club_early_transient_time_step": {
+    "reference_file": "validation/reference/launch_power_ramp.json",
+    "window_s": 6.0,
+    "dt_values_s": [
+      0.005,
+      0.0025,
+      0.00125
+    ],
+    "rows": [
       {
-        "node_count": 20,
         "dt_s": 0.005,
-        "release_time_s": 41.60187856945023,
-        "release_altitude_m": 354.4856962204709,
-        "release_eas_m_s": 27.287507971818197,
-        "max_tension_n": 6301.137973053503,
-        "min_stall_margin_m_s": 1.562503727520454,
-        "max_remesh_winch_tension_jump_n": null,
+        "liftoff_time_s": 4.7709256095487556,
+        "liftoff_distance_m": 59.1298633760508,
+        "liftoff_eas_m_s": 26.48703325552994,
+        "liftoff_ground_speed_m_s": 26.48494612795149,
+        "mean_ground_acceleration_m_s2": 5.551322383845866,
+        "max_tension_to_end_n": 4564.627742016831,
+        "max_eas_to_end_m_s": 28.680510788794756,
+        "warnings": [],
         "stops": []
       },
       {
-        "node_count": 20,
         "dt_s": 0.0025,
-        "release_time_s": 41.59698646103696,
-        "release_altitude_m": 354.4812658015293,
-        "release_eas_m_s": 27.293260113967747,
-        "max_tension_n": 6301.143712073144,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 4.110795455224434,
+        "liftoff_time_s": 4.77096824845791,
+        "liftoff_distance_m": 59.130957798881084,
+        "liftoff_eas_m_s": 26.487200580374996,
+        "liftoff_ground_speed_m_s": 26.485112479746398,
+        "mean_ground_acceleration_m_s2": 5.551307638299,
+        "max_tension_to_end_n": 4564.626159968089,
+        "max_eas_to_end_m_s": 28.680505079911537,
+        "warnings": [],
         "stops": []
       },
       {
-        "node_count": 20,
         "dt_s": 0.00125,
-        "release_time_s": 41.59575016533348,
-        "release_altitude_m": 354.4763572493804,
-        "release_eas_m_s": 27.295596699633478,
-        "max_tension_n": 6301.139958008833,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 4.109718335948855,
+        "liftoff_time_s": 4.771000644543054,
+        "liftoff_distance_m": 59.13187000634601,
+        "liftoff_eas_m_s": 26.487318144626922,
+        "liftoff_ground_speed_m_s": 26.485229294139,
+        "mean_ground_acceleration_m_s2": 5.551294428021533,
+        "max_tension_to_end_n": 4564.625059788884,
+        "max_eas_to_end_m_s": 28.68049559416369,
+        "warnings": [],
         "stops": []
       }
     ],
-    "mesh_convergence_common_dt_0p0025_s": [
-      {
-        "node_count": 20,
-        "dt_s": 0.0025,
-        "release_time_s": 41.59698646103696,
-        "release_altitude_m": 354.4812658015293,
-        "release_eas_m_s": 27.293260113967747,
-        "max_tension_n": 6301.143712073144,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 4.110795455224434,
-        "stops": []
-      },
-      {
-        "node_count": 22,
-        "dt_s": 0.0025,
-        "release_time_s": 41.59742225741108,
-        "release_altitude_m": 354.4528257090833,
-        "release_eas_m_s": 27.298905546027175,
-        "max_tension_n": 6300.884712532949,
-        "min_stall_margin_m_s": 1.5618546688038464,
-        "max_remesh_winch_tension_jump_n": null,
-        "stops": []
-      },
-      {
-        "node_count": 40,
-        "dt_s": 0.0025,
-        "release_time_s": 41.602110085777255,
-        "release_altitude_m": 354.38426815916006,
-        "release_eas_m_s": 27.3024455767462,
-        "max_tension_n": 6298.288571227989,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 3.6032145368535566,
-        "stops": []
-      }
-    ],
-    "forty_node_time_step_check": {
-      "dt_0p0025": {
-        "node_count": 40,
-        "dt_s": 0.0025,
-        "release_time_s": 41.602110085777255,
-        "release_altitude_m": 354.38426815916006,
-        "release_eas_m_s": 27.3024455767462,
-        "max_tension_n": 6298.288571227989,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 3.6032145368535566,
-        "stops": []
-      },
-      "dt_0p00125": {
-        "node_count": 40,
-        "dt_s": 0.00125,
-        "release_time_s": 41.60212190317075,
-        "release_altitude_m": 354.38241705469613,
-        "release_eas_m_s": 27.304256506916584,
-        "max_tension_n": 6298.280753988271,
-        "min_stall_margin_m_s": -4.550107784098518e-07,
-        "max_remesh_winch_tension_jump_n": 3.6074560123306583,
-        "stops": []
-      }
-    },
-    "mesh_20_to_40_delta": {
-      "release_altitude_m": -0.09699764236921737,
-      "release_altitude_percent": -0.02736326337300021,
-      "max_tension_n": -2.8551408451548923,
-      "max_tension_percent": -0.0453114700381198
-    }
+    "note": "Covers the complete 3.5 s launch-power ramp and liftoff; liftoff metrics are converged to substantially below operational/model uncertainty."
   },
+  "archived_full_mesh_reference": "validation/reference/fem_convergence_v1.1.0.json",
+  "interpretation": "The v1.1.0 full 20/22/40-node study remains evidence for the unchanged FEM plant discretization. It is not relabelled as a v1.3.0 current-policy trajectory result.",
   "acceptance": {
-    "all_runs_normal_release_without_stop": true,
-    "canonical_20_node_dt_convergence_good": true,
-    "common_dt_mesh_convergence_good": true,
-    "remesh_tension_jump_order_n": "single-digit N in the converged runs",
-    "note": "The earlier v0.17 40-node dt=.005 peak-load anomaly was a mixed temporal/spatial-resolution result observed during an intermediate vectorization bug investigation and is not used as mesh evidence."
-  },
-  "source_record": "v0.18 numerical V&V; repository-only v1.0 restructuring does not change solver numerics."
+    "rwth_full_launch_normal_release_without_stop": true,
+    "club_early_transient_without_stop": true
+  }
 }

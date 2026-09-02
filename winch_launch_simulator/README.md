@@ -1,380 +1,297 @@
-# winch_launch_simulator v1.0
+# winch_launch_simulator v1.3.0
 
-G103A の縦運動ウインチ発航を、**地上静止状態から ground roll・LIFTOFF・曳航上昇・level off・release まで**計算する研究用シミュレーターです。現在の基準実装は v1.0、実装仕様は `docs/implementation_spec.md`、開発履歴は `CHANGELOG.md` です。
+G103A の縦運動ウインチ発航を、地上静止から LIFTOFF、曳航上昇、level off、release まで計算する研究用シミュレーターです。
 
+v1.3.0 は v1.2.0 の4ケース architecture を維持し、G103A pitch inertia と pre-launch ground initialization の provenance を改善します。`Iyy` は根拠のない 2500 kg m² から、AMC 22.481 の `iy=0.225 LR`、`LR=8.18 m`、`m=580 kg` による 1964.7 kg m² を丸めた **2000 kg m²** へ変更しました。索張り合わせ時の機体は、主輪＋尾輪の2点接地静的平衡から開始し、前輪が非接触であることを検証します。
 
-## Repository layout
+## Canonical architecture
 
-```text
-winch_launch_simulator/
-├─ README.md
-├─ CHANGELOG.md
-├─ pyproject.toml
-├─ .gitignore
-├─ .gitlab-ci.yml
-├─ run_simulation.py
-├─ winch_launch_simulator/   # solver implementation
-│  └─ models/                # physical submodels
-├─ cases/                    # canonical inputs
-├─ tests/                    # pytest correctness tests
-├─ validation/               # numerical V&V runners and references
-├─ notebooks/                # simulation/search/flight analysis
-├─ data/flight_validation/raw/
-└─ docs/
-```
+| Plant | RWTH Reference | Club |
+|---|---|---|
+| Prescribed tension + Ideal Secant | `g103a_rwth_reference_prescribed_tension.json` | `g103a_club_prescribed_tension.json` |
+| Dynamic winch + FEM cable | `g103a_rwth_reference_dynamic_winch_fem.json` | `g103a_club_dynamic_winch_fem.json` |
 
-`outputs/`、図・動画、IGC派生CSVは再生成可能なのでGit管理しません。Python実装をpackage化したため、Notebook・tests・validation runnerで `sys.path` を書き換える必要はありません。
+### 1. Prescribed tension + Ideal Secant
 
-## Install
+低忠実度 plant です。
 
-```bash
-python -m pip install -e .
-```
+- cable mass = 0
+- cable elasticity / damping = 0
+- cable gravity = 0
+- cable aerodynamic drag = 0
+- cable-ground interaction = 0
+- hook と winch を直線で結ぶ
+- prescribed tension の大きさを、その直線方向へ作用させる
 
-テスト・Notebookまで含める場合は、
+Gäb & Santel の Secant model と同じ理想化を採用します。旧 v1.1.0 の `k_C`, `c_C` を持つ弾性 Secant は完全に削除しました。
 
-```bash
-python -m pip install -e ".[dev,notebook]"
-```
+Prescribed pair の2ケースは **同じ張力履歴**を使用します。したがって低忠実度 plant 上での差は pilot policy の差です。
 
-## 現在のモデル構成
-
-同一の ground-start setup から、次の3段階で物理忠実度を上げます。
-
-1. **Prescribed tension**
-   - 機体3自由度 + wheel-ground contact
-   - tension historyを外部規定
-2. **Dynamic winch + Secant cable**
-   - drum dynamics / drive torque / winch control
-   - 索を等価ばね・ダンパで表現
-   - Standard / Club SOP
-3. **Dynamic winch + FEM cable**
-   - distributed elastic cable
-   - cable mass / weight / aerodynamic drag
-   - cable-ground contact / friction
-   - reel-in / accepted-step node removal
-   - Standard / Club SOP
-
-Standard / Club は同じplantへ異なる操縦・ウインチ操作を適用するcaseとして扱います。
-
-## Canonical case tree
+canonical open-loop excitation は LIFTOFF 基準で、
 
 ```text
-cases/
-├─ g103a_prescribed_tension.json
-├─ g103a_dynamic_winch.json
-├─ g103a_club_sop_dynamic_winch.json
-├─ g103a_dynamic_winch_fem.json
-└─ g103a_club_sop_dynamic_winch_fem.json
+0.0 s   2500 N
+1.5 s   1600 N
+18.0 s  4750 N
+terminal fade: LOS 60° → 75°, 400 N
 ```
 
-通常のcanonical FEM baselineは20 nodes / `dt=0.005 s`です。高解像度確認では40 nodes / `dt=0.0025 s`を使用でき、v1.0のmesh/time-step V&Vで両者のglobal launch quantitiesが十分近いことを確認しています。
+です。この履歴は RWTH SOP でも Club SOP でもなく、比較用の共通解析入力です。
 
-## Canonical physical setup
+### 2. Dynamic winch + FEM cable
+
+高忠実度 plant です。
+
+- dynamic drum inertia
+- equivalent full-throttle torque-speed curve
+- distributed cable mass
+- axial elasticity and damping
+- gravity
+- cable aerodynamic drag
+- cable-ground contact / friction
+- reel-in and node removal
+
+を連成します。
+
+RWTH case は tension-control、Club case は throttle-based operation を使用します。FEM cable と winch hardware は2ケースで共通です。
+
+## Pilot / operation policies
+
+### RWTH Reference
+
+Santel (2008) / Gäb & Santel (2011) の reference procedure から、次を source-derived structure として実装します。
+
+- safety altitude 50 m までは trim-only
+- trim elevator = -3°
+- safety altitude 後に airspeed / dynamic-pressure control と pitch damper を fade-in
+- target EAS = 30 m/s
+- winch force は初期に抑え、LIFTOFF 後に増加させ、上限を設け、終盤に低減
+
+公開資料には human-controller gain の具体値がないため、G103A 用 controller gain と fade constants は **analysis settings** です。
+
+Dynamic FEM の target tension は、G103A へ適合させた解析設定として、
 
 ```text
-launch distance       1100 m
-pre-launch pretension 2500 N
-weak-link analysis    7000 N
-Vw                     33.3333 m/s (120 km/h)
+initial       2500 N
+rise rate      500 N/s after LIFTOFF
+cap           5000 N
+terminal fade  LOS 65° → 75°, 400 N
 ```
 
-G103A representative geometry, body-fixed +x forward / +z down:
+を用います。ASK 21 reference case の数値をそのまま G103A に移植したものではありません。
 
-```text
-belly hook      (+0.535, +0.366) m
-nosewheel       (+2.029, +0.508) m
-mainwheel       (-0.169, +0.366) m
-tailwheel       (-4.537, +0.061) m
-```
+### Club
 
-Aircraft ground baseline:
-
-```text
-normal stiffness   300000 N/m
-normal damping      18000 N s/m
-rolling Crr             0.08
-velocity smoothing      0.5 m/s
-```
-
-FEM cable-ground baseline:
-
-```text
-normal stiffness       100 N/m²
-normal damping           2 N s/m²
-sliding friction mu      0.20
-velocity smoothing       0.5 m/s
-```
-
-これらのground parameterはengineering baselineであり、field validation対象です。
-
-## Pre-launch initializer
-
-`winch_launch_simulator/initialization.py` がphysical `t=0`を作ります。simulation開始時点はpretension成立済みの `ALL OUT / launch start` とします。
-
-```text
-measured aircraft geometry
-        ↓
-wheel vertical/pitch equilibrium
-        ↓
-1100 m material cable
-        ↓
-FEM static equilibrium with gravity + ground contact
-        ↓
-derived initial reel-in
-        ↓
-winch tension ≈ 2500 N
-        ↓
-physical simulation t = 0
-```
-
-## Club SOP
-
-Club caseでは、ground rollからreleaseまで次のphaseを使用します。
+Club policy は plant fidelity に依存せず同一の pilot model を使います。
 
 ```text
 GROUND_ROLL_TAILWHEEL
-→ natural LIFTOFF
-→ POST_LIFTOFF_HOLD_DOWN to 200 ft
-→ PROGRESSIVE_ROTATION toward 45°
-→ FULL_CLIMB nominal 45° + Vw protection
-→ terminal winch fade
-→ LEVEL_OFF (gamma_ground → 0°)
-→ RELEASE
+  ↓ natural LIFTOFF
+POST_LIFTOFF_HOLD_DOWN to 60.96 m AGL
+  ↓
+PROGRESSIVE_ROTATION to nominal 45°
+  ↓
+FULL_CLIMB nominal 45° + Vw protection
+  ↓
+LEVEL_OFF: gamma_ground → 0°
+  ↓
+RELEASE
 ```
 
-Secant/FEMで同じpilot/winch commandを使用します。
+canonical full-climb settings は、両 plant で共通に
 
 ```text
-pitch-rate gain              2.4 s
-
-ground roll:
-  elevator bias             -6.0 deg
-  tailwheel load cue         500 N
-  tailwheel feedback gain     10 deg
-
-hold-down:
-  until AGL                  60.96 m
-  forward elevator           +0.9 deg
-  low-tension cue            4000 N
-  low-tension relief           20 deg
-
-rotation:
-  target                       45 deg
-  duration                    7.4 s
-  pitch Kp                    1.5
-
-full climb:
-  nominal target               45 deg
-  pitch Kp                    0.50
-  elevator bias              -4.0 deg
-  speed-protection margin     1.5 m/s
-  pitch increment gain        4 deg/(m/s)
-  power-reduction request     Vw - 0.9 m/s
-
-winch:
-  launch throttle             1.00 (provisional)
-  launch-power ramp            3.5 s
-  operator delay              0.5 s
-  reduced throttle            0.70
-  terminal fade LOS           60 → 75 deg
+pitch target       45°
+elevator bias      -2°
+pitch Kp           0.25
+pitch-rate gain    2.4 s
 ```
 
-`launch_throttle=1.0` はequivalent full-throttle torque curveに対するcanonical launch-drive targetです。actual Club winchのlever position、engine/transmission/drum特性は今後のhardware identification対象です。
+です。これらの数値は current G103A model に対する analysis settings であり、訓練資料の規定値ではありません。
 
-Club launch commandはpretension平衡に必要なequivalent commandから始まり、3.5 sのlinear rampで`launch_throttle`へ到達します。このrampはground rollとLIFTOFFをまたいで連続し、LIFTOFFをwinch-controlの切替条件には使用しません。
-
-## Secant 1100 m baseline
-
-1000 m equivalent baselineの軸方向特性を長さ比で1100 mへ換算し、
+Dynamic FEM では Club winch を throttle operation としてモデル化します。
 
 ```text
-unstrained length  1100 m
-stiffness          18181.818 N/m
-damping             2272.727 N s/m
+launch throttle ramp     3.5 s → 1.0
+Vw protection request    Vw - 0.9 m/s
+operator delay           0.5 s
+reduced throttle         0.70
+terminal fade            LOS 60° → 75° → throttle 0
 ```
 
-を使用します。この `k,c` はFEMのmaterial property `EA` と同一視しません。
+## Aircraft aerodynamics
 
-## Canonical regression
+`CL` と `Cm` は `G103A.stab` の local-linear stability derivatives を使用します。
 
-v1.0の最終release treeから5 canonical casesを再実行した結果です。
+抗力は v1.1.0 以降、
 
-| case | release altitude [m] | max EAS [m/s] | max tension [kN] | min airborne stall margin [m/s] | max |q| [deg/s] |
+```text
+CD = CD0 + K * CL^2
+```
+
+です。
+
+`G103A.polar` の `CLwtot/CDwtot`, AoA -2°..12° を最小二乗 fit した値は、
+
+```text
+CD0 = 0.007906026873656432
+K   = 0.025021597731889444
+R²  = 0.9999565364889669
+```
+
+です。
+
+Repository には再現用として、
+
+- `aero_reference/G103A.polar`（VSPAERO original static polar）
+- `aero_reference/G103A_drag_polar.csv`
+- `aero_reference/G103A_drag_polar_fit.json`
+- `validation/fit_drag_polar.py`
+
+を含みます。
+
+## Pre-launch two-point support
+
+4ケースは 2500 N pretension が成立した **主輪＋尾輪の2点接地静的平衡**から開始します。初期化では主輪・尾輪だけを active contact として垂直力・ピッチモーメント平衡を解き、前輪が地面に接触していないことを明示的に検証します。
+
+canonical geometry / tire model では、
+
+```text
+rigid two-point pitch         5.4992 deg
+compliant equilibrium pitch  5.2515 deg
+CG height                     0.58099 m
+mainwheel reaction            5683.5 N
+tailwheel reaction               4.94 N
+nosewheel reaction               0 N
+nosewheel clearance             0.1308 m
+mainwheel penetration           18.95 mm
+tailwheel penetration            0.0165 mm
+```
+
+となります。尾輪反力は小さいものの正であり、2点接地条件を満たします。タイヤを完全剛体として接触深さゼロから開始すると compliant ground model の反力がゼロになるため、time-domain ODE へ連続に接続する目的で静的タイヤ圧縮を含む平衡姿勢を使用します。
+
+## Pitch inertia
+
+AMC 22.481 は、より合理的な方法で pitch radius of gyration を決定できない場合、
+
+```text
+iy = 0.225 LR
+```
+
+を用いることを認め、`LR` を rudder を除く fuselage overall length としています。G103A の解析値 `LR=8.18 m` と canonical mass `580 kg` を使うと、
+
+```text
+iy  = 1.8405 m
+Iyy = m iy² = 1964.7 kg m²
+```
+
+となるため、canonical model では **`Iyy = 2000 kg m²`** に丸めます。これは実機の直接実測値ではなく、AMC-based derived analysis value です。
+
+## Numerical integration
+
+時間積分は fixed-step classical RK4 です。
+
+- Ideal Secant canonical: `dt = 0.01 s`
+- FEM canonical: `dt = 0.005 s`
+
+FEM node removal は accepted RK4 step の終了後だけ実施し、RK4 substage 中の state dimension は固定します。
+
+v1.2.0 では architecture/control change 後に Club dynamic-FEM の最初の6 sについて、
+
+```text
+dt = .005 / .0025 / .00125 s
+```
+
+を再計算しています。canonical 3.5 s throttle ramp の liftoff time は、
+
+```text
+4.770926 / 4.770968 / 4.771001 s
+```
+
+で、liftoff distance と EAS も実質一致します。
+
+また RWTH dynamic-FEM では full-launch `dt=.005` と `.0025` の release altitude が、
+
+```text
+241.3443 m / 241.3377 m
+```
+
+で一致することを確認しました。
+
+旧 v1.1.0 の 20/22/40-node full-launch mesh study は Git history / archived reference として保持します。v1.3.0 では FEM constitutive / discretization equations は変更していませんが、Iyy と初期姿勢を変更したため current-policy time-step checks は再生成しています。
+
+## v1.3.0 canonical regression
+
+| case | release altitude [m] | max EAS [m/s] | max tension [kN] | min stall margin [m/s] | max |q| [deg/s] |
 |---|---:|---:|---:|---:|---:|
-| Prescribed | 362.229 | 33.269 | 5.154 | 2.881 | 7.935 |
-| Secant Standard | 368.724 | 32.288 | 6.236 | 2.158 | 7.897 |
-| Secant Club | 377.174 | 31.653 | 6.263 | 2.498 | 5.471 |
-| FEM Standard | 322.414 | 30.461 | 5.148 | 1.952 | 7.942 |
-| FEM Club | 354.486 | 32.656 | 6.301 | 1.563 | 5.542 |
+| RWTH / Prescribed + Ideal Secant | 347.581 | 31.335 | 4.750 | 3.926 | 6.023 |
+| Club / Prescribed + Ideal Secant | 345.334 | 33.058 | 4.750 | 1.988 | 5.359 |
+| RWTH / Dynamic winch + FEM | 241.344 | 32.560 | 5.306 | 3.666 | 7.214 |
+| Club / Dynamic winch + FEM | 329.102 | 32.905 | 5.108 | 1.704 | 4.805 |
 
-Club ground run:
+4ケースとも normal release、stop event なしです。
 
-| case | liftoff [s] | ground distance [m] | liftoff EAS [m/s] | mean ground acceleration [m/s²] |
-|---|---:|---:|---:|---:|
-| Secant Club | 4.927 | 64.28 | 26.17 | 5.31 |
-| FEM Club | 4.762 | 58.92 | 26.49 | 5.56 |
+この4ケースを **同一SOPの単純な cable-model sensitivity** と解釈してはいけません。特に dynamic pair では winch policy も RWTH force-control / Club throttle と異なります。比較目的は次のように分けます。
 
-両caseとも `t=0` のequivalent commandは `0.475694...`、3.5 sで `launch_throttle=1.0` へ到達します。詳細時系列は `validation/reference/launch_power_ramp.json` に保存しています。
+- Prescribed pair: same forcing 下での pilot-policy comparison
+- RWTH prescribed → RWTH FEM: reduced plant と dynamic distributed plant の method comparison
+- Club prescribed → Club FEM: reduced-order comparison。prescribed case は実 Club winch operation の再現ではない
+- Club FEM: 実 Club trajectory validation の主対象
 
-## FEM numerical V&V
-
-20-node FEMをfull launchで `dt=.005/.0025/.00125 s` まで再計算しました。
-
-| SOP | metric | .005 s | .0025 s | .00125 s |
-|---|---|---:|---:|---:|
-| Standard | release altitude [m] | 322.4141 | 322.4218 | 322.4257 |
-| Standard | max tension [kN] | 5.148449 | 5.148443 | 5.148443 |
-| Club | release altitude [m] | 354.4857 | 354.4813 | 354.4764 |
-| Club | max tension [kN] | 6.301138 | 6.301144 | 6.301140 |
-
-全runでnormal release、stop eventなしです。canonical `dt=.005 s` のglobal full-launch quantitiesは十分に収束しています。
-
-mesh sensitivityは20/22/40 nodesすべて共通 `dt=.0025 s` で比較しました。
-
-| SOP | nodes | release altitude [m] | max tension [kN] |
-|---|---:|---:|---:|
-| Standard | 20 | 322.4218 | 5.148443 |
-| Standard | 22 | 322.2001 | 5.148949 |
-| Standard | 40 | 321.6750 | 5.149168 |
-| Club | 20 | 354.4813 | 6.301144 |
-| Club | 22 | 354.4528 | 6.300885 |
-| Club | 40 | 354.3843 | 6.298289 |
-
-20→40 nodesの差はStandardでrelease altitude `-0.232%` / max tension `+0.014%`、Clubでrelease altitude `-0.027%` / max tension `-0.045%`です。40-nodeは `dt=.00125 s` でも再計算し、`.0025 s` と実質一致しています。
-
-詳細は `validation/reference/fem_convergence.json` を参照してください。
-
-## Vw feedback verification
-
-ClubはAGL 200 ft未満のVw crossingをwarningとして扱い、200 ft以降はVwをhard constraintとします。200 ft crossingをまたぐ1 integration stepも補間します。
-
-`wind_x=-4.5 m/s` のSecant Club regressionでは、
-
-```text
-Vw proximity
-→ pilot pitch protection
-→ WINCH_POWER_REDUCTION_REQUEST  t=25.993 s
-→ 0.5 s operator delay
-→ reduced throttle active        t=26.493 s
-→ normal release                 t=45.843 s
-```
-
-を確認しています。200 ft以降のmax EASは `32.693 m/s < Vw 33.333 m/s` です。minimum modeled stall marginは約 `0.236 m/s` まで低下するため、このcaseはfeedback pathのverificationに使用し、validated operational wind envelopeとは扱いません。
-
-## Physical validation status
-
-数値V&Vとは別に、2026-04-05 / 11 / 12 / 19の実フライト12発航のIGCを使ってClub caseの軌跡を比較しました。1 Hz GNSSログのためwheel-offやreleaseを秒以下で同定する用途には使わず、ground-track accelerationと発航軌跡のenvelopeを主に見ています。
-
-- ground rollからGNSS liftoff proxyまでの時間・距離は現在の3.5 s launch-power rampと矛盾しない
-- zero-wind caseは実軌跡より浅い上昇となる
-- 3～4 m/s程度のheadwindを与えると、一部の実フライトで20～30 sの水平距離・高度が大きく改善する
-- 実風、winch RPM、drum speed、cable tensionが未取得のため、pilot controllerやwinch torque curveの再fitには使用していない
-
-実フライト比較はパッケージ内のrelease acceptance recordには含めず、physical validationの継続課題として扱います。
-
-## Run
+## Running
 
 ```bash
-python run_simulation.py cases/g103a_prescribed_tension.json
-python run_simulation.py cases/g103a_dynamic_winch.json
-python run_simulation.py cases/g103a_club_sop_dynamic_winch.json
-python run_simulation.py cases/g103a_dynamic_winch_fem.json
-python run_simulation.py cases/g103a_club_sop_dynamic_winch_fem.json
+python run_simulation.py cases/g103a_rwth_reference_prescribed_tension.json
+python run_simulation.py cases/g103a_club_prescribed_tension.json
+python run_simulation.py cases/g103a_rwth_reference_dynamic_winch_fem.json
+python run_simulation.py cases/g103a_club_dynamic_winch_fem.json
 ```
 
-結果は `outputs/<case_id>/` へ保存されます。
-
-動画を保存する場合は、
+Regression:
 
 ```bash
-python run_simulation.py cases/g103a_club_sop_dynamic_winch_fem.json --animation
+PYTHONPATH=. python validation/run_regression.py
 ```
 
-とします。`make_winch_launch_animation(history, fps=..., mode=...)` は計算済み `history` を直接受け取り、`fig, ani, axes` を返します。Prescribed / Secantはhook→winchの1線分、FEMは保存された各節点位置を結ぶ実要素線分として描画します。動画は1×実時間で、x-z表示はfollow / overviewとも物理縮尺1:1です。MP4/GIF保存APIは `save_mp4(ani, path=..., fps=..., dpi=...)` / `save_gif(...)` です。
+Club early transient / launch-power-ramp:
 
-## Notebook
-
-Main notebook:
-
-```text
-notebooks/winch_launch_simulator.ipynb
+```bash
+PYTHONPATH=. python validation/run_launch_power_ramp.py
 ```
 
-Parameter search:
+Vw feedback path:
 
-```text
-notebooks/winch_launch_parameter_search.ipynb
-notebooks/winch_launch_fem_parameter_search.ipynb
+```bash
+PYTHONPATH=. python validation/run_vw_feedback.py
 ```
 
-Club search schemaは `ground_roll / hold_down / rotation / full_climb / level_off / club_throttle` を使用します。
-
-## Tests
+Tests:
 
 ```bash
 python -m pytest -q
 ```
 
-v1.0 release treeでは **56 passed** を確認しています。
+v1.3.0 release candidate: **63 passed**.
 
-主要coverage:
+## Provenance status
 
-- ground-start / LIFTOFF
-- Standard / Club controller separation
-- tailwheel-load feedback
-- Club 200 ft transition
-- Club Vw early-warning / late-hard-stop
-- exact 200 ft boundary interpolation
-- LEVEL OFF + LOS release
-- club throttle mode
-- power-reduction request / operator delay / activation
-- winch torque bound
-- FEM constitutive / ground contact / reeling / node-removal conservation
-- FEM node-position history / element-by-element animation / release hide
-- case schema / provenance
+Source-confirmed / source-derived:
 
-## Validation records
+- G103A Flight Manual operational limits used in the model
+- G103A geometry items explicitly traced to dimensioned manual drawings
+- VSPAERO `.stab`, `.vspaero`, `.vsp3`, static polar data
+- RWTH reference pilot structure and force-control philosophy
+- Santel/Gäb FEM cable concept and material properties used for the reference synthetic cable
 
-現行branchでは、現在の基準値だけをversionlessなreference名で保持します。過去版の差分はGit historyと `CHANGELOG.md` から追跡します。
+Analysis settings / unresolved hardware-specific values include:
 
-```text
-validation/
-├─ run_regression.py
-├─ run_fem_convergence.py
-└─ reference/
-   ├─ canonical_regression.json
-   ├─ fem_convergence.json
-   ├─ launch_power_ramp.json
-   └─ vw_feedback.json
-```
+- `Iyy = 2000 kg m²`: AMC 22.481 の `iy=0.225 LR` と `LR=8.18 m`, `m=580 kg` から得る 1964.7 kg m² を丸めた analysis value
+- tailwheel vertical coordinate `z = +0.061 m`
+- effective loaded mainwheel radius `0.220 m`
+- equivalent winch torque-speed curve
+- Club controller numerical gains
+- RWTH G103A controller numerical gains
+- prescribed-tension common excitation
+- deterministic weak-link break threshold `7000 N`
 
-`run_regression.py` は5 canonical casesを再実行して `canonical_regression.json` を生成します。FEMのfull convergence matrixは `run_fem_convergence.py` で再生成します。
-
-v1.0ではsolver numericsを変更していないため、初期repositoryでは実在するv0.18 numerical recordをcurrent referenceへ引き継ぎ、各JSONの `source_record` / `source_version` に出典を残しています。以後、solver physics・numerical scheme・canonical parameterを変更したreleaseではrunnerを再実行してcurrent referenceを更新します。
-
-## Release acceptance
-
-v1.0について次を確認済みです。
-
-- 5 canonical case JSONがload/run可能
-- 5 canonical casesがnormal release、warning/stopなし
-- `python -m pytest -q`: 56 passed
-- Python modules compile
-- Notebook code cells compile
-- validation JSON parse
-- legacy Club winch-control schema referenceなし
-- clean ZIP extraction後のpytest通過
-- ZIP integrity check通過
-
-## Known limitations
-
-- ground contactはcompliant penalty spring/damperです。
-- tire loaded radius / grass rolling resistance / cable-ground frictionは未同定です。
-- Club launch-power ramp 3.5 sとtailwheel cueはengineering controller modelです。
-- `launch_throttle=1.0` とfull-throttle winch torque curveはactual hardware未同定のparameterです。
-- aerodynamic ground effectは含みません。
-- VSPAERO aerodynamic modelは局所線形モデルで、大舵角域はmodel validity確認が必要です。
-- G72/G73 automatic-release installation-axis mappingは未確定です。
-- FEM release-local quantityはglobal altitude/loadが安定していても完全mesh-convergedとは扱いません。
-- flight-by-flight physical validationには発航地点の実風、機体実重量、winch RPM/drum speed、cable tensionが必要です。
+The simulator is a research model, not an operational approval or flight-training authority.

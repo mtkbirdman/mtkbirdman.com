@@ -1,12 +1,13 @@
 {
+  "case_id": "g103a_club_prescribed_tension",
   "simulation": {
-    "dt_s": 0.005,
+    "dt_s": 0.01,
     "max_time_s": 75.0,
     "post_release_duration_s": 2.0
   },
   "aircraft": {
     "mass_kg": 580.0,
-    "iyy_kg_m2": 2500.0
+    "iyy_kg_m2": 2000.0
   },
   "aerodynamics": {
     "reference_area_m2": 17.8819,
@@ -14,20 +15,16 @@
     "reference_span_m": 17.5366,
     "reference_alpha_deg": 2.0,
     "CL_ref": 0.5321151,
-    "CD_ref": 0.0149235,
     "Cm_ref": -0.0578052,
     "CL_alpha_per_rad": 5.6873282,
     "CL_qhat": 9.0915253,
     "CL_elevator_per_rad": 0.3279602,
-    "CD_alpha_per_rad": 0.1491309,
-    "CD_qhat": -0.6089485,
-    "CD_elevator_per_rad": 0.0072277,
     "Cm_alpha_per_rad": -0.9929549,
     "Cm_qhat": -24.1286907,
     "Cm_elevator_per_rad": -1.5039185,
     "state": {
       "aerodynamic_dataset_id": "g103a_stab_wake15_alpha2",
-      "source_file": "G103A.stab",
+      "source_file": "aero_reference/G103A.stab",
       "openvsp_version": "unresolved",
       "vspaero_version": "unresolved",
       "vspaero_stability_type": 1,
@@ -45,12 +42,34 @@
       ],
       "wake_num_iter": 15,
       "num_wake_nodes": 64,
-      "fixed_wake_flag": "unresolved",
+      "fixed_wake_flag": false,
       "control_group_name": "ELEVATOR_GROUP",
       "control_group_index": 2,
       "elevator_sign_convention": "positive = trailing-edge down = nose-down moment",
-      "rate_derivative_convention": "qhat = q*Cref/(2*Va)"
-    }
+      "rate_derivative_convention": "qhat = q*Cref/(2*Va)",
+      "solver_input_file": "aero_reference/G103A.vspaero",
+      "geometry_file": "aero_reference/G103A.vsp3",
+      "drag_model": "CD=CD0+K*CL^2",
+      "drag_polar_original_source_file": "G103A.polar",
+      "drag_polar_repository_file": "aero_reference/G103A_drag_polar.csv",
+      "drag_polar_columns": [
+        "CLwtot",
+        "CDwtot"
+      ],
+      "drag_polar_alpha_range_deg": [
+        -2.0,
+        12.0
+      ],
+      "drag_polar_fit_method": "unweighted least squares of CDwtot against [1, CLwtot^2]",
+      "drag_polar_CD0": 0.007906026873656432,
+      "drag_polar_K": 0.025021597731889444,
+      "drag_polar_r_squared": 0.9999565364889669,
+      "drag_polar_rmse": 0.00012676939327264326,
+      "drag_polar_max_abs_residual": 0.00024042269956176324,
+      "drag_application": "static polar fit evaluated at instantaneous CL from the local-linear CL model"
+    },
+    "CD0": 0.007906026873656432,
+    "K": 0.025021597731889444
   },
   "hook": {
     "x_from_cg_m": 0.535,
@@ -66,24 +85,7 @@
     "automatic_release_enabled": false
   },
   "cable": {
-    "model": "fem",
-    "unstrained_length_m": 1100.0,
-    "fem": {
-      "node_count": 20,
-      "diameter_m": 0.005,
-      "linear_density_kg_m": 0.0188,
-      "youngs_modulus_pa": 40250000000.0,
-      "strain_rate_stress_pa_s": 15600000.0,
-      "include_weight": true,
-      "include_aerodynamic_drag": true,
-      "drag_coefficient": 1.3,
-      "aerodynamic_model": "williams_lansdorp_ockels_2007_cylinder",
-      "reeling": {
-        "enabled": true,
-        "node_removal_length_factor": 0.2,
-        "minimum_node_count": 2
-      }
-    }
+    "model": "ideal_secant"
   },
   "pilot": {
     "sop": "club",
@@ -109,8 +111,8 @@
     },
     "full_climb": {
       "pitch_target_deg": 45.0,
-      "elevator_bias_deg": -4.0,
-      "pitch_kp": 0.5,
+      "elevator_bias_deg": -2.0,
+      "pitch_kp": 0.25,
       "speed_protection_margin_m_s": 1.5,
       "speed_protection_pitch_gain_deg_per_m_s": 4.0,
       "max_speed_protection_pitch_increment_deg": 10.0,
@@ -149,58 +151,28 @@
   "output": {
     "save_animation": false
   },
-  "case_id": "g103a_club_sop_dynamic_winch_fem",
   "winch": {
-    "model": "dynamic",
+    "model": "prescribed_tension",
     "x_m": 1100.0,
     "z_m": 0.0,
-    "drum_radius_m": 0.5,
-    "equivalent_inertia_kg_m2": 20.0,
-    "loss_torque_nm": 120.0,
-    "control": {
-      "mode": "club_throttle",
-      "launch_throttle": 1.0,
-      "launch_power_ramp_duration_s": 3.5,
-      "speed_protection": {
-        "operator_response_delay_s": 0.5,
-        "reduced_throttle": 0.7
-      },
+    "tension_profile": {
       "terminal_fade": {
         "start_ground_angle_deg": 60.0,
         "end_ground_angle_deg": 75.0,
-        "final_throttle": 0.0
-      }
-    },
-    "drive": {
-      "model": "equivalent_full_throttle_torque_curve",
-      "full_throttle_torque_curve": [
+        "final_tension_n": 400.0
+      },
+      "time_points_after_liftoff": [
         {
-          "drum_rate_rad_s": 0.0,
-          "drive_torque_nm": 2880.0
+          "time_s": 0.0,
+          "tension_n": 2500.0
         },
         {
-          "drum_rate_rad_s": 15.0,
-          "drive_torque_nm": 3200.0
+          "time_s": 1.5,
+          "tension_n": 1600.0
         },
         {
-          "drum_rate_rad_s": 25.0,
-          "drive_torque_nm": 3200.0
-        },
-        {
-          "drum_rate_rad_s": 35.0,
-          "drive_torque_nm": 2700.0
-        },
-        {
-          "drum_rate_rad_s": 45.0,
-          "drive_torque_nm": 1900.0
-        },
-        {
-          "drum_rate_rad_s": 50.0,
-          "drive_torque_nm": 1300.0
-        },
-        {
-          "drum_rate_rad_s": 60.0,
-          "drive_torque_nm": 800.0
+          "time_s": 18.0,
+          "tension_n": 4750.0
         }
       ]
     }
@@ -208,39 +180,31 @@
   "provenance": {
     "specification": "docs/implementation_spec.md",
     "source_confirmed": [
-      "G103A VSPAERO canonical coefficients",
-      "G72/G73 11700 N load limit",
-      "G103A 120 km/h winch-launch speed limit",
-      "G103A weak-link manual maximum 7540 N"
+      "G103A VSPAERO CL/Cm stability coefficients and solver settings: Re=4.4e6, wake iterations=15, wake nodes=64, Fixed Wake=false",
+      "G103A static drag polar: CLwtot/CDwtot, AoA=-2..12 deg; parabolic least-squares fit CD=CD0+K*CL^2",
+      "G103A Flight Manual: mass=580 kg, Vw=120 km/h, weak-link maximum=754 daN, minimum cable length=600 m",
+      "G103A representative CG hook/nosewheel/mainwheel geometry from dimensioned Maintenance Handbook overlays",
+      "AMC 22.481 permits iy=0.225 LR when iy cannot be determined by more rational means; LR is fuselage overall length without rudder",
+      "G103A Maintenance Manual technical data list fuselage length=8.18 m; used as the LR proxy in the AMC 22.481 inertia estimate"
     ],
     "analysis_baseline": [
-      "mass=580 kg and Iyy=2500 kg m^2 analysis case",
+      "Iyy=2000 kg m^2 is rounded from 1964.7 kg m^2 using AMC 22.481 iy=0.225 LR, m=580 kg, and the Maintenance Manual fuselage length 8.18 m as the LR proxy; it is not a measured inertia value",
       "canonical ground-start geometry uses winch.x_m=1100 m and launch pretension=2500 N",
-      "measured G103A representative geometry: belly hook=(+0.535,+0.366) m, nosewheel=(+2.029,+0.508) m, mainwheel=(-0.169,+0.366) m",
-      "tailwheel z, tire radii, aircraft ground stiffness/damping and rolling resistance remain engineering baselines",
-      "VSPAERO local linear aerodynamic model is unchanged; aerodynamic ground effect is not included",
-      "weak-link analysis limit=7000 N; G72/G73 automatic-angle release remains disabled pending installation-axis mapping",
-      "Club SOP is intentionally distinct from Standard: tailwheel hold -> taut-cable hold-down -> 200 ft rotation -> nominal 45 deg full climb -> level off -> release",
-      "ground roll tailwheel cue=500.0 N and feedback gain=10.0 deg",
-      "hold-down to 60.96 m AGL uses forward elevator=0.9 deg, low-tension cue=4000.0 N and relief=20.0 deg",
-      "rotation duration=7.4 s toward 45.0 deg; full-climb pitch Kp=0.5 with elevator bias=-4.0 deg",
-      "Vw pitch protection begins 1.5 m/s below Vw; power-reduction request begins 0.9 m/s below Vw",
-      "Club launch starts from the 2500 N pretension-equilibrium drive command and ramps linearly to launch_throttle=1.0 in 3.5 s; operator delay=0.5 s; reduced throttle=0.7",
-      "terminal fade is distinct from speed protection and runs from hook-to-winch LOS 60.0 to 75.0 deg",
-      "LEVEL_OFF controls ground flight-path angle gamma_ground toward 0 deg; release uses terminal-fade completion, low tension, LOS angle, pitch-rate and gamma_ground",
-      "Club Vw policy: below 60.96 m AGL, Vw crossing is warning and 1.1 Vw is the analysis stop; at/above 60.96 m Vw is a hard constraint",
-      "power-reduction request time is a discrete pilot state; the operator delay does not add a continuous ODE state",
-      "FEM cable material natural length=1100.0 m with 20 canonical nodes",
-      "FEM includes distributed cable elasticity, mass, weight, aerodynamic drag, ground contact/friction, reel-in and node removal"
+      "CL and Cm use local-linear VSPAERO .stab derivatives; CD=CD0+K*CL^2 uses the static .polar fit at instantaneous CL",
+      "weak-link break threshold=7000 N is a deterministic analysis value below the Flight Manual maximum 754 daN",
+      "tailwheel z=+0.061 m, mainwheel effective radius=0.220 m and winch torque-speed curve remain engineering baselines",
+      "Club pilot policy is independent of the removed Standard controller: tailwheel hold -> hold-down to 60.96 m -> 45 deg rotation/full climb -> level off -> release",
+      "Club full-climb pitch Kp=0.25 and elevator bias=-2 deg are cross-plant G103A tuning settings, not measured pilot gains",
+      "Ideal Secant has no cable mass, elasticity, damping, gravity, drag or ground interaction",
+      "The prescribed tension profile is identical to the RWTH-pilot prescribed case so only pilot policy changes",
+      "pre-launch aircraft support is a static mainwheel+tailwheel two-point equilibrium under 2500 N pretension; nosewheel contact is prohibited and checked by clearance"
     ],
-    "validation_reference": "validation/reference/canonical_regression.json",
-    "warning": "Ground-contact stiffness/damping, tire loaded radius, rolling resistance, cable-ground friction, and the equivalent winch torque-speed curve are engineering baselines. The Club controller gains, tailwheel-load cue and winch launch-command ramp and operator response are modeling parameters, not measured operational values."
+    "validation_reference": "validation/reference/canonical_regression.json"
   },
   "launch_setup": {
     "mode": "ground_start",
     "x_m": 0.0,
-    "pretension_n": 2500.0,
-    "ground_pitch_guess_deg": 1.4
+    "pretension_n": 2500.0
   },
   "ground": {
     "z_m": 0.0,

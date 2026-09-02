@@ -1,23 +1,27 @@
-"""Re-run the five canonical cases and write the current regression record."""
+"""Re-run the four canonical cases and write the current regression record."""
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import copy
 import json
+import subprocess
+import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
-from winch_launch_simulator.simulation import load_case, run_simulation
-
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from winch_launch_simulator.simulation import load_case, run_simulation
 CASE_PATHS = [
-    ROOT / "cases" / "g103a_prescribed_tension.json",
-    ROOT / "cases" / "g103a_dynamic_winch.json",
-    ROOT / "cases" / "g103a_club_sop_dynamic_winch.json",
-    ROOT / "cases" / "g103a_dynamic_winch_fem.json",
-    ROOT / "cases" / "g103a_club_sop_dynamic_winch_fem.json",
+    ROOT / "cases" / "g103a_rwth_reference_prescribed_tension.json",
+    ROOT / "cases" / "g103a_club_prescribed_tension.json",
+    ROOT / "cases" / "g103a_rwth_reference_dynamic_winch_fem.json",
+    ROOT / "cases" / "g103a_club_dynamic_winch_fem.json",
 ]
 
 
@@ -32,11 +36,9 @@ def summarize(case, result, runtime_s):
     release = event(result, "PILOT_COMMAND_RELEASE")
     weak_link = event(result, "WEAK_LINK_BREAK")
     terminal = release or weak_link
-
     liftoff_index = 0 if liftoff is None else int(np.argmin(np.abs(time_axis - liftoff["time"])))
     terminal_index = len(time_axis) - 1 if terminal is None else int(np.argmin(np.abs(time_axis - terminal["time"])))
     airborne = slice(liftoff_index, terminal_index + 1)
-
     return {
         "case_id": case["case_id"],
         "dt_s": case["simulation"]["dt_s"],
@@ -60,30 +62,50 @@ def summarize(case, result, runtime_s):
     }
 
 
+def run_one(path):
+    case = copy.deepcopy(load_case(path))
+    case["simulation"]["post_release_duration_s"] = 0.0
+    started = time.perf_counter()
+    result = run_simulation(case)
+    return summarize(case, result, time.perf_counter() - started)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=ROOT / "validation" / "reference" / "canonical_regression.json",
-    )
+    parser.add_argument("--output", type=Path, default=ROOT / "validation" / "reference" / "canonical_regression.json")
+    parser.add_argument("--single-case", type=Path, default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    rows = []
-    for path in CASE_PATHS:
-        case = copy.deepcopy(load_case(path))
-        case["simulation"]["post_release_duration_s"] = 0.0
-        started = time.perf_counter()
-        result = run_simulation(case)
-        row = summarize(case, result, time.perf_counter() - started)
-        rows.append(row)
+    if args.single_case is not None:
+        print(json.dumps(run_one(args.single_case), ensure_ascii=False))
+        return
+
+    # Run every canonical launch in a fresh Python process.  The two FEM cases are
+    # independent, so running subprocesses concurrently avoids retaining large
+    # histories between cases and keeps the regression command practical.
+    def invoke(path):
+        completed = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), "--single-case", str(path)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        return json.loads(completed.stdout.strip().splitlines()[-1])
+
+    with ThreadPoolExecutor(max_workers=len(CASE_PATHS)) as executor:
+        rows = list(executor.map(invoke, CASE_PATHS))
+    for row in rows:
         print(json.dumps(row, ensure_ascii=False), flush=True)
 
+    record = {
+        "version": "v1.3.0",
+        "architecture": "2 plant fidelities x 2 pilot/operation policies",
+        "physics_change": "Iyy=2000 kg m^2 AMC-based estimate; mainwheel+tailwheel two-point prelaunch equilibrium",
+        "cases": rows,
+    }
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(
-        json.dumps({"version": "v1.0", "cases": rows}, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    args.output.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(args.output, flush=True)
 
 

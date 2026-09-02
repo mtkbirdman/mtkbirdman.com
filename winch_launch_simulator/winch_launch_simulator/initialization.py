@@ -15,52 +15,140 @@ from .models.fem_cable import (
 
 BASE_STATE_SIZE = 9
 
-def _ground_pose(case, cable_force_ground_n):
-    """Solve the vertical/pitch pre-launch equilibrium of the three-wheel airframe."""
+def _contact_kinematics(contact, z_m, theta_rad, ground_z):
+    """Return static 2-D wheel-center/contact geometry for one tire."""
+    x_body = contact["x_from_cg_m"]
+    z_body = contact["z_from_cg_m"]
+    radius = contact["radius_m"]
+    cos_theta = math.cos(theta_rad)
+    sin_theta = math.sin(theta_rad)
+    center_x_rel = cos_theta * x_body + sin_theta * z_body
+    center_z_rel = -sin_theta * x_body + cos_theta * z_body
+    signed_depth = z_m + center_z_rel + radius - ground_z
+    return {
+        "center_x_rel_m": center_x_rel,
+        "center_z_rel_m": center_z_rel,
+        "contact_x_rel_m": center_x_rel,
+        "signed_depth_m": signed_depth,
+    }
+
+
+def _ground_pose(case, pretension_n):
+    """Solve a mainwheel+tailwheel pre-launch static equilibrium.
+
+    The launch starts from the practical tail-down two-point support condition:
+    mainwheel and tailwheel are active unilateral contacts, while the nosewheel
+    must remain clear of the ground.  The compliant tire law is retained during
+    the static solve so that the t=0 state is continuous with the time-domain
+    ground-contact model rather than starting from zero tire reaction.
+    """
     x_m = case["launch_setup"].get("x_m", 0.0)
-    force_x, force_z = cable_force_ground_n
     mass = case["aircraft"]["mass_kg"]
     hook = case["hook"]
+    winch = case["winch"]
+    ground = case["ground"]
+    ground_z = ground["z_m"]
+    stiffness = ground["aircraft"]["normal_stiffness_n_m"]
+    contacts = {item["name"]: item for item in ground["aircraft"]["contacts"]}
+    main = contacts["mainwheel"]
+    tail = contacts["tailwheel"]
+    nose = contacts["nosewheel"]
 
-    # The measured G103A geometry gives a nose/main ground attitude near 1.4 deg.
-    theta_guess = math.radians(case["launch_setup"].get("ground_pitch_guess_deg", 1.4))
-    main = next(
-        item for item in case["ground"]["aircraft"]["contacts"] if item["name"] == "mainwheel"
+    # First obtain the rigid two-point attitude as a robust initial guess.
+    def rigid_residual(values):
+        z_value, theta_value = values
+        return np.array(
+            [
+                _contact_kinematics(main, z_value, theta_value, ground_z)["signed_depth_m"],
+                _contact_kinematics(tail, z_value, theta_value, ground_z)["signed_depth_m"],
+            ]
+        )
+
+    rigid_solution = least_squares(
+        rigid_residual,
+        np.array([-0.60, math.radians(5.5)]),
+        bounds=(np.array([-1.5, math.radians(-5.0)]), np.array([0.2, math.radians(15.0)])),
+        xtol=1.0e-13,
+        ftol=1.0e-13,
+        gtol=1.0e-13,
+        max_nfev=500,
     )
-    z_guess = (
-        main["x_from_cg_m"] * math.sin(theta_guess)
-        - main["z_from_cg_m"] * math.cos(theta_guess)
-        - main["radius_m"]
-        + case["ground"]["z_m"]
-    )
+    if not rigid_solution.success:
+        raise RuntimeError("Rigid mainwheel/tailwheel ground attitude did not converge.")
 
     def residual(values):
-        z_m, theta_rad = values
-        ground = wheel_ground_forces_and_moment(
-            case, x_m, z_m, theta_rad, 0.0, 0.0, 0.0
+        z_value, theta_value = values
+        main_geom = _contact_kinematics(main, z_value, theta_value, ground_z)
+        tail_geom = _contact_kinematics(tail, z_value, theta_value, ground_z)
+        main_normal = stiffness * max(main_geom["signed_depth_m"], 0.0)
+        tail_normal = stiffness * max(tail_geom["signed_depth_m"], 0.0)
+
+        geometry = hook_winch_geometry(
+            x_m, z_value, theta_value, 0.0, 0.0, 0.0, hook, winch
         )
-        cos_theta = math.cos(theta_rad)
-        sin_theta = math.sin(theta_rad)
+        force_x = pretension_n * geometry["unit_x_ground"]
+        force_z = pretension_n * geometry["unit_z_ground"]
+
+        cos_theta = math.cos(theta_value)
+        sin_theta = math.sin(theta_value)
         hook_x_rel = cos_theta * hook["x_from_cg_m"] + sin_theta * hook["z_from_cg_m"]
         hook_z_rel = -sin_theta * hook["x_from_cg_m"] + cos_theta * hook["z_from_cg_m"]
         cable_moment = hook_z_rel * force_x - hook_x_rel * force_z
-        vertical_residual = ground["force_ground_n"][1] + force_z + mass * G
-        pitch_residual = ground["pitch_moment_nm"] + cable_moment
-        scale = mass * G
-        return (vertical_residual / scale, pitch_residual / scale)
 
-    solution = least_squares(
+        vertical_residual = -main_normal - tail_normal + force_z + mass * G
+        pitch_residual = (
+            main_geom["contact_x_rel_m"] * main_normal
+            + tail_geom["contact_x_rel_m"] * tail_normal
+            + cable_moment
+        )
+        scale = mass * G
+        return np.array([vertical_residual / scale, pitch_residual / scale])
+
+    # A slight tail penetration is expected because the tail reaction is small at
+    # the canonical 2500 N pretension.  Starting from the rigid support attitude
+    # selects the physically intended two-contact equilibrium rather than the
+    # alternative mainwheel-only equilibrium of the unilateral contact system.
+    z0, theta0 = rigid_solution.x
+    equilibrium_solution = least_squares(
         residual,
-        np.array([z_guess, theta_guess]),
-        bounds=(np.array([-1.5, math.radians(-10.0)]), np.array([0.2, math.radians(15.0)])),
-        xtol=1.0e-12,
-        ftol=1.0e-12,
-        gtol=1.0e-12,
-        max_nfev=500,
+        np.array([z0 + 0.010, theta0]),
+        bounds=(np.array([-1.5, math.radians(3.5)]), np.array([0.2, math.radians(8.0)])),
+        xtol=1.0e-13,
+        ftol=1.0e-13,
+        gtol=1.0e-13,
+        max_nfev=1000,
     )
-    if not solution.success or np.linalg.norm(residual(solution.x), ord=np.inf) > 1.0e-6:
-        raise RuntimeError("Pre-launch aircraft ground equilibrium did not converge.")
-    return float(solution.x[0]), float(solution.x[1])
+    if (
+        not equilibrium_solution.success
+        or np.linalg.norm(residual(equilibrium_solution.x), ord=np.inf) > 1.0e-7
+    ):
+        raise RuntimeError("Pre-launch mainwheel/tailwheel equilibrium did not converge.")
+
+    z_m, theta_rad = map(float, equilibrium_solution.x)
+    ground_result = wheel_ground_forces_and_moment(case, x_m, z_m, theta_rad, 0.0, 0.0, 0.0)
+    main_result = ground_result["contacts"]["mainwheel"]
+    tail_result = ground_result["contacts"]["tailwheel"]
+    nose_result = ground_result["contacts"]["nosewheel"]
+
+    if main_result["normal_force_n"] <= 0.0 or tail_result["normal_force_n"] <= 0.0:
+        raise RuntimeError("Requested two-point launch attitude does not support both mainwheel and tailwheel.")
+    if nose_result["penetration_m"] > 1.0e-10:
+        raise RuntimeError("Requested two-point launch attitude places the nosewheel on the ground.")
+
+    # Positive clearance means the bottom of the tire lies above the ground plane.
+    nose_geom = _contact_kinematics(nose, z_m, theta_rad, ground_z)
+    nose_clearance = max(0.0, -nose_geom["signed_depth_m"])
+    metadata = {
+        "ground_support_mode": "mainwheel_tailwheel_two_point",
+        "rigid_two_point_pitch_deg": math.degrees(float(rigid_solution.x[1])),
+        "mainwheel_normal_force_n": float(main_result["normal_force_n"]),
+        "tailwheel_normal_force_n": float(tail_result["normal_force_n"]),
+        "nosewheel_normal_force_n": float(nose_result["normal_force_n"]),
+        "mainwheel_penetration_m": float(main_result["penetration_m"]),
+        "tailwheel_penetration_m": float(tail_result["penetration_m"]),
+        "nosewheel_clearance_m": float(nose_clearance),
+    }
+    return z_m, theta_rad, metadata
 
 def _relax_fem_prelaunch(case, hook_position, winch_position, target_tension_n):
     """Find a gravity/ground equilibrium FEM shape and the reel-in giving target winch tension."""
@@ -230,15 +318,8 @@ def initialize_launch_state(case):
     pretension = setup["pretension_n"]
     winch = case["winch"]
 
-    # First place the aircraft using the nominal pretension along the hook/winch line.
-    z_guess = -0.59
-    theta_guess = math.radians(setup.get("ground_pitch_guess_deg", 1.4))
-    geometry = hook_winch_geometry(x_m, z_guess, theta_guess, 0.0, 0.0, 0.0, case["hook"], winch)
-    nominal_force = (
-        pretension * geometry["unit_x_ground"],
-        pretension * geometry["unit_z_ground"],
-    )
-    z_m, theta_rad = _ground_pose(case, nominal_force)
+    # Start from the practical mainwheel+tailwheel two-point support state.
+    z_m, theta_rad, ground_metadata = _ground_pose(case, pretension)
 
     geometry = hook_winch_geometry(x_m, z_m, theta_rad, 0.0, 0.0, 0.0, case["hook"], winch)
     base_state = np.array(
@@ -252,15 +333,12 @@ def initialize_launch_state(case):
         "initial_cg_height_m": -z_m + case["ground"]["z_m"],
         "initial_pitch_deg": math.degrees(theta_rad),
         "target_pretension_n": pretension,
+        **ground_metadata,
     }
 
-    if case["cable"]["model"] == "secant":
-        if winch["model"] == "dynamic":
-            effective_natural_length = geometry["length_m"] - pretension / case["cable"]["stiffness_n_m"]
-            initial_reel_in = case["cable"]["unstrained_length_m"] - effective_natural_length
-            if initial_reel_in < 0.0:
-                raise RuntimeError("Secant pre-launch geometry requires a cable longer than its unstrained length.")
-        initialization["initial_reel_in_m"] = float(initial_reel_in)
+    if case["cable"]["model"] == "ideal_secant":
+        initialization["initial_reel_in_m"] = 0.0
+        initialization["ideal_secant"] = True
         return base_state, initialization
 
     hook_position = np.array([geometry["x_hook_m"], geometry["z_hook_m"]])

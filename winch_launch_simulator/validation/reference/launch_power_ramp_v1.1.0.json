@@ -1,0 +1,37 @@
+{
+  "version": "v1.1.0",
+  "physics_change": "parabolic drag polar CD=CD0+K*CL^2",
+  "case_id": "g103a_club_sop_dynamic_winch",
+  "rows": [
+    {
+      "ramp_s": 2.5,
+      "liftoff_time_s": 4.639230833354913,
+      "liftoff_distance_m": 61.69405379402051,
+      "liftoff_eas_m_s": 26.162573475199007
+    },
+    {
+      "ramp_s": 3.0,
+      "liftoff_time_s": 4.786770200324924,
+      "liftoff_distance_m": 62.94964251987417,
+      "liftoff_eas_m_s": 26.162679035533316
+    },
+    {
+      "ramp_s": 3.5,
+      "liftoff_time_s": 4.934245143033472,
+      "liftoff_distance_m": 64.43092183501884,
+      "liftoff_eas_m_s": 26.162110660237797
+    },
+    {
+      "ramp_s": 4.0,
+      "liftoff_time_s": 5.082518345977866,
+      "liftoff_distance_m": 66.15009955866901,
+      "liftoff_eas_m_s": 26.163188647880087
+    },
+    {
+      "ramp_s": 4.5,
+      "liftoff_time_s": 5.2309586748743,
+      "liftoff_distance_m": 68.0754343231424,
+      "liftoff_eas_m_s": 26.162787576520817
+    }
+  ]
+}

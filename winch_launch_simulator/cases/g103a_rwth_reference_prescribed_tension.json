@@ -1,0 +1,219 @@
+{
+  "case_id": "g103a_rwth_reference_prescribed_tension",
+  "simulation": {
+    "dt_s": 0.01,
+    "max_time_s": 75.0,
+    "post_release_duration_s": 2.0
+  },
+  "aircraft": {
+    "mass_kg": 580.0,
+    "iyy_kg_m2": 2000.0
+  },
+  "aerodynamics": {
+    "reference_area_m2": 17.8819,
+    "reference_chord_m": 0.996386,
+    "reference_span_m": 17.5366,
+    "reference_alpha_deg": 2.0,
+    "CL_ref": 0.5321151,
+    "Cm_ref": -0.0578052,
+    "CL_alpha_per_rad": 5.6873282,
+    "CL_qhat": 9.0915253,
+    "CL_elevator_per_rad": 0.3279602,
+    "Cm_alpha_per_rad": -0.9929549,
+    "Cm_qhat": -24.1286907,
+    "Cm_elevator_per_rad": -1.5039185,
+    "state": {
+      "aerodynamic_dataset_id": "g103a_stab_wake15_alpha2",
+      "source_file": "aero_reference/G103A.stab",
+      "openvsp_version": "unresolved",
+      "vspaero_version": "unresolved",
+      "vspaero_stability_type": 1,
+      "reference_alpha_deg": 2.0,
+      "reference_mach": 0.0,
+      "reference_reynolds": 4400000.0,
+      "reference_vinf_m_s": 30.0,
+      "reference_area_m2": 17.8819,
+      "reference_chord_m": 0.996386,
+      "reference_span_m": 17.5366,
+      "moment_reference_xyz_m": [
+        2.87,
+        0.0,
+        0.164
+      ],
+      "wake_num_iter": 15,
+      "num_wake_nodes": 64,
+      "fixed_wake_flag": false,
+      "control_group_name": "ELEVATOR_GROUP",
+      "control_group_index": 2,
+      "elevator_sign_convention": "positive = trailing-edge down = nose-down moment",
+      "rate_derivative_convention": "qhat = q*Cref/(2*Va)",
+      "solver_input_file": "aero_reference/G103A.vspaero",
+      "geometry_file": "aero_reference/G103A.vsp3",
+      "drag_model": "CD=CD0+K*CL^2",
+      "drag_polar_original_source_file": "G103A.polar",
+      "drag_polar_repository_file": "aero_reference/G103A_drag_polar.csv",
+      "drag_polar_columns": [
+        "CLwtot",
+        "CDwtot"
+      ],
+      "drag_polar_alpha_range_deg": [
+        -2.0,
+        12.0
+      ],
+      "drag_polar_fit_method": "unweighted least squares of CDwtot against [1, CLwtot^2]",
+      "drag_polar_CD0": 0.007906026873656432,
+      "drag_polar_K": 0.025021597731889444,
+      "drag_polar_r_squared": 0.9999565364889669,
+      "drag_polar_rmse": 0.00012676939327264326,
+      "drag_polar_max_abs_residual": 0.00024042269956176324,
+      "drag_application": "static polar fit evaluated at instantaneous CL from the local-linear CL model"
+    },
+    "CD0": 0.007906026873656432,
+    "K": 0.025021597731889444
+  },
+  "hook": {
+    "x_from_cg_m": 0.535,
+    "z_from_cg_m": 0.366,
+    "release_model": "TOST Europa G72/G73",
+    "max_cable_load_n": 11700.0,
+    "max_cable_angle_up_deg": -60.0,
+    "max_cable_angle_down_deg": 83.0,
+    "max_lateral_cable_angle_deg": 85.0,
+    "automatic_release_angle_nominal_deg": 83.0,
+    "automatic_release_angle_tolerance_deg": 7.0,
+    "automatic_release_min_cable_load_n": 200.0,
+    "automatic_release_enabled": false
+  },
+  "cable": {
+    "model": "ideal_secant"
+  },
+  "pilot": {
+    "sop": "rwth_reference",
+    "elevator_min_deg": -15.0,
+    "elevator_max_deg": 10.0,
+    "trim_elevator_deg": -3.0,
+    "safety_altitude_m": 50.0,
+    "target_eas_m_s": 30.0,
+    "speed_kp": 1.5,
+    "pitch_rate_gain_s": 2.4,
+    "fade_tau1_s": 1.0,
+    "fade_tau2_s": 2.0,
+    "release": {
+      "max_tension_n": 500.0,
+      "min_los_ground_angle_deg": 77.5
+    }
+  },
+  "atmosphere": {
+    "model": "isa",
+    "wind_x_m_s": 0.0,
+    "wind_z_m_s": 0.0,
+    "wind_x_gradient_per_m": 0.0,
+    "wind_z_gradient_per_m": 0.0
+  },
+  "limits": {
+    "weak_link_break_load_n": 7000.0,
+    "max_winch_eas_m_s": 33.333333333333336,
+    "stall_speed_1g_eas_m_s": 20.833333333333332,
+    "aero_alpha_min_deg": -4.0,
+    "aero_alpha_max_deg": 14.0,
+    "stop_on_overspeed": true,
+    "stop_on_stall": true,
+    "stop_on_aero_validity": true,
+    "initial_phase_max_winch_speed_factor": 1.1
+  },
+  "output": {
+    "save_animation": false
+  },
+  "winch": {
+    "model": "prescribed_tension",
+    "x_m": 1100.0,
+    "z_m": 0.0,
+    "tension_profile": {
+      "terminal_fade": {
+        "start_ground_angle_deg": 60.0,
+        "end_ground_angle_deg": 75.0,
+        "final_tension_n": 400.0
+      },
+      "time_points_after_liftoff": [
+        {
+          "time_s": 0.0,
+          "tension_n": 2500.0
+        },
+        {
+          "time_s": 1.5,
+          "tension_n": 1600.0
+        },
+        {
+          "time_s": 18.0,
+          "tension_n": 4750.0
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "specification": "docs/implementation_spec.md",
+    "source_confirmed": [
+      "G103A VSPAERO CL/Cm stability coefficients and solver settings: Re=4.4e6, wake iterations=15, wake nodes=64, Fixed Wake=false",
+      "G103A static drag polar: CLwtot/CDwtot, AoA=-2..12 deg; parabolic least-squares fit CD=CD0+K*CL^2",
+      "G103A Flight Manual: mass=580 kg, Vw=120 km/h, weak-link maximum=754 daN, minimum cable length=600 m",
+      "G103A representative CG hook/nosewheel/mainwheel geometry from dimensioned Maintenance Handbook overlays",
+      "RWTH reference pilot structure: trim-only below 50 m safety altitude, then airspeed/dynamic-pressure control with pitch damping; target airspeed 30 m/s",
+      "RWTH reference winch philosophy: moderate initial force, controlled force rise, force cap and terminal force reduction",
+      "AMC 22.481 permits iy=0.225 LR when iy cannot be determined by more rational means; LR is fuselage overall length without rudder",
+      "G103A Maintenance Manual technical data list fuselage length=8.18 m; used as the LR proxy in the AMC 22.481 inertia estimate"
+    ],
+    "analysis_baseline": [
+      "Iyy=2000 kg m^2 is rounded from 1964.7 kg m^2 using AMC 22.481 iy=0.225 LR, m=580 kg, and the Maintenance Manual fuselage length 8.18 m as the LR proxy; it is not a measured inertia value",
+      "canonical ground-start geometry uses winch.x_m=1100 m and launch pretension=2500 N",
+      "CL and Cm use local-linear VSPAERO .stab derivatives; CD=CD0+K*CL^2 uses the static .polar fit at instantaneous CL",
+      "weak-link break threshold=7000 N is a deterministic analysis value below the Flight Manual maximum 754 daN",
+      "tailwheel z=+0.061 m, mainwheel effective radius=0.220 m and winch torque-speed curve remain engineering baselines",
+      "RWTH controller numerical gains/fade constants are G103A analysis settings because published source values are not provided",
+      "RWTH force targets are G103A-adapted and are not the ASK 21 numerical force limits of the source study",
+      "Ideal Secant has no cable mass, elasticity, damping, gravity, drag or ground interaction",
+      "The common prescribed tension profile is an open-loop analysis excitation and not an RWTH or Club winch SOP",
+      "pre-launch aircraft support is a static mainwheel+tailwheel two-point equilibrium under 2500 N pretension; nosewheel contact is prohibited and checked by clearance"
+    ],
+    "validation_reference": "validation/reference/canonical_regression.json"
+  },
+  "launch_setup": {
+    "mode": "ground_start",
+    "x_m": 0.0,
+    "pretension_n": 2500.0
+  },
+  "ground": {
+    "z_m": 0.0,
+    "aircraft": {
+      "normal_stiffness_n_m": 300000.0,
+      "normal_damping_n_s_m": 18000.0,
+      "rolling_resistance_coefficient": 0.08,
+      "velocity_regularization_m_s": 0.5,
+      "contacts": [
+        {
+          "name": "nosewheel",
+          "x_from_cg_m": 2.029,
+          "z_from_cg_m": 0.508,
+          "radius_m": 0.13
+        },
+        {
+          "name": "mainwheel",
+          "x_from_cg_m": -0.169,
+          "z_from_cg_m": 0.366,
+          "radius_m": 0.22
+        },
+        {
+          "name": "tailwheel",
+          "x_from_cg_m": -4.537,
+          "z_from_cg_m": 0.061,
+          "radius_m": 0.105
+        }
+      ]
+    },
+    "cable": {
+      "normal_stiffness_n_m2": 100.0,
+      "normal_damping_n_s_m2": 2.0,
+      "sliding_friction_coefficient": 0.2,
+      "velocity_regularization_m_s": 0.5
+    }
+  }
+}

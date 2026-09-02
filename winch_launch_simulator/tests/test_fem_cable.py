@@ -116,7 +116,7 @@ def test_cable_weight_produces_gravity_acceleration_on_free_node():
 
 
 def test_fem_ground_contact_is_unilateral_and_pushes_upward():
-    case = load_case("cases/g103a_dynamic_winch_fem.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     cable = make_cable(node_count=2)
     cable["fem"]["include_weight"] = False
     result = fem_cable_dynamics(
@@ -135,7 +135,7 @@ def test_fem_ground_contact_is_unilateral_and_pushes_upward():
 
 
 def test_ground_contact_damping_is_zero_before_penetration():
-    case = load_case("cases/g103a_dynamic_winch_fem.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     cable = make_cable(node_count=2)
     result = fem_cable_dynamics(
         cable,
@@ -153,7 +153,7 @@ def test_ground_contact_damping_is_zero_before_penetration():
 
 
 def test_ground_contact_force_is_approximately_mesh_independent():
-    ground = load_case("cases/g103a_dynamic_winch_fem.json")["ground"]
+    ground = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")["ground"]
     totals = []
     for node_count in (20, 40):
         cable = make_cable(node_count=node_count, total_length=1000.0)
@@ -223,7 +223,7 @@ def test_winch_boundary_tension_matches_elastic_strain():
 
 
 def test_canonical_fem_initializer_solves_pretension_and_ground_equilibrium():
-    case = load_case("cases/g103a_dynamic_winch_fem.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     state, metadata = initialize_launch_state(case)
     positions, velocities = unpack_fem_state(case["cable"], state[9:])
 
@@ -238,7 +238,7 @@ def test_canonical_fem_initializer_solves_pretension_and_ground_equilibrium():
 
 
 def test_prelaunch_equilibrium_removes_the_old_large_initial_tension_pulse():
-    case = copy.deepcopy(load_case("cases/g103a_dynamic_winch_fem.json"))
+    case = copy.deepcopy(load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json"))
     case["simulation"]["max_time_s"] = 0.2
     result = run_simulation(case)
     tension = result["history"]["hook_tension_n"]
@@ -248,7 +248,7 @@ def test_prelaunch_equilibrium_removes_the_old_large_initial_tension_pulse():
 
 @pytest.mark.parametrize("connection_state", [RELEASED, BROKEN])
 def test_released_or_broken_fem_cable_applies_no_aircraft_cable_force(connection_state):
-    case = load_case("cases/g103a_dynamic_winch_fem.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     state, metadata = initialize_launch_state(case)
     runtime = {
         "initial_reel_in_m": metadata["initial_reel_in_m"],
@@ -270,7 +270,7 @@ def test_released_or_broken_fem_cable_applies_no_aircraft_cable_force(connection
 
 
 def test_fem_node_removal_preserves_remaining_states_reference_length_and_mass():
-    case = load_case("cases/g103a_dynamic_winch_fem.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     state, metadata = initialize_launch_state(case)
     positions, velocities = unpack_fem_state(case["cable"], state[9:])
     kept_position = positions[0].copy()
@@ -301,7 +301,7 @@ def test_fem_node_removal_preserves_remaining_states_reference_length_and_mass()
 
 
 def test_repository_fem_case_reports_ground_contact_diagnostics():
-    case = copy.deepcopy(load_case("cases/g103a_dynamic_winch_fem.json"))
+    case = copy.deepcopy(load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json"))
     case["simulation"]["max_time_s"] = 0.05
     result = run_simulation(case)
     history = result["history"]
@@ -311,7 +311,7 @@ def test_repository_fem_case_reports_ground_contact_diagnostics():
 
 
 def test_ground_start_fem_has_no_large_artificial_initial_tension_collapse(project_root):
-    case = load_case(project_root / "cases" / "g103a_dynamic_winch_fem.json")
+    case = load_case(project_root / "cases" / "g103a_rwth_reference_dynamic_winch_fem.json")
     case["simulation"]["max_time_s"] = 0.2
     result = run_simulation(case)
     tension = result["history"]["cable_tension_n"]

@@ -9,8 +9,8 @@ import numpy as np
 from .initialization import initialize_launch_state
 from .models.aircraft import air_data, aerodynamic_forces_and_moment, wheel_ground_forces_and_moment
 from .models.atmosphere import G, atmosphere
-from .models.cable import hook_winch_geometry, secant_elastic_tension
-from .models.controllers import club_pilot_control, standard_pilot_control, tension_control_drive_torque
+from .models.cable import hook_winch_geometry
+from .models.controllers import club_pilot_control, rwth_reference_pilot_control, tension_control_drive_torque
 from .models.fem_cable import (
     fem_cable_dynamics,
     fem_node_count_from_state,
@@ -20,7 +20,7 @@ from .models.fem_cable import (
     pack_fem_state,
     unpack_fem_state,
 )
-from .models.winch import club_winch_throttle, drum_derivatives, full_throttle_drive_torque, scheduled_tension
+from .models.winch import club_winch_throttle, drum_derivatives, full_throttle_drive_torque, prescribed_tension, rwth_target_tension
 
 TAUT = 1
 SLACK = 2
@@ -93,6 +93,10 @@ def load_case(path):
         raise ValueError("aircraft mass and pitch inertia must be positive.")
     if case["aerodynamics"]["reference_area_m2"] <= 0.0:
         raise ValueError("aerodynamics.reference_area_m2 must be positive.")
+    if case["aerodynamics"].get("CD0", 0.0) <= 0.0:
+        raise ValueError("aerodynamics.CD0 must be positive.")
+    if case["aerodynamics"].get("K", 0.0) <= 0.0:
+        raise ValueError("aerodynamics.K must be positive.")
 
     launch_setup = case["launch_setup"]
     if launch_setup.get("mode") != "ground_start":
@@ -116,15 +120,15 @@ def load_case(path):
 
     cable = case["cable"]
     winch = case["winch"]
-    if cable.get("model") not in {"secant", "fem"}:
-        raise ValueError("cable.model must be 'secant' or 'fem'.")
+    if cable.get("model") not in {"ideal_secant", "fem"}:
+        raise ValueError("cable.model must be 'ideal_secant' or 'fem'.")
     if winch.get("model") not in {"prescribed_tension", "dynamic"}:
         raise ValueError("winch.model must be 'prescribed_tension' or 'dynamic'.")
 
-    if cable["model"] == "secant" and winch["model"] == "dynamic":
-        for key in ("stiffness_n_m", "damping_n_s_m", "unstrained_length_m"):
-            if cable.get(key, 0.0) <= 0.0:
-                raise ValueError(f"cable.{key} must be positive for a dynamic Secant case.")
+    if cable["model"] == "ideal_secant" and winch["model"] != "prescribed_tension":
+        raise ValueError("cable.model='ideal_secant' requires winch.model='prescribed_tension'.")
+    if cable["model"] == "fem" and winch["model"] != "dynamic":
+        raise ValueError("cable.model='fem' requires winch.model='dynamic'.")
 
     if cable["model"] == "fem":
         if cable.get("unstrained_length_m", 0.0) <= 0.0:
@@ -240,25 +244,42 @@ def load_case(path):
             if not 0.0 <= terminal["final_throttle"] <= 1.0:
                 raise ValueError("Club terminal-fade final_throttle must be between 0 and 1.")
 
-    pilot = case["pilot"]
-    if pilot.get("sop") not in {"standard", "club"}:
-        raise ValueError("pilot.sop must be 'standard' or 'club'.")
+    if winch["model"] == "prescribed_tension":
+        profile = winch.get("tension_profile", {})
+        points = profile.get("time_points_after_liftoff", [])
+        if len(points) < 2:
+            raise ValueError("winch.tension_profile.time_points requires at least two points.")
+        times = [point.get("time_s", -1.0) for point in points]
+        tensions = [point.get("tension_n", -1.0) for point in points]
+        if times[0] != 0.0 or any(b <= a for a, b in zip(times, times[1:])):
+            raise ValueError("Prescribed-tension post-liftoff time points must start at t=0 and increase strictly.")
+        if any(value < 0.0 for value in tensions):
+            raise ValueError("Prescribed tension values must be non-negative.")
+        if abs(tensions[0] - launch_setup["pretension_n"]) > 1.0e-9:
+            raise ValueError("First prescribed-tension point must equal launch pretension.")
+        terminal = profile.get("terminal_fade", {})
+        if terminal.get("end_ground_angle_deg", 0.0) <= terminal.get("start_ground_angle_deg", 0.0):
+            raise ValueError("Prescribed-tension terminal fade end angle must exceed start angle.")
 
-    if pilot["sop"] == "standard":
-        initial = pilot["initial_climb"]
-        if initial["pitch_kp"] < 0.0:
-            raise ValueError("pilot.initial_climb.pitch_kp must be non-negative.")
-        rotation = pilot["rotation"]
-        if rotation["min_duration_s"] <= 0.0 or rotation["start_min_agl_m"] < 0.0:
-            raise ValueError("Invalid standard-pilot rotation settings.")
-        if rotation["full_climb_min_agl_m"] <= 0.0:
-            raise ValueError("pilot.rotation.full_climb_min_agl_m must be positive.")
-        release_preparation = pilot["release_preparation"]
-        if release_preparation["end_ground_angle_deg"] <= release_preparation["start_ground_angle_deg"]:
-            raise ValueError("Standard release-preparation end angle must exceed its start angle.")
+    pilot = case["pilot"]
+    if pilot.get("sop") not in {"rwth_reference", "club"}:
+        raise ValueError("pilot.sop must be 'rwth_reference' or 'club'.")
+
+    if pilot["sop"] == "rwth_reference":
+        if pilot["safety_altitude_m"] <= 0.0 or pilot["target_eas_m_s"] <= 0.0:
+            raise ValueError("Invalid RWTH reference pilot target or safety altitude.")
+        if pilot["fade_tau1_s"] <= 0.0 or pilot["fade_tau2_s"] <= 0.0:
+            raise ValueError("RWTH pilot fade constants must be positive.")
+        if pilot["speed_kp"] < 0.0 or pilot["pitch_rate_gain_s"] < 0.0:
+            raise ValueError("RWTH pilot gains must be non-negative.")
+        release = pilot["release"]
+        if release["max_tension_n"] < 0.0 or release["min_los_ground_angle_deg"] <= 0.0:
+            raise ValueError("Invalid RWTH release settings.")
+        if winch["model"] == "dynamic" and winch["control"]["mode"] != "tension_control":
+            raise ValueError("RWTH reference dynamic case requires tension_control.")
     else:
-        if winch["model"] != "dynamic" or winch["control"]["mode"] != "club_throttle":
-            raise ValueError("pilot.sop='club' requires dynamic winch control mode 'club_throttle'.")
+        if winch["model"] == "dynamic" and winch["control"]["mode"] != "club_throttle":
+            raise ValueError("Club dynamic case requires club_throttle.")
         if pilot["ground_roll"]["tailwheel_load_cue_n"] <= 0.0:
             raise ValueError("Club tailwheel_load_cue_n must be positive.")
         hold = pilot["hold_down"]
@@ -399,51 +420,45 @@ def evaluate_dynamics(
                 throttle_command = 0.0
             drum_angle_dot, drum_rate_dot = drum_derivatives(case, 0.0, 0.0, drum_rate)
     elif winch["model"] == "prescribed_tension":
-        target_tension = scheduled_tension(
-            winch["tension_schedule"],
+        target_tension, terminal_fade_progress_raw = prescribed_tension(
+            winch["tension_profile"],
             case["launch_setup"]["pretension_n"],
             time_s,
             cable_geometry["ground_angle_rad"],
             pilot_state.get("liftoff_time_s"),
-            pilot_state.get("rotation_start_time_s"),
+        )
+        terminal_fade_progress = max(
+            float(pilot_state.get("terminal_fade_progress", 0.0)),
+            terminal_fade_progress_raw,
         )
         winch_tension = target_tension
         tension = target_tension
     else:
-        if cable_model == "fem":
-            fem_boundary = _fem_winch_boundary_state(
-                case,
-                fem_positions,
-                fem_velocities,
-                drum_angle,
-                drum_rate,
-                cable_runtime,
-            )
-            winch_tension = fem_boundary["tension_n"]
-            tension = winch_tension
-        else:
-            tension = secant_elastic_tension(
-                case["cable"],
-                case["winch"],
-                cable_geometry["length_m"],
-                cable_geometry["length_rate_m_s"],
-                drum_angle,
-                drum_rate,
-                float(cable_runtime.get("initial_reel_in_m", 0.0)),
-            )
-            winch_tension = tension
+        fem_boundary = _fem_winch_boundary_state(
+            case,
+            fem_positions,
+            fem_velocities,
+            drum_angle,
+            drum_rate,
+            cable_runtime,
+        )
+        winch_tension = fem_boundary["tension_n"]
+        tension = winch_tension
 
         control = winch["control"]
         full_throttle_torque = full_throttle_drive_torque(winch, drum_rate)
 
         if control["mode"] == "tension_control":
-            target_tension = scheduled_tension(
+            target_tension, terminal_fade_progress_raw = rwth_target_tension(
                 control["target_tension_schedule"],
                 case["launch_setup"]["pretension_n"],
                 time_s,
                 cable_geometry["ground_angle_rad"],
                 pilot_state.get("liftoff_time_s"),
-                pilot_state.get("rotation_start_time_s"),
+            )
+            terminal_fade_progress = max(
+                float(pilot_state.get("terminal_fade_progress", 0.0)),
+                terminal_fade_progress_raw,
             )
             drive_torque, winch_integral_dot, _ = tension_control_drive_torque(
                 winch,
@@ -619,17 +634,14 @@ def evaluate_dynamics(
     ground_x_body = math.cos(theta) * ground_force_x - math.sin(theta) * ground_force_z
     ground_z_body = math.sin(theta) * ground_force_x + math.cos(theta) * ground_force_z
 
-    # 5. Pilot command. Standard and Club SOPs are deliberately separate because
-    # their control objectives differ, not merely their parameter values.
-    if case["pilot"]["sop"] == "standard":
-        pilot = standard_pilot_control(
+    # 5. Pilot command. RWTH-reference and Club policies are independent; neither
+    # inherits parameters from the removed Standard controller.
+    if case["pilot"]["sop"] == "rwth_reference":
+        pilot = rwth_reference_pilot_control(
             case,
             time_s,
             air,
-            theta,
             pitch_rate,
-            agl,
-            cable_geometry["ground_angle_rad"],
             pilot_state,
         )
     else:
@@ -696,7 +708,7 @@ def evaluate_dynamics(
     if case["pilot"]["sop"] == "club":
         early_speed_allowance = agl < case["pilot"]["hold_down"]["until_agl_m"]
     else:
-        early_speed_allowance = pilot["phase"] in {"GROUND_ROLL", "INITIAL_CLIMB", "PROGRESSIVE_ROTATION"}
+        early_speed_allowance = agl < case["pilot"]["safety_altitude_m"]
     active_speed_limit = (
         max_winch_speed * case["limits"]["initial_phase_max_winch_speed_factor"]
         if early_speed_allowance
@@ -743,22 +755,14 @@ def evaluate_dynamics(
         "pilot_rotation_progress": pilot["rotation_progress"],
         "pilot_release_preparation_progress": pilot["release_preparation_progress"],
         "pilot_initial_climb_mode": (
-            "takeoff_attitude" if case["pilot"]["sop"] == "standard" else "taut_cable_hold_down"
+            "trim_until_safety_altitude" if case["pilot"]["sop"] == "rwth_reference" else "taut_cable_hold_down"
         ),
         "pilot_initial_climb_tension_deficit": pilot["initial_climb_tension_deficit"],
         "pilot_pitch_target_deg": pilot["pitch_target_deg"],
         "pilot_speed_protection_pitch_increment_deg": pilot["speed_protection_pitch_increment_deg"],
         "pilot_power_reduction_requested": pilot["power_reduction_requested"],
-        "pilot_release_pitch_reference_deg": (
-            case["pilot"]["release"]["pitch_reference_deg"]
-            if case["pilot"]["sop"] == "standard"
-            else math.nan
-        ),
-        "pilot_release_pitch_error_deg": (
-            math.degrees(theta) - case["pilot"]["release"]["pitch_reference_deg"]
-            if case["pilot"]["sop"] == "standard"
-            else math.nan
-        ),
+        "pilot_release_pitch_reference_deg": math.nan,
+        "pilot_release_pitch_error_deg": math.nan,
         "pilot_eas_rate_m_s2": pilot_state.get("eas_rate_m_s2", 0.0),
         "CL": aero["CL"],
         "CD": aero["CD"],
@@ -1079,9 +1083,10 @@ def detect_step_event(previous, current, case, connection_state, pilot_state):
                 severity = "stop" if limits.get("stop_on_overspeed", True) else "warning"
                 candidates.append((4, altitude_fraction, "MAX_WINCH_SPEED_EXCEEDED", severity))
     else:
-        early_phases = {"GROUND_ROLL", "INITIAL_CLIMB", "PROGRESSIVE_ROTATION"}
-        previous_early = previous["pilot_phase"] in early_phases
-        current_early = current["pilot_phase"] in early_phases
+        boundary = case["pilot"]["safety_altitude_m"]
+        altitude_fraction = _crossing_fraction(previous["agl_m"], current["agl_m"], boundary, "up")
+        previous_early = previous["agl_m"] < boundary
+        current_early = current["agl_m"] < boundary
         if previous_early and current_early:
             fraction = _crossing_fraction(previous["eas_m_s"], current["eas_m_s"], vw, "up")
             if fraction is not None:
@@ -1092,8 +1097,10 @@ def detect_step_event(previous, current, case, connection_state, pilot_state):
                 candidates.append((4, fraction, "INITIAL_PHASE_OVERSPEED_STOP_LIMIT_EXCEEDED", severity))
         else:
             fraction = _crossing_fraction(previous["eas_m_s"], current["eas_m_s"], vw, "up")
-            if fraction is None and previous_early and not current_early and current["eas_m_s"] > vw:
-                fraction = 1.0
+            if fraction is None and altitude_fraction is not None:
+                eas_at_boundary = previous["eas_m_s"] + altitude_fraction * (current["eas_m_s"] - previous["eas_m_s"])
+                if eas_at_boundary > vw:
+                    fraction = altitude_fraction
             if fraction is not None:
                 severity = "stop" if limits.get("stop_on_overspeed", True) else "warning"
                 candidates.append((4, fraction, "MAX_WINCH_SPEED_EXCEEDED", severity))
@@ -1129,28 +1136,14 @@ def detect_step_event(previous, current, case, connection_state, pilot_state):
         candidates.append((5, fraction, "WINCH_POWER_REDUCTION_REQUEST", "transition"))
 
     release = case["pilot"]["release"]
-    if case["pilot"]["sop"] == "standard":
+    if case["pilot"]["sop"] == "rwth_reference":
         ready = (
-            current["pilot_phase"] == "RELEASE_PREPARATION"
-            and current["pilot_release_preparation_progress"] >= 1.0
+            current["winch_terminal_fade_progress"] >= 1.0
             and current["cable_tension_n"] <= release["max_tension_n"]
-            and current["cable_ground_angle_deg"] >= release["min_ground_angle_deg"]
-            and abs(current["pitch_rate_deg_s"]) <= release["max_abs_pitch_rate_deg_s"]
-            and abs(current["pilot_release_pitch_error_deg"]) <= release["max_pitch_error_deg"]
+            and current["cable_los_ground_angle_deg"] >= release["min_los_ground_angle_deg"]
         )
         if ready:
-            fractions = []
-            checks = [
-                (previous["cable_tension_n"], current["cable_tension_n"], release["max_tension_n"], "down"),
-                (previous["cable_ground_angle_deg"], current["cable_ground_angle_deg"], release["min_ground_angle_deg"], "up"),
-                (previous["pilot_release_preparation_progress"], current["pilot_release_preparation_progress"], 1.0, "up"),
-                (abs(previous["pitch_rate_deg_s"]), abs(current["pitch_rate_deg_s"]), release["max_abs_pitch_rate_deg_s"], "down"),
-                (abs(previous["pilot_release_pitch_error_deg"]), abs(current["pilot_release_pitch_error_deg"]), release["max_pitch_error_deg"], "down"),
-            ]
-            for a, b, threshold, direction in checks:
-                already = a <= threshold if direction == "down" else a >= threshold
-                fractions.append(0.0 if already else (_crossing_fraction(a, b, threshold, direction) or 1.0))
-            candidates.append((6, max(fractions), "PILOT_COMMAND_RELEASE", "transition"))
+            candidates.append((6, 1.0, "PILOT_COMMAND_RELEASE", "transition"))
     else:
         ready = (
             current["pilot_phase"] == "LEVEL_OFF"
@@ -1199,6 +1192,7 @@ def run_simulation(case):
         "liftoff_time_s": None,
         "rotation_start_time_s": None,
         "rotation_start_pitch_rad": None,
+        "rwth_safety_altitude_time_s": None,
         "eas_rate_m_s2": 0.0,
         "power_reduction_request_time_s": None,
         "terminal_fade_progress": 0.0,
@@ -1304,27 +1298,30 @@ def run_simulation(case):
         diagnostics = next_diagnostics
         pilot_state["eas_rate_m_s2"] = next_eas_rate
 
-        if case["pilot"]["sop"] == "club":
-            pilot_state["terminal_fade_progress"] = max(
-                pilot_state.get("terminal_fade_progress", 0.0),
-                diagnostics.get("winch_terminal_fade_progress", 0.0),
-            )
+        pilot_state["terminal_fade_progress"] = max(
+            pilot_state.get("terminal_fade_progress", 0.0),
+            diagnostics.get("winch_terminal_fade_progress", 0.0),
+        )
 
-        rotation = case["pilot"]["rotation"]
         if (
-            pilot_state["rotation_start_time_s"] is None
-            and pilot_state.get("liftoff_time_s") is not None
-            and connection_state in {TAUT, SLACK}
+            case["pilot"]["sop"] == "rwth_reference"
+            and pilot_state.get("rwth_safety_altitude_time_s") is None
+            and diagnostics["agl_m"] >= case["pilot"]["safety_altitude_m"]
         ):
-            if case["pilot"]["sop"] == "standard":
-                rotation_ready = (
-                    diagnostics["eas_m_s"] >= rotation["start_eas_m_s"]
-                    and next_eas_rate >= rotation["min_eas_rate_m_s2"]
-                    and diagnostics["agl_m"] >= rotation["start_min_agl_m"]
-                )
-            else:
-                rotation_ready = diagnostics["agl_m"] >= case["pilot"]["hold_down"]["until_agl_m"]
-            if rotation_ready:
+            pilot_state["rwth_safety_altitude_time_s"] = time_s
+            _, diagnostics = evaluate_dynamics(
+                time_s, state, case, connection_state, pilot_state, cable_runtime
+            )
+            diagnostics["pilot_eas_rate_m_s2"] = next_eas_rate
+
+        if case["pilot"]["sop"] == "club":
+            rotation = case["pilot"]["rotation"]
+            if (
+                pilot_state["rotation_start_time_s"] is None
+                and pilot_state.get("liftoff_time_s") is not None
+                and connection_state in {TAUT, SLACK}
+                and diagnostics["agl_m"] >= case["pilot"]["hold_down"]["until_agl_m"]
+            ):
                 pilot_state["rotation_start_time_s"] = time_s
                 pilot_state["rotation_start_pitch_rad"] = float(state[4])
                 _, diagnostics = evaluate_dynamics(
@@ -1432,9 +1429,9 @@ def run_simulation(case):
             else "prescribed_tension"
         ),
         "pilot_model": (
-            "ground roll -> takeoff attitude -> progressive rotation -> EAS full climb -> release preparation"
-            if case["pilot"]["sop"] == "standard"
-            else "tailwheel hold -> taut-cable hold-down to 200 ft -> 45 deg rotation/full climb -> level off"
+            "RWTH reference: trim to safety altitude -> faded 30 m/s airspeed control + pitch damping"
+            if case["pilot"]["sop"] == "rwth_reference"
+            else "Club: tailwheel hold -> taut-cable hold-down to 200 ft -> 45 deg rotation/full climb -> level off"
         ),
         "initialization": copy.deepcopy(initialization),
         "liftoff_time_s": pilot_state.get("liftoff_time_s"),

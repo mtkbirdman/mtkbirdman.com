@@ -3,130 +3,74 @@ import math
 from .atmosphere import RHO0
 
 
-GROUND_ROLL = "GROUND_ROLL"
-INITIAL_CLIMB = "INITIAL_CLIMB"
-PROGRESSIVE_ROTATION = "PROGRESSIVE_ROTATION"
-FULL_CLIMB = "FULL_CLIMB"
-RELEASE_PREPARATION = "RELEASE_PREPARATION"
+RWTH_TRIM = "RWTH_TRIM"
+RWTH_AIRSPEED_CONTROL = "RWTH_AIRSPEED_CONTROL"
 
 GROUND_ROLL_TAILWHEEL = "GROUND_ROLL_TAILWHEEL"
 POST_LIFTOFF_HOLD_DOWN = "POST_LIFTOFF_HOLD_DOWN"
+PROGRESSIVE_ROTATION = "PROGRESSIVE_ROTATION"
+FULL_CLIMB = "FULL_CLIMB"
 LEVEL_OFF = "LEVEL_OFF"
 
 
-def standard_pilot_control(
+def _second_order_fade(elapsed_s, tau1_s, tau2_s):
+    if elapsed_s <= 0.0:
+        return 0.0
+    if abs(tau1_s - tau2_s) < 1.0e-12:
+        tau = tau1_s
+        return min(max(1.0 - math.exp(-elapsed_s / tau) * (1.0 + elapsed_s / tau), 0.0), 1.0)
+    value = 1.0 - (tau1_s * math.exp(-elapsed_s / tau1_s) - tau2_s * math.exp(-elapsed_s / tau2_s)) / (tau1_s - tau2_s)
+    return min(max(value, 0.0), 1.0)
+
+
+def rwth_reference_pilot_control(
     case,
     time_s,
     air,
-    theta_rad,
     pitch_rate_rad_s,
-    agl_m,
-    cable_ground_angle_rad,
     pilot_state,
 ):
-    """Standard longitudinal pilot model, read in launch-phase order."""
+    """G103A-adapted implementation of the RWTH reference pilot structure.
+
+    Source-confirmed elements are trim-only low-altitude flight, engagement of
+    airspeed/dynamic-pressure control and pitch damping after a safety altitude, and
+    a 30 m/s target.  The numerical gains and fade constants are explicit G103A
+    analysis settings because the RWTH publications do not provide their values.
+    """
     pilot = case["pilot"]
     lower = math.radians(pilot["elevator_min_deg"])
     upper = math.radians(pilot["elevator_max_deg"])
-    pitch_rate_gain = pilot["pitch_rate_gain_s"]
-
-    initial = pilot["initial_climb"]
-    initial_pitch = math.radians(initial["pitch_target_deg"])
-    initial_command = (
-        math.radians(initial["elevator_bias_deg"])
-        + initial["pitch_kp"] * (theta_rad - initial_pitch)
-        + pitch_rate_gain * pitch_rate_rad_s
-    )
-
-    full = pilot["full_climb"]
-    target_eas = full["target_eas_m_s"]
+    trim = math.radians(pilot["trim_elevator_deg"])
+    target_eas = pilot["target_eas_m_s"]
     speed_error = (
         RHO0 * target_eas**2
         - air["density_kg_m3"] * air["airspeed_m_s"] ** 2
     ) / (RHO0 * target_eas**2)
-    full_command = (
-        math.radians(full["elevator_bias_deg"])
-        + full["eas_kp"] * speed_error
-        + pitch_rate_gain * pitch_rate_rad_s
-    )
 
-    rotation_start_time = pilot_state.get("rotation_start_time_s")
-    rotation_progress = 0.0
-    release_progress = 0.0
-
-    if pilot_state.get("liftoff_time_s") is None:
-        phase = GROUND_ROLL
-        if "ground_roll_elevator_deg" in pilot:
-            unsaturated = (
-                math.radians(pilot["ground_roll_elevator_deg"])
-                + pitch_rate_gain * pitch_rate_rad_s
-            )
-        else:
-            unsaturated = initial_command
-    elif rotation_start_time is None:
-        phase = INITIAL_CLIMB
-        unsaturated = initial_command
+    safety_time = pilot_state.get("rwth_safety_altitude_time_s")
+    if safety_time is None:
+        phase = RWTH_TRIM
+        fade = 0.0
+        unsaturated = trim
     else:
-        rotation = pilot["rotation"]
-        rotation_progress = min(
-            max((time_s - rotation_start_time) / rotation["min_duration_s"], 0.0),
-            1.0,
+        phase = RWTH_AIRSPEED_CONTROL
+        fade = _second_order_fade(
+            time_s - safety_time,
+            pilot["fade_tau1_s"],
+            pilot["fade_tau2_s"],
         )
-        full_climb_ready = (
-            rotation_progress >= 1.0
-            and agl_m >= rotation["full_climb_min_agl_m"]
+        feedback = (
+            pilot["speed_kp"] * speed_error
+            + pilot["pitch_rate_gain_s"] * pitch_rate_rad_s
         )
-
-        if not full_climb_ready:
-            phase = PROGRESSIVE_ROTATION
-            blend = 0.5 * (1.0 - math.cos(math.pi * rotation_progress))
-            rotation_pitch = math.radians(rotation["pitch_target_deg"])
-            rotation_pitch_command = (
-                rotation["pitch_kp"]
-                * (theta_rad - rotation_pitch)
-                * 16.0
-                * rotation_progress**2
-                * (1.0 - rotation_progress) ** 2
-            )
-            unsaturated = (
-                initial_command
-                + (full_command - initial_command) * blend
-                + rotation_pitch_command
-            )
-        else:
-            release = pilot["release_preparation"]
-            cable_angle_deg = math.degrees(cable_ground_angle_rad)
-            if cable_angle_deg < release["start_ground_angle_deg"]:
-                phase = FULL_CLIMB
-                unsaturated = full_command
-            else:
-                phase = RELEASE_PREPARATION
-                release_progress = min(
-                    max(
-                        (cable_angle_deg - release["start_ground_angle_deg"])
-                        / (
-                            release["end_ground_angle_deg"]
-                            - release["start_ground_angle_deg"]
-                        ),
-                        0.0,
-                    ),
-                    1.0,
-                )
-                blend = 0.5 * (1.0 - math.cos(math.pi * release_progress))
-                release_pitch = math.radians(release["pitch_target_deg"])
-                release_command = (
-                    math.radians(release["elevator_bias_deg"])
-                    + release["pitch_kp"] * (theta_rad - release_pitch)
-                    + pitch_rate_gain * pitch_rate_rad_s
-                )
-                unsaturated = full_command + (release_command - full_command) * blend
+        unsaturated = trim + fade * feedback
 
     return {
         "elevator_rad": min(max(unsaturated, lower), upper),
         "speed_error": speed_error,
         "phase": phase,
-        "rotation_progress": rotation_progress,
-        "release_preparation_progress": release_progress,
+        "rotation_progress": fade,
+        "release_preparation_progress": float(pilot_state.get("terminal_fade_progress", 0.0)),
         "initial_climb_tension_deficit": 0.0,
         "pitch_target_deg": math.nan,
         "speed_protection_pitch_increment_deg": 0.0,
@@ -145,7 +89,7 @@ def club_pilot_control(
     tailwheel_normal_force_n,
     pilot_state,
 ):
-    """Club SOP: tailwheel hold, taut-cable hold-down, 45 deg climb, then level off."""
+    """Club pilot policy independent of the selected plant fidelity."""
     pilot = case["pilot"]
     lower = math.radians(pilot["elevator_min_deg"])
     upper = math.radians(pilot["elevator_max_deg"])
@@ -186,7 +130,11 @@ def club_pilot_control(
         + pitch_rate_gain * pitch_rate_rad_s
     )
 
-    power_request = (
+    dynamic_club_winch = (
+        case["winch"]["model"] == "dynamic"
+        and case["winch"]["control"]["mode"] == "club_throttle"
+    )
+    power_request = dynamic_club_winch and (
         air["eas_m_s"]
         >= case["limits"]["max_winch_eas_m_s"] - full["power_reduction_request_margin_m_s"]
     )
@@ -231,11 +179,6 @@ def club_pilot_control(
             if rotation_progress < 1.0:
                 phase = PROGRESSIVE_ROTATION
                 blend = 0.5 * (1.0 - math.cos(math.pi * rotation_progress))
-                start_pitch = pilot_state.get("rotation_start_pitch_rad", theta_rad)
-                rotation_target = start_pitch + blend * (
-                    math.radians(rotation["pitch_target_deg"]) - start_pitch
-                )
-                pitch_target_deg = math.degrees(rotation_target)
                 pitch_bump = (
                     rotation["pitch_kp"]
                     * (theta_rad - math.radians(rotation["pitch_target_deg"]))
@@ -244,6 +187,7 @@ def club_pilot_control(
                     * (1.0 - rotation_progress) ** 2
                 )
                 unsaturated = hold_command + (full_command - hold_command) * blend + pitch_bump
+                pitch_target_deg = rotation["pitch_target_deg"]
                 power_request = False
             else:
                 phase = FULL_CLIMB

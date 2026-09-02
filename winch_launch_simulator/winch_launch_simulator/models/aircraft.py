@@ -30,7 +30,12 @@ def air_data(u, w, theta, wind_x, wind_z, rho):
 
 
 def aerodynamic_forces_and_moment(case, air, pitch_rate_rad_s, elevator_rad, rho):
-    """Evaluate the canonical local-linear G103A VSPAERO model."""
+    """Evaluate the canonical G103A longitudinal aerodynamic model.
+
+    CL and Cm use the local-linear VSPAERO stability derivatives.  CD uses
+    the parabolic static-polar fit CD = CD0 + K * CL**2 evaluated at the
+    instantaneous CL.
+    """
     aero = case["aerodynamics"]
     airspeed = max(air["airspeed_m_s"], 1.0e-6)
     alpha = air["alpha_rad"]
@@ -43,12 +48,7 @@ def aerodynamic_forces_and_moment(case, air, pitch_rate_rad_s, elevator_rad, rho
         + aero["CL_qhat"] * pitch_rate_rad_s * chord / (2.0 * airspeed)
         + aero["CL_elevator_per_rad"] * elevator_rad
     )
-    cd = (
-        aero["CD_ref"]
-        + aero["CD_alpha_per_rad"] * (alpha - alpha_ref)
-        + aero["CD_qhat"] * pitch_rate_rad_s * chord / (2.0 * airspeed)
-        + aero["CD_elevator_per_rad"] * elevator_rad
-    )
+    cd = aero["CD0"] + aero["K"] * cl**2
     cm = (
         aero["Cm_ref"]
         + aero["Cm_alpha_per_rad"] * (alpha - alpha_ref)

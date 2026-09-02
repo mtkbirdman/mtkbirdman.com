@@ -10,8 +10,24 @@ def test_no_wind_air_data_matches_body_state():
     assert math.isclose(air["alpha_rad"], math.atan2(2.0, 20.0), rel_tol=1e-12)
 
 
+
+
+def test_drag_coefficient_uses_parabolic_polar_at_instantaneous_cl():
+    case = load_case("cases/g103a_rwth_reference_prescribed_tension.json")
+    air = {
+        "airspeed_m_s": 30.0,
+        "alpha_rad": math.radians(4.0),
+    }
+    result = aerodynamic_forces_and_moment(
+        case, air, math.radians(2.0), math.radians(-3.0), 1.225
+    )
+    aero = case["aerodynamics"]
+    expected_cd = aero["CD0"] + aero["K"] * result["CL"] ** 2
+    assert math.isclose(result["CD"], expected_cd, rel_tol=1e-12, abs_tol=1e-15)
+    assert result["CD"] >= aero["CD0"]
+
 def test_positive_elevator_command_gives_more_nose_down_cm():
-    case = load_case("cases/g103a_prescribed_tension.json")
+    case = load_case("cases/g103a_rwth_reference_prescribed_tension.json")
     air = {
         "airspeed_m_s": 30.0,
         "alpha_rad": math.radians(2.0),
@@ -24,7 +40,7 @@ def test_positive_elevator_command_gives_more_nose_down_cm():
 def test_wheel_ground_contact_is_unilateral_and_has_no_attractive_normal_force():
     from winch_launch_simulator.models.aircraft import wheel_ground_forces_and_moment
 
-    case = load_case("cases/g103a_dynamic_winch.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     # Far above ground: no tire contact.
     clear = wheel_ground_forces_and_moment(case, 0.0, -2.0, 0.0, 0.0, 0.0, 0.0)
     assert clear["contact_count"] == 0

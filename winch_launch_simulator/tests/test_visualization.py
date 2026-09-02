@@ -14,7 +14,7 @@ def _cable_collection(axes):
 
 
 def test_summary_plot_has_four_axes():
-    case = load_case("cases/g103a_prescribed_tension.json")
+    case = load_case("cases/g103a_rwth_reference_prescribed_tension.json")
     case["simulation"]["max_time_s"] = 0.05
     result = run_simulation(case)
     figure = plot_summary(result)
@@ -23,7 +23,7 @@ def test_summary_plot_has_four_axes():
 
 
 def test_animation_frame_count_tracks_simulation_time_not_integrator_samples():
-    case = load_case("cases/g103a_prescribed_tension.json")
+    case = load_case("cases/g103a_rwth_reference_prescribed_tension.json")
     case["simulation"]["max_time_s"] = 2.0
     result = run_simulation(case)
     fps = 20
@@ -58,7 +58,7 @@ def _pixels_per_metre(axis):
 
 
 def test_animation_keeps_equal_x_z_physical_scale_in_follow_and_overview_modes():
-    case = load_case("cases/g103a_dynamic_winch.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     case["simulation"]["max_time_s"] = 0.05
     result = run_simulation(case)
 
@@ -91,7 +91,7 @@ def test_overview_keeps_ground_near_bottom_at_equal_rendered_scale():
         "winch_x_m": [1100.0, 1100.0],
         "winch_z_m": [0.0, 0.0],
         "connection_state": [1, 1],
-        "cable_model": ["secant", "secant"],
+        "cable_model": ["ideal_secant", "ideal_secant"],
     }
 
     figure, ani, axes = make_winch_launch_animation(
@@ -116,8 +116,8 @@ def test_overview_keeps_ground_near_bottom_at_equal_rendered_scale():
     plt.close(figure)
 
 
-def test_secant_animation_uses_one_straight_cable_segment():
-    case = load_case("cases/g103a_dynamic_winch.json")
+def test_ideal_secant_animation_uses_one_straight_cable_segment():
+    case = load_case("cases/g103a_rwth_reference_prescribed_tension.json")
     case["simulation"]["max_time_s"] = 0.05
     result = run_simulation(case)
 
@@ -142,7 +142,7 @@ def test_secant_animation_uses_one_straight_cable_segment():
 
 
 def test_fem_animation_draws_each_active_element_from_saved_node_positions():
-    case = load_case("cases/g103a_dynamic_winch_fem.json")
+    case = load_case("cases/g103a_rwth_reference_dynamic_winch_fem.json")
     case["simulation"]["max_time_s"] = 0.01
     result = run_simulation(case)
     history = result["history"]

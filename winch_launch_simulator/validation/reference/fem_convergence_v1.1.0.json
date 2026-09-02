@@ -1,0 +1,220 @@
+{
+  "version": "v1.1.0",
+  "physics_change": "parabolic drag polar CD=CD0+K*CL^2",
+  "scope": "Full-launch FEM time-step and mesh convergence for the current canonical solver.",
+  "canonical_fem": {
+    "node_count": 20,
+    "dt_s": 0.005
+  },
+  "mesh_comparison_dt_s": 0.0025,
+  "standard": {
+    "time_step_convergence_20_nodes": [
+      {
+        "node_count": 20,
+        "dt_s": 0.005,
+        "release_time_s": 40.70602946980298,
+        "release_altitude_m": 318.96377694603416,
+        "release_eas_m_s": 27.71508000649528,
+        "max_tension_n": 5148.023155233972,
+        "min_stall_margin_m_s": 1.9488238518739607,
+        "max_remesh_winch_tension_jump_n": 3.9370242932491237,
+        "stops": []
+      },
+      {
+        "node_count": 20,
+        "dt_s": 0.0025,
+        "release_time_s": 40.70611527731602,
+        "release_altitude_m": 318.97098328277576,
+        "release_eas_m_s": 27.715143121559006,
+        "max_tension_n": 5148.024401975768,
+        "min_stall_margin_m_s": 1.9488295412519534,
+        "max_remesh_winch_tension_jump_n": 3.915841982805887,
+        "stops": []
+      },
+      {
+        "node_count": 20,
+        "dt_s": 0.00125,
+        "release_time_s": 40.70611041258251,
+        "release_altitude_m": 318.97099138322943,
+        "release_eas_m_s": 27.715144513016423,
+        "max_tension_n": 5148.025114641296,
+        "min_stall_margin_m_s": 1.9488271307666025,
+        "max_remesh_winch_tension_jump_n": 3.9040365809100877,
+        "stops": []
+      }
+    ],
+    "mesh_convergence_common_dt_0p0025_s": [
+      {
+        "node_count": 20,
+        "dt_s": 0.0025,
+        "release_time_s": 40.70611527731602,
+        "release_altitude_m": 318.97098328277576,
+        "release_eas_m_s": 27.715143121559006,
+        "max_tension_n": 5148.024401975768,
+        "min_stall_margin_m_s": 1.9488295412519534,
+        "max_remesh_winch_tension_jump_n": 3.915841982805887,
+        "stops": []
+      },
+      {
+        "node_count": 22,
+        "dt_s": 0.0025,
+        "release_time_s": 40.653319629582846,
+        "release_altitude_m": 318.74936760688894,
+        "release_eas_m_s": 27.74445356804947,
+        "max_tension_n": 5147.107522922179,
+        "min_stall_margin_m_s": 1.9531797538670368,
+        "max_remesh_winch_tension_jump_n": 3.8087025052755052,
+        "stops": []
+      },
+      {
+        "node_count": 40,
+        "dt_s": 0.0025,
+        "release_time_s": 40.47899921224428,
+        "release_altitude_m": 317.96913634121347,
+        "release_eas_m_s": 27.77027552061892,
+        "max_tension_n": 5150.030632909879,
+        "min_stall_margin_m_s": 1.9641518895943975,
+        "max_remesh_winch_tension_jump_n": 2.822939325767038,
+        "stops": []
+      }
+    ],
+    "forty_node_time_step_check": {
+      "dt_0p0025": {
+        "node_count": 40,
+        "dt_s": 0.0025,
+        "release_time_s": 40.47899921224428,
+        "release_altitude_m": 317.96913634121347,
+        "release_eas_m_s": 27.77027552061892,
+        "max_tension_n": 5150.030632909879,
+        "min_stall_margin_m_s": 1.9641518895943975,
+        "max_remesh_winch_tension_jump_n": 2.822939325767038,
+        "stops": []
+      },
+      "dt_0p00125": {
+        "node_count": 40,
+        "dt_s": 0.00125,
+        "release_time_s": 40.47906037924507,
+        "release_altitude_m": 317.9728949241901,
+        "release_eas_m_s": 27.770280188866362,
+        "max_tension_n": 5150.030338934897,
+        "min_stall_margin_m_s": 1.9641600795812764,
+        "max_remesh_winch_tension_jump_n": 2.8230605120352266,
+        "stops": []
+      }
+    },
+    "mesh_20_to_40_delta": {
+      "release_altitude_m": -1.0018469415622917,
+      "release_altitude_percent": -0.3140871722096832,
+      "max_tension_n": 2.006230934111045,
+      "max_tension_percent": 0.038970890140712436
+    }
+  },
+  "club": {
+    "time_step_convergence_20_nodes": [
+      {
+        "node_count": 20,
+        "dt_s": 0.005,
+        "release_time_s": 41.72770866417489,
+        "release_altitude_m": 351.25832560810204,
+        "release_eas_m_s": 27.38747418614345,
+        "max_tension_n": 6302.316077287953,
+        "min_stall_margin_m_s": 1.396409410275755,
+        "max_remesh_winch_tension_jump_n": 3.981849173869705,
+        "stops": []
+      },
+      {
+        "node_count": 20,
+        "dt_s": 0.0025,
+        "release_time_s": 41.7252900164407,
+        "release_altitude_m": 351.25421632666774,
+        "release_eas_m_s": 27.39219414915415,
+        "max_tension_n": 6302.3302441822825,
+        "min_stall_margin_m_s": 1.3963275561874333,
+        "max_remesh_winch_tension_jump_n": 3.9814403033378767,
+        "stops": []
+      },
+      {
+        "node_count": 20,
+        "dt_s": 0.00125,
+        "release_time_s": 41.72404933356241,
+        "release_altitude_m": 351.2493070287954,
+        "release_eas_m_s": 27.394563909798986,
+        "max_tension_n": 6302.329953949757,
+        "min_stall_margin_m_s": 1.3963277042788995,
+        "max_remesh_winch_tension_jump_n": 3.981481331901705,
+        "stops": []
+      }
+    ],
+    "mesh_convergence_common_dt_0p0025_s": [
+      {
+        "node_count": 20,
+        "dt_s": 0.0025,
+        "release_time_s": 41.7252900164407,
+        "release_altitude_m": 351.25421632666774,
+        "release_eas_m_s": 27.39219414915415,
+        "max_tension_n": 6302.3302441822825,
+        "min_stall_margin_m_s": 1.3963275561874333,
+        "max_remesh_winch_tension_jump_n": 3.9814403033378767,
+        "stops": []
+      },
+      {
+        "node_count": 22,
+        "dt_s": 0.0025,
+        "release_time_s": 41.725698329569155,
+        "release_altitude_m": 351.22465089184254,
+        "release_eas_m_s": 27.398926267133874,
+        "max_tension_n": 6301.510004021631,
+        "min_stall_margin_m_s": 1.3957564875868371,
+        "max_remesh_winch_tension_jump_n": 3.562142197067942,
+        "stops": []
+      },
+      {
+        "node_count": 40,
+        "dt_s": 0.0025,
+        "release_time_s": 41.73041582429789,
+        "release_altitude_m": 351.15496766043645,
+        "release_eas_m_s": 27.403325709764903,
+        "max_tension_n": 6301.846990180596,
+        "min_stall_margin_m_s": 1.3945401516584504,
+        "max_remesh_winch_tension_jump_n": 3.6027347947238013,
+        "stops": []
+      }
+    ],
+    "forty_node_time_step_check": {
+      "dt_0p0025": {
+        "node_count": 40,
+        "dt_s": 0.0025,
+        "release_time_s": 41.73041582429789,
+        "release_altitude_m": 351.15496766043645,
+        "release_eas_m_s": 27.403325709764903,
+        "max_tension_n": 6301.846990180596,
+        "min_stall_margin_m_s": 1.3945401516584504,
+        "max_remesh_winch_tension_jump_n": 3.6027347947238013,
+        "stops": []
+      },
+      "dt_0p00125": {
+        "node_count": 40,
+        "dt_s": 0.00125,
+        "release_time_s": 41.72917786969386,
+        "release_altitude_m": 351.1528473155267,
+        "release_eas_m_s": 27.405701919486418,
+        "max_tension_n": 6301.849012298022,
+        "min_stall_margin_m_s": 1.3944977588740564,
+        "max_remesh_winch_tension_jump_n": 3.60656689474672,
+        "stops": []
+      }
+    },
+    "mesh_20_to_40_delta": {
+      "release_altitude_m": -0.09924866623128992,
+      "release_altitude_percent": -0.028255508864550763,
+      "max_tension_n": -0.4832540016868734,
+      "max_tension_percent": -0.0076678622503631565
+    }
+  },
+  "acceptance": {
+    "all_runs_normal_release_without_stop": true,
+    "canonical_20_node_dt_convergence_good": true,
+    "common_dt_mesh_convergence_good": true,
+    "note": "Metrics were regenerated after the v1.1.0 drag-model change. Acceptance requires normal release and inspection of the stored time-step and mesh trends."
+  }
+}

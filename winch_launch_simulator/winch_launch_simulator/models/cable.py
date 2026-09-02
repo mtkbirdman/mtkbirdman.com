@@ -36,24 +36,3 @@ def hook_winch_geometry(x, z, theta, pitch_rate, x_dot, z_dot, hook, winch):
         "unit_z_ground": unit_z,
         "ground_angle_rad": ground_angle,
     }
-
-
-def secant_elastic_tension(
-    cable,
-    winch,
-    cable_length_m,
-    cable_length_rate_m_s,
-    drum_angle_rad,
-    drum_rate_rad_s,
-    initial_reel_in_m,
-):
-    """Return tension from the Secant model's equivalent spring and damper."""
-    deployed_natural_length = (
-        cable["unstrained_length_m"]
-        - initial_reel_in_m
-        - winch["drum_radius_m"] * drum_angle_rad
-    )
-    extension = cable_length_m - deployed_natural_length
-    extension_rate = cable_length_rate_m_s + winch["drum_radius_m"] * drum_rate_rad_s
-    tension = cable["stiffness_n_m"] * extension + cable["damping_n_s_m"] * extension_rate
-    return max(0.0, tension)

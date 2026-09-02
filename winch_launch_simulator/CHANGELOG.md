@@ -1,5 +1,112 @@
 # Changelog
 
+## 1.3.0
+
+- Replace the unsupported `Iyy=2500 kg m²` analysis assumption with `Iyy=2000 kg m²`, rounded from `1964.7 kg m²` derived using AMC 22.481 `iy=0.225 LR`, `LR=8.18 m`, and canonical mass `580 kg`.
+- Treat this inertia as an AMC-based derived analysis value, not a measured G103A mass property.
+- Replace the pre-launch three-wheel/unconstrained equilibrium selection with a deliberate mainwheel+tailwheel two-point static support equilibrium under 2500 N pretension.
+- Require positive mainwheel and tailwheel reactions and explicit nosewheel clearance at initialization.
+- Retain compliant tire compression in the static solve so the t=0 support reactions are continuous with the time-domain ground-contact model.
+- Canonical initial aircraft state: pitch `5.25148 deg`, CG height `0.580987 m`, mainwheel reaction `5683.52 N`, tailwheel reaction `4.944 N`, nosewheel clearance `0.130828 m`.
+- FEM pre-launch relaxation from the new aircraft pose gives initial reel-in `4.03253 m`, winch tension `2499.94 N`, hook tension `2499.97 N`.
+- Existing RWTH and Club controller gains require no retuning; all four canonical cases still reach normal release without stop/warning.
+- Regenerate canonical regression, Club launch-power-ramp / early-transient convergence, Vw-feedback reference, and RWTH FEM full-launch time-step spot check.
+- Add regression tests for the `Iyy=2000 kg m²` baseline and mainwheel+tailwheel-only support state.
+
+Canonical regression:
+
+| case | release altitude [m] | max EAS [m/s] | max tension [kN] | min stall margin [m/s] | max |q| [deg/s] |
+|---|---:|---:|---:|---:|---:|
+| RWTH / Prescribed + Ideal Secant | 347.581 | 31.335 | 4.750 | 3.926 | 6.023 |
+| Club / Prescribed + Ideal Secant | 345.334 | 33.058 | 4.750 | 1.988 | 5.359 |
+| RWTH / Dynamic winch + FEM | 241.344 | 32.560 | 5.306 | 3.666 | 7.214 |
+| Club / Dynamic winch + FEM | 329.102 | 32.905 | 5.108 | 1.704 | 4.805 |
+
+- `pytest -q`: **63 passed**.
+
+## 1.2.0
+
+- Remove the lumped elastic `Dynamic Secant` model completely.
+- Remove the mixed-origin `Standard SOP` completely.
+- Reduce canonical architecture to four cases: two plant fidelities × two pilot/operation policies.
+- Add literature-aligned Ideal Secant: massless, inelastic, undamped, no gravity/drag/ground interaction, prescribed hook tension along the hook-winch line.
+- Use one identical prescribed-tension excitation for both low-fidelity pilot cases so that their difference is the pilot policy.
+- Add `rwth_reference_pilot_control()`: trim-only below 50 m, then 30 m/s airspeed/dynamic-pressure control plus pitch damping with a second-order fade-in.
+- Treat RWTH controller gains/fade constants as explicit G103A analysis settings because the source describes the form but does not publish final gain values.
+- Use G103A-adapted RWTH dynamic-FEM tension control: 2500 N pretension, 500 N/s rise, 5000 N cap, 65-75 deg terminal fade.
+- Keep one common Club pilot across both plant fidelities; canonical full-climb settings are 45 deg target, `pitch_kp=0.25`, `elevator_bias=-2 deg`.
+- Keep Club throttle control only on Dynamic winch + FEM; the prescribed Club case is explicitly a reduced-order comparison, not a replay of Club winch operation.
+- Update validation runners, tests, README and implementation specification for the new architecture.
+
+Canonical regression:
+
+| case | release altitude [m] | max EAS [m/s] | max tension [kN] | min stall margin [m/s] | max |q| [deg/s] |
+|---|---:|---:|---:|---:|---:|
+| RWTH / Prescribed + Ideal Secant | 347.717 | 31.362 | 4.750 | 3.934 | 5.991 |
+| Club / Prescribed + Ideal Secant | 345.350 | 33.074 | 4.750 | 1.963 | 5.373 |
+| RWTH / Dynamic winch + FEM | 241.709 | 32.560 | 5.307 | 3.680 | 7.268 |
+| Club / Dynamic winch + FEM | 329.121 | 32.906 | 5.108 | 1.698 | 4.597 |
+
+All four canonical cases reach normal release without a stop event.
+
+Club dynamic-FEM early transient convergence at the canonical 3.5 s launch-power ramp:
+
+| dt [s] | liftoff [s] | distance [m] | EAS [m/s] |
+|---:|---:|---:|---:|
+| .005 | 4.767709 | 59.03594 | 26.47566 |
+| .0025 | 4.767790 | 59.03814 | 26.47598 |
+| .00125 | 4.767799 | 59.03832 | 26.47600 |
+
+RWTH dynamic-FEM full-launch spot check: `.005/.0025 s` release altitude = `241.7088/241.6942 m`, max tension = `5307.073/5307.074 N`.
+
+- `pytest -q`: **61 passed**.
+
+## 1.1.0
+
+- Replace the canonical drag-coefficient model with the static-polar fit `CD=CD0+K*CL^2`.
+- Fit source: `G103A.polar` `CLwtot/CDwtot`, AoA -2..12 deg, 8 points.
+- Canonical fit: `CD0=0.007906026873656432`, `K=0.025021597731889444`, `R^2=0.9999565365`, RMSE `1.2677e-4`.
+- Keep `CL` and `Cm` on the existing local-linear `G103A.stab` stability-derivative model.
+- Remove `CD_ref`, `CD_alpha_per_rad`, `CD_qhat`, and `CD_elevator_per_rad` from canonical cases; add `CD0`, `K`, and drag-polar provenance.
+- Add `aero_reference/G103A_drag_polar.csv`, `aero_reference/G103A_drag_polar_fit.json`, and `validation/fit_drag_polar.py`.
+- Regenerate canonical regression, Club launch-power-ramp sensitivity, Vw-feedback reference, and full FEM time-step/mesh convergence after the physics change.
+- Add unit tests for the parabolic drag relation and positive `CD0/K` case validation.
+
+Canonical regression:
+
+| case | release altitude [m] | max EAS [m/s] | max tension [kN] | min stall margin [m/s] | max |q| [deg/s] |
+|---|---:|---:|---:|---:|---:|
+| Prescribed | 359.927 | 33.081 | 5.157 | 2.900 | 7.906 |
+| Secant Standard | 364.511 | 32.245 | 6.234 | 2.122 | 7.869 |
+| Secant Club | 373.983 | 31.718 | 6.259 | 2.344 | 5.459 |
+| FEM Standard | 318.964 | 30.395 | 5.148 | 1.949 | 7.917 |
+| FEM Club | 351.258 | 32.669 | 6.302 | 1.396 | 5.515 |
+
+Release-altitude change from v1.0.1 is approximately -0.64%, -1.14%, -0.85%, -1.07%, and -0.91% respectively. All five canonical cases reach normal release without warning/stop.
+
+20-node full-launch time-step convergence:
+
+| SOP | metric | .005 s | .0025 s | .00125 s |
+|---|---|---:|---:|---:|
+| Standard | release altitude [m] | 318.9638 | 318.9710 | 318.9710 |
+| Standard | max tension [kN] | 5.148023 | 5.148024 | 5.148025 |
+| Club | release altitude [m] | 351.2583 | 351.2542 | 351.2493 |
+| Club | max tension [kN] | 6.302316 | 6.302330 | 6.302330 |
+
+Common-`dt=.0025 s` 20→40 node changes are Standard release altitude -0.314% / max tension +0.039%, and Club release altitude -0.028% / max tension -0.008%. The 40-node `.00125 s` checks agree closely with `.0025 s`.
+
+Club Vw-feedback reference at `wind_x=-4.5 m/s`: request 26.698 s, reduced throttle active 27.198 s, normal release 45.728 s, max EAS at/above 200 ft 32.639 m/s, minimum airborne stall margin 0.242 m/s.
+
+- `pytest -q`: **60 passed**.
+- Fixed-step RK4, cable/winch physics, pilot SOP parameters, and canonical launch setup are otherwise unchanged.
+
+## 1.0.1
+
+- Normalize archived `G103A.vsp3` to 15 wake iterations, matching `G103A.vspaero` and the canonical aerodynamic dataset.
+- Resolve canonical aerodynamic provenance for Reynolds number, wake node count, and Fixed Wake flag.
+- Clarify which G103A geometry values are dimensioned sources and which remain engineering baselines.
+- Clarify `Iyy=2500 kg m^2` and weak-link `7000 N` as analysis settings.
+
 ## v1.0
 
 - GitLab repository layoutへ整理。
@@ -8,6 +115,9 @@
 - `tests/` と数値V&Vの `validation/` を分離したまま維持。
 - 実フライトIGCのraw dataを `data/flight_validation/raw/` へ移動。
 - Notebookを `notebooks/` へ集約。
+- 公開repositoryの固定parameter-search Notebook 2本を削除し、AI-assisted engineering explorationの標準手順を `prompts/canonical_parameter_search.md` へ移行。
+- `notebooks/winch_launch_simulator.ipynb` はeditable installなしでrepository sourceを直接importできるbootstrapを追加。
+- `notebooks/flight_validation.ipynb` はpackage importを追加せず、repository-relative data pathの起点だけを明確化。
 - 再生成可能な `outputs/`、`fig/`、IGC派生CSV/PNGをGit管理対象から除外。
 - versioned release-note filesを本ファイルへ統合。
 - 計算モデル・canonical parameter・数値アルゴリズム自体は変更していない。

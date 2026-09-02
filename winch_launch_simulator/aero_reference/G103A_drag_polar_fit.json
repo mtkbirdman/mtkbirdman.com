@@ -1,0 +1,78 @@
+{
+  "model": "CD=CD0+K*CL^2",
+  "source_original_file": "G103A.polar",
+  "source_repository_file": "aero_reference/G103A_drag_polar.csv",
+  "source_columns": [
+    "CLwtot",
+    "CDwtot"
+  ],
+  "fit_method": "unweighted least squares of CDwtot against [1, CLwtot^2]",
+  "alpha_range_deg": [
+    -2.0,
+    12.0
+  ],
+  "point_count": 8,
+  "CD0": 0.007906026873656432,
+  "K": 0.025021597731889444,
+  "r_squared": 0.9999565364889669,
+  "rmse": 0.00012676939327264326,
+  "max_abs_residual": 0.00024042269956176324,
+  "points": [
+    {
+      "AoA_deg": -2.0,
+      "CLwtot": 0.133438465424,
+      "CDwtot": 0.00859197974,
+      "CD_fit": 0.008351557040438237,
+      "residual": 0.00024042269956176324
+    },
+    {
+      "AoA_deg": 0.0,
+      "CLwtot": 0.332911590591,
+      "CDwtot": 0.010729661497,
+      "CD_fit": 0.010679173731773628,
+      "residual": 5.048776522637195e-05
+    },
+    {
+      "AoA_deg": 2.0,
+      "CLwtot": 0.532113933784,
+      "CDwtot": 0.014923460233,
+      "CD_fit": 0.014990773131780991,
+      "residual": -6.731289878099053e-05
+    },
+    {
+      "AoA_deg": 4.0,
+      "CLwtot": 0.730979263294,
+      "CDwtot": 0.021144791697,
+      "CD_fit": 0.021275834288642048,
+      "residual": -0.0001310425916420492
+    },
+    {
+      "AoA_deg": 6.0,
+      "CLwtot": 0.928951428712,
+      "CDwtot": 0.02936624101,
+      "CD_fit": 0.029498433575389532,
+      "residual": -0.00013219256538953353
+    },
+    {
+      "AoA_deg": 8.0,
+      "CLwtot": 1.125946280794,
+      "CDwtot": 0.039527057182,
+      "CD_fit": 0.03962728318768215,
+      "residual": -0.00010022600568214413
+    },
+    {
+      "AoA_deg": 10.0,
+      "CLwtot": 1.321693871248,
+      "CDwtot": 0.051617703433,
+      "CD_fit": 0.05161562263720339,
+      "residual": 2.0807957966106905e-06
+    },
+    {
+      "AoA_deg": 12.0,
+      "CLwtot": 1.516109085981,
+      "CDwtot": 0.06555812295,
+      "CD_fit": 0.06542034014908996,
+      "residual": 0.00013778280091004957
+    }
+  ]
+}
