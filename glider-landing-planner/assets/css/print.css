@@ -1,19 +1,57 @@
-@page{size:A4 landscape;margin:11mm}
-@media print {
- body *{visibility:hidden!important}
- .glp-print,.glp-print *{visibility:visible!important}
- .glp-app-root{position:static!important;left:auto!important;transform:none!important;margin:0!important;width:auto!important;max-width:none!important;box-shadow:none!important;border:0!important}
- .glp-app-root .glp-print{display:block!important;position:absolute!important;top:0!important;left:0!important;width:100%!important;background:white!important;font:10pt/1.3 "Yu Gothic",Meiryo,sans-serif!important;color:#15263b!important;padding:0!important}
- .glp-print-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #9eacbb;padding-bottom:5px;margin-bottom:6px}
- .glp-print-head h1{font-size:17pt!important;margin:0!important;font-weight:bold!important}.glp-print-head p{font-size:8pt!important;margin:0!important}
- .glp-print-figure{width:63%;float:left;height:92mm}.glp-print-figure svg{width:100%;height:100%!important}
- .glp-print-graph{width:37%;float:right;height:92mm}.glp-print-graph svg{width:100%;height:100%!important}
- .glp-print-data{clear:both;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid #dce4ee;padding:4px 0;gap:3px;font-size:8pt}
- .glp-print-table{border-collapse:collapse!important;width:100%!important;margin:5px 0!important;font-size:8pt!important}
- .glp-print-table th,.glp-print-table td{border:1px solid #b8c4d3!important;padding:4px 7px!important;text-align:right!important}
- .glp-print-table th:first-child,.glp-print-table td:first-child{text-align:left!important}
- .glp-print-table th{background:#edf2f6!important;font-weight:bold!important}
- .glp-print-warning{border:1px solid #d9b39e!important;padding:5px!important;font-size:8pt!important;margin:4px 0!important}
- .glp-print-source{font-size:7pt!important;color:#64748b!important;margin:4px 0!important}
- .glp-print svg{display:block!important}
+/* Glider Landing Planner 0.1.5 — standalone print-preview document.
+   No WordPress ancestor, visibility:hidden or absolute print canvas. */
+@page{size:A4 landscape;margin:12mm}
+html,body{margin:0;padding:0}
+body.glp-report{background:#e8edf3;color:#14253a;font:12px/1.45 system-ui,"Yu Gothic",Meiryo,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.glp-report *{box-sizing:border-box}
+.glp-report-screen-toolbar{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:12px 20px;max-width:1100px;margin:auto;font-weight:600}
+.glp-report-screen-toolbar button{background:#2059bf;color:#fff;border:0;border-radius:7px;padding:10px 16px;cursor:pointer}
+.glp-report-document{width:min(1050px,calc(100% - 25px));background:#fff;margin:0 auto 25px;padding:20px;box-shadow:0 4px 22px #0002}
+.glp-report-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #b8cbe2;padding:0 0 8px;margin-bottom:12px}
+.glp-report-head h1{font-size:20px;margin:0}.glp-report-head p{font-size:10px;margin:3px 0;color:#52677f}
+.glp-report-head>p{text-align:right}
+.glp-report-section{margin:0 0 12px;break-inside:avoid-page;page-break-inside:avoid}
+.glp-report-section h2{font-size:13px;padding:0 0 5px;border-bottom:1px solid #dce5f0;margin:0 0 7px}
+.glp-report-map-frame{position:relative;width:100%;overflow:hidden;border:1px solid #d7e1ec;background:#e7edf3;border-radius:5px}
+.glp-report-map-viewport{position:relative;width:100%;height:100%;overflow:hidden}
+.glp-report-live-map{max-width:none!important;max-height:none!important;overflow:hidden!important;pointer-events:none}
+.glp-report-live-map .leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}
+.glp-report-live-map .leaflet-control-zoom{display:none!important}
+.glp-report-live-map .leaflet-control-attribution{font-size:10px!important}
+.glp-report-live-map .leaflet-tooltip.glp-checkpoint-label{background:#fff;border:1px solid #bacbdd;border-radius:5px;box-shadow:0 1px 5px #0002;color:#27374b;padding:4px 7px;font:700 10px/1.4 system-ui,"Yu Gothic",Meiryo,sans-serif;white-space:nowrap!important;width:max-content!important;max-width:none!important;writing-mode:horizontal-tb!important}
+.glp-report-live-map .glp-map-cp-content{display:flex;flex-direction:column;gap:2px;align-items:center;white-space:nowrap!important}
+.glp-report-live-map .glp-map-cp-content>*{display:block;white-space:nowrap!important}
+.glp-report-live-map .glp-cp-margin{color:#92400e;border-top:1px solid #ddd;padding-top:2px}
+.glp-report-live-map .glp-point{width:25px;height:25px;border-radius:50%;border:2px solid #fff;display:flex;justify-content:center;align-items:center;color:#fff;font-weight:800;box-shadow:0 2px 7px #0003}
+.glp-report-live-map .glp-point-blue{background:#2563eb}.glp-report-live-map .glp-point-green{background:#059669}
+.glp-report-live-map .glp-handle{background:#fff;color:#7c3aed;border:2px solid #8559b8;border-radius:6px;width:18px;height:18px;display:flex;justify-content:center;align-items:center}
+.glp-report-caption{font-size:9px;color:#64748b;margin:4px 0 0}
+.glp-report-chart{width:100%;height:auto}.glp-report-chart svg{width:100%;height:auto;max-height:230px;display:block}
+.glp-report-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.glp-report-metrics .glp-stat{background:#f0f5fb;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.glp-report-metrics .glp-stat small,.glp-report-data-item small{font-size:9px;color:#61768b}
+.glp-report-metrics .glp-stat strong{font-size:14px;color:#164275}
+.glp-report-data{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.glp-report-data-item{border:1px solid #e3ebf2;border-radius:4px;padding:6px;display:flex;flex-direction:column;gap:3px}
+.glp-report-data-item strong{font-size:10px}
+.glp-print-table,.glp-report-table{border-collapse:collapse;width:100%;margin:4px 0;font-size:10px}
+.glp-print-table th,.glp-print-table td,.glp-report-table th,.glp-report-table td{border:1px solid #d3dce7;padding:5px 7px;text-align:right}
+.glp-print-table th:first-child,.glp-print-table td:first-child,.glp-report-table th:nth-child(2),.glp-report-table td:nth-child(2){text-align:left}
+.glp-print-table th,.glp-report-table th{background:#eef4f9;font-weight:700}
+.glp-print-table .glp-cp-margin-row{background:#fff8e6}
+.glp-report-diagnostics .glp-overview-top{display:flex;justify-content:space-between;margin-bottom:8px}
+.glp-report-diagnostics .glp-alerts{display:block;max-height:none!important;overflow:visible!important}
+.glp-report-diagnostics .glp-alert{border-left:3px solid #cbd5e1;background:#f6f8fb;padding:5px 7px;margin-bottom:4px}
+.glp-report-diagnostics .glp-inline-message{background:#fff3e0;padding:6px;margin-bottom:5px}
+.glp-report-diagnostics .glp-status-chip{color:#93551b;font-size:10px}
+.glp-report-footer{border-top:1px solid #d1dae6;padding-top:8px;font-size:9px;color:#566b83;break-inside:avoid-page}
+@media print{
+ html,body.glp-report{background:#fff!important;margin:0!important;padding:0!important}
+ .glp-report-screen-toolbar{display:none!important}
+ .glp-report-document{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important}
+ .glp-report-section{break-inside:avoid-page;page-break-inside:avoid}
+ .glp-report-map-section{break-inside:avoid-page}
+ .glp-report-map-frame{border:1px solid #d7e1ec}
+ .glp-print-table tr,.glp-report-table tr{break-inside:avoid-page;page-break-inside:avoid}
+ .glp-report-head,.glp-report-footer{break-inside:avoid-page}
 }
