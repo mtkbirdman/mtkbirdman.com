@@ -1,4 +1,4 @@
-/* Glider Landing Planner 0.1.5 — CSS scoped to shortcode container. */
+/* Glider Landing Planner 0.1.8 — CSS scoped to shortcode container. */
 .glp-app-root,.glp-app-root *{box-sizing:border-box}
 .glp-app-root{--glp-ink:#16263a;--glp-muted:#62738b;--glp-blue:#2563eb;--glp-border:#dce4ee;--glp-panel:#fff;position:relative;left:50%;transform:translateX(-50%);width:min(1510px,calc(100vw - 22px));max-width:none!important;margin:12px 0 25px!important;font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:13px;color:var(--glp-ink);line-height:1.45}
 .glp-app-root button,.glp-app-root input,.glp-app-root select{font:inherit;line-height:1.35}
@@ -99,7 +99,11 @@
 .glp-map-add-badge{width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 3px 12px #0f172a55;border-radius:50%;font-weight:900;font-size:26px;line-height:1;color:white;cursor:pointer;touch-action:manipulation}
 .glp-map-add-blue{background:#2563eb}.glp-map-add-green{background:#059669}
 @media (max-width:760px), (max-width:1050px) and (orientation:portrait){
-  .glp-app-root{width:calc(100vw - 12px)}
+  /* A transformed ancestor becomes the containing block for position:fixed.
+     The app uses translateX() for centering on desktop; remove that transform
+     in compact layouts and center using margin instead so the sheet anchors
+     to the viewport, not to the long WordPress article. */
+  .glp-app-root{width:calc(100vw - 12px);transform:none!important;margin-left:calc(6px - 50vw)!important}
   .glp-app-body{display:flex;flex-direction:column}
   .glp-main{width:100%;order:1;padding:10px}
   .glp-sidebar{width:100%;order:2;position:static;min-height:0;padding:0;border-right:0;border-top:1px solid #e0e8f2}
