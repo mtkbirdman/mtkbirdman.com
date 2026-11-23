@@ -1,4 +1,4 @@
-/* Glider Landing Planner 0.1.2 — CSS scoped to shortcode container. */
+/* Glider Landing Planner 0.1.3 — CSS scoped to shortcode container. */
 .glp-app-root,.glp-app-root *{box-sizing:border-box}
 .glp-app-root{--glp-ink:#16263a;--glp-muted:#62738b;--glp-blue:#2563eb;--glp-border:#dce4ee;--glp-panel:#fff;position:relative;left:50%;transform:translateX(-50%);width:min(1510px,calc(100vw - 22px));max-width:none!important;margin:12px 0 25px!important;font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:13px;color:var(--glp-ink);line-height:1.45}
 .glp-app-root button,.glp-app-root input,.glp-app-root select{font:inherit;line-height:1.35}
@@ -71,9 +71,17 @@
 .glp-opacity-field>span{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .glp-opacity-field output{font-variant-numeric:tabular-nums;color:#315682;font-weight:700}
 .glp-opacity-field input[type="range"]{display:block;width:100%;height:20px;padding:0!important;margin:0!important;accent-color:#2563eb;cursor:pointer;border:0!important;background:transparent!important;box-shadow:none!important}
-.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label{background:rgba(255,255,255,.96);border:1px solid #bfd0e2;border-radius:7px;box-shadow:0 1px 5px rgba(15,23,42,.18);color:#27374b;padding:4px 7px;font-size:10px;line-height:1.4;white-space:normal;max-width:250px;pointer-events:none;font-family:inherit}
+.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label{background:rgba(255,255,255,.96);border:1px solid #bfd0e2;border-radius:7px;box-shadow:0 1px 5px rgba(15,23,42,.18);color:#27374b;padding:4px 7px;font-size:10px;line-height:1.4;white-space:nowrap!important;width:max-content!important;max-width:none!important;writing-mode:horizontal-tb!important;word-break:normal!important;overflow-wrap:normal!important;pointer-events:none;font-family:inherit}
 .glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label::before{border-top-color:#bfd0e2;border-bottom-color:#bfd0e2}
 .glp-map-cp-content{display:flex;flex-direction:column;gap:3px}
 .glp-map-cp-content strong{font-weight:800;color:#8b4c07}
 .glp-map-cp-content span{font-weight:600;color:#30465e}
-@media(max-width:760px){.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label{font-size:9px;padding:3px 5px;max-width:180px}}
+@media(max-width:760px){.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label{font-size:9px;padding:3px 5px;max-width:none!important}}
+
+/* v0.1.3: Cocoon/WordPress generic tooltip styles must not rotate or wrap altitude labels. */
+.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label .glp-map-cp-content{display:flex!important;flex-direction:column!important;align-items:center;gap:2px;white-space:nowrap!important;writing-mode:horizontal-tb!important;word-break:normal!important;overflow-wrap:normal!important}
+.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label .glp-map-cp-content > *{display:block!important;white-space:nowrap!important;writing-mode:horizontal-tb!important;word-break:normal!important;overflow-wrap:normal!important}
+.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label .glp-cp-height{font-variant-numeric:tabular-nums;font-weight:700}
+.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label .glp-cp-margin{color:#92400e;font-weight:700;border-top:1px solid #e2e8f0;padding-top:2px}
+.glp-app-root .glp-cp-group th{background:#eaf1fa!important;color:#41566e!important;font-weight:700;text-align:left!important}
+.glp-app-root .glp-cp-margin-row td{background:#fffbeb!important;font-weight:700}

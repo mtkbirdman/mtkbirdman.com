@@ -83,10 +83,11 @@ export class PlannerMap {
    const showHeights=project.display.showCheckpointAltitudes;
    const showMargin=Boolean(downwind&&project.display.showDownwindMargin);
    const lines:string[]=[];
-   if(showHeights){for(const c of cluster){const kind=c.altitudeType==='predicted'?'予想高度':c.altitudeType==='required'?'必要高度':'目標高度';lines.push(`<span>${html(c.label)}：${kind} ${html(heightText(c.altitudeM,project.display.altitudeUnit))} MSL</span>`);}}
+   // Permanent map labels stay short and horizontal; details remain in the hover tooltip and table.
+   if(showHeights){lines.push(`<span class="glp-cp-height">${html(heightText(cp.altitudeM,project.display.altitudeUnit))}</span>`);}
    if(showMargin&&downwind){
      const value=downwind.marginM===undefined?'評価不可':html(marginText(downwind.marginM,project.display.altitudeUnit));
-     lines.push(`<strong>ダウンウィンド開始｜高度余裕 ${value}</strong>`);
+     lines.push(`<strong class="glp-cp-margin">高度余裕 ${value}</strong>`);
    }
    const hover=cluster.map(c=>`${c.label}: ${heightText(c.altitudeM,project.display.altitudeUnit)} MSL`).join(' / ');
    const marker=L.circleMarker(loc(cp),{radius:4,fillColor:downwind?'#b45309':'#d97706',fillOpacity:1,color:'#fff',weight:1,interactive:true,bubblingMouseEvents:false,renderer:this.vectorRenderer});

@@ -39,7 +39,7 @@ test('GLP WordPress/Cocoon vector paths use explicit SVG renderer', async () => 
   delete globalThis.L;
 });
 
-test('v0.1.2 selected leg is highlighted and a path click selects its leg',async()=>{
+test('v0.1.3 selected leg is highlighted and a path click selects its leg',async()=>{
  const paths=[],circles=[],markers=[];let selected=null;
  const layer=(type,opts)=>({type,options:opts,handlers:{},addTo(){(type==='path'?paths:type==='circle'?circles:markers).push(this);return this;},on(k,fn){this.handlers[k]=fn;return this;},bindTooltip(content,options){this.tooltipContent=content;this.tooltipOptions=options;return this;}});
  globalThis.L={
@@ -60,11 +60,13 @@ test('v0.1.2 selected leg is highlighted and a path click selects its leg',async
  assert.equal(base.options.smoothFactor,0,'Leaflet simplification disabled for sampled arcs');
  assert.equal(circles.filter(c=>c.options.radius&&c.options.opacity===.2).length,4);
  assert.equal(paths.filter(p=>p.options.color==='#94a3b8'&&p.options.opacity===.8).length,8);
- assert.ok(circles.some(c=>String(c.tooltipContent).includes('ダウンウィンド開始')&&String(c.tooltipContent).includes('高度余裕')));
- assert.ok(circles.some(c=>String(c.tooltipContent).includes('必要高度')));
+ assert.ok(circles.some(c=>String(c.tooltipContent).includes('高度余裕')));
+ assert.ok(circles.some(c=>String(c.tooltipContent).includes('glp-cp-height')));
+ assert.ok(circles.some(c=>/^<div class=\"glp-map-cp-content\">/.test(String(c.tooltipContent))));
+ assert.ok(circles.every(c=>!String(c.tooltipContent).includes(' MSL</span>')),'permanent labels contain only values/units');
  delete globalThis.L;
 });
-test('v0.1.2 checkpoint altitudes and downwind margin labels can be disabled independently',async()=>{
+test('v0.1.3 checkpoint altitudes and downwind margin labels can be disabled independently',async()=>{
  const circles=[];const marker=(opts)=>({options:opts,addTo(){circles.push(this);return this;},on(){return this;},bindTooltip(text,options){this.text=text;this.tooltipOptions=options;return this;}});
  globalThis.L={map(){return {setView(){return this;},on(){return this;},invalidateSize(){}};},svg(){return {};},tileLayer(){return {addTo(){}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline(){return {addTo(){return this;},on(){return this;},bindTooltip(){return this;}};},circle(){return {addTo(){return this;}};},circleMarker(_pt,opts){return marker(opts);},marker(_pt,opts){return marker(opts);},divIcon(v){return v;}};
  const {PlannerMap}=await import('../../assets/js/ui/map.js');const project=createDemo();project.arrivalLegs=trafficPreset('right');project.display.showCheckpointAltitudes=false;project.display.showDownwindMargin=false;
