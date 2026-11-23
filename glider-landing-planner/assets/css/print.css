@@ -58,3 +58,6 @@ body.glp-report{background:#e8edf3;color:#14253a;font:12px/1.45 system-ui,"Yu Go
 }
 
 .glp-report-diagnostics .glp-diagnostic-bank{margin:4px 0 8px;padding:6px 8px;background:#edf2f7;border-left:3px solid #64748b;font-size:10px}
+
+/* v0.1.7: map editing controls never appear in printed route reports. */
+.glp-report .glp-map-add-point,.glp-report .glp-mobile-editor{display:none!important}

@@ -92,3 +92,32 @@
 
 /* v0.1.6: keep the required connector bank with the diagnostic section. */
 .glp-diagnostic-bank{margin:8px 0 10px;padding:9px 11px;background:#f1f5fa;border-left:3px solid #64748b;color:#334155;font-size:12px}
+
+/* v0.1.7 — compact map-first editing; the same data-path editor drives desktop and mobile. */
+.glp-mobile-editor[hidden]{display:none!important}
+.glp-mobile-editor{display:none}
+.glp-map-add-badge{width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 3px 12px #0f172a55;border-radius:50%;font-weight:900;font-size:26px;line-height:1;color:white;cursor:pointer;touch-action:manipulation}
+.glp-map-add-blue{background:#2563eb}.glp-map-add-green{background:#059669}
+@media (max-width:760px), (max-width:1050px) and (orientation:portrait){
+  .glp-app-root{width:calc(100vw - 12px)}
+  .glp-app-body{display:flex;flex-direction:column}
+  .glp-main{width:100%;order:1;padding:10px}
+  .glp-sidebar{width:100%;order:2;position:static;min-height:0;padding:0;border-right:0;border-top:1px solid #e0e8f2}
+  .glp-sidebar-scroll{position:static;max-height:none;min-height:0;overflow:visible;padding:12px}
+  .glp-map-hint{display:none}
+  .glp-mobile-editor:not([hidden]){display:flex;flex-direction:column;position:fixed;z-index:10000;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,640px);max-height:min(68dvh,620px);background:#fff;border:1px solid #b8c9dd;border-bottom:0;border-radius:16px 16px 0 0;box-shadow:0 -8px 34px #0f172a55;overflow:hidden}
+  .glp-mobile-editor-head{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f0f6ff;border-bottom:1px solid #dce7f3;padding:11px 14px;flex-shrink:0}
+  .glp-mobile-editor-head strong{font-size:14px;color:#1f3a56}
+  .glp-mobile-editor-content{overflow-y:auto;overscroll-behavior:contain;padding:12px 14px 18px;min-height:0;max-height:60dvh}
+  .glp-mobile-editor .glp-leg-edit{border:0;background:#fff;padding:0}
+  .glp-mobile-editor .glp-field{font-size:12px!important}
+  .glp-mobile-editor .glp-field input,.glp-mobile-editor .glp-field select{min-height:43px!important;font-size:16px!important}
+  .glp-mobile-editor .glp-btn{min-height:42px!important}
+  .glp-mobile-editor .glp-adds{padding:12px 0}
+  .glp-mobile-editor .glp-adds .glp-btn{flex:1}
+}
+
+/* Leg reorder/delete remains accessible without scrolling to the desktop sidebar. */
+.glp-mobile-leg-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0}
+.glp-mobile-leg-actions .glp-btn{flex:1;min-width:85px}
+.glp-mobile-leg-actions .glp-mobile-remove{color:#ae3023!important;border-color:#e7c4bd!important}

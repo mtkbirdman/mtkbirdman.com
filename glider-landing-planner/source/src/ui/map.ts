@@ -1,6 +1,7 @@
 import type {ProjectV1,PlanResult,Point2,Side,Checkpoint,Sample} from '../model/types.js';
 import {LocalFrame,headingVector,dot,sub,add,mul,magneticToTrue} from '../geometry/geo.js';
 import {windVector} from '../flight/core.js';
+import {isCompactLayout} from './responsive.js';
 declare const L:any;
 type PickMode='departure'|'landing'|null;
 interface Callbacks {
@@ -9,6 +10,8 @@ interface Callbacks {
  onFinalLength:(lengthM:number)=>void;
  onHandle:(end:'start'|'end',lengthM:number)=>void;
  onSelectLeg?:(id:string)=>void;
+ onSelectPoint?:(point:'departure'|'landing')=>void;
+ onAddAtEnd?:(side:Side)=>void;
 }
 const html=(value:unknown)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
 const heightText=(m:number,unit:'m'|'ft')=>`${Math.round(unit==='ft'?m/0.3048:m).toLocaleString('ja-JP')} ${unit}`;
@@ -33,7 +36,12 @@ export class PlannerMap {
  const draw=(points:Point2[],color:string,weight=3,dashArray?:string,legId?:string)=>{
    if(points.length<2)return;
    const line=L.polyline(points.map(loc),{color,weight,opacity:.95,dashArray,lineCap:'round',lineJoin:'round',smoothFactor:0,renderer:this.vectorRenderer,bubblingMouseEvents:false});
-   if(legId&&this.cb.onSelectLeg){line.on('click',()=>this.cb.onSelectLeg?.(legId));}
+   if(legId&&this.cb.onSelectLeg){
+     // A wider, nearly transparent hit target makes narrow curved legs tappable on phones.
+     const click=(ev:any)=>{if(this.picking){this.cb.onPick(this.picking,ev.latlng.lat,ev.latlng.lng);this.setPick(null);}else this.cb.onSelectLeg?.(legId);};
+     line.on('click',click);
+     if(isCompactLayout())L.polyline(points.map(loc),{color,weight:22,opacity:.002,lineCap:'round',lineJoin:'round',smoothFactor:0,renderer:this.vectorRenderer,bubblingMouseEvents:false}).on('click',click).addTo(this.graphics);
+   }
    line.addTo(this.graphics);
  };
  for(const seg of plan.departure.segments)draw(seg.samples,'#2563eb',3.5,undefined,seg.leg.id);
@@ -50,8 +58,15 @@ export class PlannerMap {
  }
  const depIcon=L.divIcon({className:'glp-map-point',html:'<span class="glp-point glp-point-blue">離</span>',iconSize:[25,25],iconAnchor:[12,12]});
  const landIcon=L.divIcon({className:'glp-map-point',html:'<span class="glp-point glp-point-green">着</span>',iconSize:[25,25],iconAnchor:[12,12]});
- L.marker([project.departure.latDeg,project.departure.lonDeg],{draggable:true,icon:depIcon,title:'離脱地点：ドラッグで変更'}).on('dragend',(e:any)=>{const x=e.target.getLatLng();this.cb.onPick('departure',x.lat,x.lng);}).addTo(this.controls);
- L.marker([project.landing.point.latDeg,project.landing.point.lonDeg],{draggable:true,icon:landIcon,title:'接地点：ドラッグで変更'}).on('dragend',(e:any)=>{const x=e.target.getLatLng();this.cb.onPick('landing',x.lat,x.lng);}).addTo(this.controls);
+ L.marker([project.departure.latDeg,project.departure.lonDeg],{draggable:true,icon:depIcon,title:'離脱地点：ドラッグで変更'}).on('dragend',(e:any)=>{const x=e.target.getLatLng();this.cb.onPick('departure',x.lat,x.lng);}).on('click',()=>{if(!this.picking)this.cb.onSelectPoint?.('departure');}).addTo(this.controls);
+ L.marker([project.landing.point.latDeg,project.landing.point.lonDeg],{draggable:true,icon:landIcon,title:'接地点：ドラッグで変更'}).on('dragend',(e:any)=>{const x=e.target.getLatLng();this.cb.onPick('landing',x.lat,x.lng);}).on('click',()=>{if(!this.picking)this.cb.onSelectPoint?.('landing');}).addTo(this.controls);
+ // Add buttons remain tied to their physically meaningful extension ends.
+ if(isCompactLayout()&&this.cb.onAddAtEnd){
+   for(const [side,point,color] of [['departure',plan.departure.end,'blue'],['arrival',plan.arrival.start,'green']] as const){
+     const icon=L.divIcon({className:'glp-map-add-point',html:`<span class="glp-map-add-badge glp-map-add-${color}" aria-label="${side==='departure'?'離脱':'着陸'}側レグを追加">＋</span>`,iconSize:[44,44],iconAnchor:[22,22]});
+     L.marker(loc(point),{icon,keyboard:true,zIndexOffset:1000,title:side==='departure'?'離脱側へ経路を追加':'着陸側へ経路を追加'}).on('click',()=>{if(!this.picking)this.cb.onAddAtEnd?.(side);}).addTo(this.controls);
+   }
+ }
  const smallIcon=(name:string)=>L.divIcon({className:'glp-map-point',html:'<span class="glp-handle">'+html(name)+'</span>',iconSize:[19,19],iconAnchor:[9,9]});
  for(const side of ['departure','arrival'] as Side[]){const path=side==='departure'?plan.departure:plan.arrival;
  for(const segment of path.segments){if(segment.leg.type!=='straight')continue;const pt=side==='departure'?segment.end:segment.start;

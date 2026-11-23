@@ -1,4 +1,4 @@
-export const ENGINE_VERSION = '0.1.6-test';
+export const ENGINE_VERSION = '0.1.7-test';
 let nextId = 0;
 export function newId() { nextId += 1; return 'leg-' + Date.now().toString(36) + '-' + nextId.toString(36); }
 export function makeStraight(lengthM = 300) { return { id: newId(), type: 'straight', lengthM, guidance: 'heading', speedOverrideMps: null, directionDeg: null }; }

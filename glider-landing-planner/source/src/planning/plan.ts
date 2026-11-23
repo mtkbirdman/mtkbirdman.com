@@ -56,17 +56,24 @@ export function buildPlan(project:ProjectV1):PlanResult {
    id:'departure-anchor',label:'離脱地点',kind:'departure-start',group:'departure',
    e:departure.start.e,n:departure.start.n,altitudeM:departure.start.h,altitudeType:'predicted'
  }];
+ let departureStraightCount=0,departureTurnCount=0;
  for(let i=0;i<departure.segments.length;i++){
    const seg=departure.segments[i];
-   checkpoints.push({id:'departure:'+seg.leg.id+':end',label:seg.leg.checkpointLabel??`離脱側 ${i+1} 終点`,kind:'departure-end',group:'departure',
+   const sequence=seg.leg.type==='turn'?++departureTurnCount:++departureStraightCount;
+   const generated=seg.leg.type==='turn'?`離脱側 第${sequence}旋回 終点`:`離脱側 直線${sequence} 終点`;
+   checkpoints.push({id:'departure:'+seg.leg.id+':end',label:seg.leg.checkpointLabel??generated,kind:'departure-end',group:'departure',
      e:seg.end.e,n:seg.end.n,altitudeM:seg.end.h,altitudeType:'predicted',legId:seg.leg.id});
  }
  const marginAvailable=Boolean(connection?.feasible)&&!notices.some(n=>n.level==='error');
+ let arrivalStraightCount=0,arrivalTurnCount=0;
  for(let i=0;i<arrival.segments.length;i++){
    const req=arrival.segments[i].start;
    const leg=arrival.segments[i].leg;
    const isDownwind=leg.checkpointKind==='downwind-start';
-   const label=leg.checkpointLabel??(isDownwind?'ダウンウィンド開始':leg.type==='turn'?'旋回開始 '+(i+1):'レグ開始 '+(i+1));
+   // Preset and user-defined checkpoint names are retained verbatim. Only unnamed legs get numbered labels.
+   if(!leg.checkpointLabel){if(leg.type==='turn')arrivalTurnCount++;else arrivalStraightCount++;}
+   const generated=leg.type==='turn'?`着陸側 第${arrivalTurnCount}旋回 開始`:`着陸側 直線${arrivalStraightCount} 開始`;
+   const label=leg.checkpointLabel??(isDownwind?'ダウンウィンド開始':generated);
    const cp:Checkpoint={id:'arrival:'+leg.id+':start',label,kind:'arrival-start',group:'arrival',
      e:req.e,n:req.n,altitudeM:req.h,altitudeType:'required',legId:leg.id,
      ...(isDownwind?{checkpointKind:'downwind-start' as const}:{})};
