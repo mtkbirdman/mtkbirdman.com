@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ES2020", "moduleResolution": "Bundler",
+    "strict": true, "noImplicitAny": true, "outDir": "../assets/js", "rootDir": "src",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"], "skipLibCheck": true,
+    "noEmitOnError": true
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,22 @@
+import type {GeoPoint,Point2} from '../model/types.js';
+const a=6378137; const f=1/298.257223563;const e2=f*(2-f);const d=Math.PI/180;
+export const rad=(deg:number)=>deg*d;
+export const deg=(r:number)=>r/d;
+export const norm=(n:number)=>((n%360)+360)%360;
+export const signed=(n:number)=>((n+180)%360+360)%360-180;
+export const headingVector=(angleDeg:number):Point2=>({e:Math.sin(rad(angleDeg)),n:Math.cos(rad(angleDeg))});
+export const courseOf=(e:number,n:number)=>norm(deg(Math.atan2(e,n)));
+export const dot=(a:Point2,b:Point2)=>a.e*b.e+a.n*b.n;
+export const cross=(a:Point2,b:Point2)=>a.e*b.n-a.n*b.e;
+export const magnitude=(v:Point2)=>Math.hypot(v.e,v.n);
+export const add=(a:Point2,b:Point2):Point2=>({e:a.e+b.e,n:a.n+b.n});
+export const sub=(a:Point2,b:Point2):Point2=>({e:a.e-b.e,n:a.n-b.n});
+export const mul=(a:Point2,s:number):Point2=>({e:a.e*s,n:a.n*s});
+export const leftNormal=(v:Point2):Point2=>({e:-v.n,n:v.e});
+function xyz(geo:GeoPoint,h=0){const lat=rad(geo.latDeg),lon=rad(geo.lonDeg);const n=a/Math.sqrt(1-e2*Math.sin(lat)**2);return {x:(n+h)*Math.cos(lat)*Math.cos(lon),y:(n+h)*Math.cos(lat)*Math.sin(lon),z:(n*(1-e2)+h)*Math.sin(lat)};}
+export class LocalFrame {
+ private originXYZ;private slat;private clat;private slon;private clon;
+ constructor(public origin:GeoPoint){this.originXYZ=xyz(origin);this.slat=Math.sin(rad(origin.latDeg));this.clat=Math.cos(rad(origin.latDeg));this.slon=Math.sin(rad(origin.lonDeg));this.clon=Math.cos(rad(origin.lonDeg));}
+ toLocal(geo:GeoPoint):Point2 { const p=xyz(geo),dx=p.x-this.originXYZ.x,dy=p.y-this.originXYZ.y,dz=p.z-this.originXYZ.z;return {e:-this.slon*dx+this.clon*dy,n:-this.slat*this.clon*dx-this.slat*this.slon*dy+this.clat*dz}; }
+ toGeo(pt:Point2):GeoPoint {const {e,n}=pt;const x=this.originXYZ.x-this.slon*e-this.slat*this.clon*n,y=this.originXYZ.y+this.clon*e-this.slat*this.slon*n,z=this.originXYZ.z+this.clat*n;const lon=Math.atan2(y,x),p=Math.hypot(x,y);let lat=Math.atan2(z,p*(1-e2));for(let k=0;k<8;k++){const n0=a/Math.sqrt(1-e2*Math.sin(lat)**2);const h=p/Math.cos(lat)-n0;lat=Math.atan2(z,p*(1-e2*n0/(n0+h)));}return {latDeg:deg(lat),lonDeg:deg(lon)};}
+}
