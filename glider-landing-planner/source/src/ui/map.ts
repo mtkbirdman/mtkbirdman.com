@@ -5,10 +5,13 @@ declare const L:any;
 type PickMode='departure'|'landing'|null;
 interface Callbacks {onPick:(mode:'departure'|'landing',lat:number,lon:number)=>void;onLegLength:(side:Side,id:string,lengthM:number)=>void;onFinalLength:(lengthM:number)=>void;onHandle:(end:'start'|'end',lengthM:number)=>void;}
 export class PlannerMap {
- private map:any;private graphics:any;private rings:any;private controls:any;private picking:PickMode=null;private ready=false;
+ private map:any;private graphics:any;private rings:any;private controls:any;private vectorRenderer:any;private picking:PickMode=null;private ready=false;
  constructor(private element:HTMLElement,private cb:Callbacks){
    if(typeof L==='undefined'){element.innerHTML='<div class="glp-map-unavailable">地図ライブラリの読込に失敗しました。インターネット接続・CDN制限をご確認ください。</div>';return;}
-   this.map=L.map(element,{zoomControl:true,preferCanvas:true}).setView([35.4,136.7],14);
+   this.map=L.map(element,{zoomControl:true,preferCanvas:false}).setView([35.4,136.7],14);
+   // Draw vectors using SVG. Canvas paths were not visible on the first Cocoon/WordPress test page.
+   // SVG also keeps the path elements inspectable in DevTools.
+   this.vectorRenderer=L.svg({padding:0.5});
    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener">国土地理院</a>',maxZoom:18,minZoom:3}).addTo(this.map);
    this.graphics=L.layerGroup().addTo(this.map);this.rings=L.layerGroup().addTo(this.map);this.controls=L.layerGroup().addTo(this.map);
    this.map.on('click',(ev:any)=>{if(this.picking){this.cb.onPick(this.picking,ev.latlng.lat,ev.latlng.lng);this.setPick(null);}});
@@ -18,7 +21,7 @@ export class PlannerMap {
  fit(project:ProjectV1,plan:PlanResult){if(!this.ready)return;const pts=[project.departure,project.landing.point,...plan.forwardAll.filter((_,i)=>i%Math.max(1,Math.ceil(plan.forwardAll.length/100))===0).map(p=>new LocalFrame(project.landing.point).toGeo(p))];this.map.fitBounds(L.latLngBounds(pts.map(p=>[p.latDeg,p.lonDeg])),{padding:[45,45],maxZoom:16});}
  redraw(project:ProjectV1,plan:PlanResult){if(!this.ready)return;this.graphics.clearLayers();this.rings.clearLayers();this.controls.clearLayers();
  const f=new LocalFrame(project.landing.point),loc=(p:Point2)=>{const g=f.toGeo(p);return [g.latDeg,g.lonDeg]};
- const addPath=(points:Point2[],color:string,weight=3,dashArray?:string)=>{if(points.length<2)return;L.polyline(points.map(loc),{color,weight,opacity:.95,dashArray,lineCap:'round'}).addTo(this.graphics);};
+ const addPath=(points:Point2[],color:string,weight=3,dashArray?:string)=>{if(points.length<2)return;L.polyline(points.map(loc),{color,weight,opacity:.95,dashArray,lineCap:'round',renderer:this.vectorRenderer}).addTo(this.graphics);};
  addPath(plan.departure.samples,'#2563eb',3.5);
  if(plan.connector)addPath(plan.connector.points,'#8b5cf6',3.5,plan.connector.feasible?undefined:'8,5');
  addPath(plan.arrival.samples,'#059669',3.5);
@@ -45,13 +48,13 @@ export class PlannerMap {
    const A=plan.departure.end,B=plan.arrival.start,da=headingVector(A.trackDeg),db=headingVector(B.trackDeg);
    const p1=add(A,mul(da,project.connector!.handleStartM)),p4=sub(B,mul(db,project.connector!.handleEndM));
    for(const [name,p,base,unit,end] of [['A',p1,A,da,'start'],['B',p4,B,mul(db,-1),'end']] as const){
-      L.polyline([loc(base),loc(p)],{color:'#9333ea',dashArray:'3,5',weight:1.5,opacity:.8}).addTo(this.controls);
+      L.polyline([loc(base),loc(p)],{color:'#9333ea',dashArray:'3,5',weight:1.5,opacity:.8,renderer:this.vectorRenderer}).addTo(this.controls);
       L.marker(loc(p),{draggable:true,icon:smallIcon(name),title:'Bezier制御ハンドル'}).on('dragend',(ev:any)=>{const ll=ev.target.getLatLng(),q=f.toLocal({latDeg:ll.lat,lonDeg:ll.lng});this.cb.onHandle(end,Math.max(1,dot(sub(q,base),unit)));}).addTo(this.controls);
    }
  }
- for(const cp of plan.checkpoints){L.circleMarker(loc(cp),{radius:4,fillColor:'#d97706',fillOpacity:1,color:'#fff',weight:1}).bindTooltip(cp.label+': '+(cp.marginM/0.3048).toFixed(0)+' ft').addTo(this.graphics);}
- if(project.display.showDistanceRings){for(const radius of [250,500,1000,2000])L.circle([project.landing.point.latDeg,project.landing.point.lonDeg],{radius,color:'#7a8797',weight:1,opacity:.5,fill:false,dashArray:'4,5',interactive:false}).addTo(this.rings);}
- if(project.display.showBearingLines){for(let i=0;i<360;i+=45){const vec=headingVector(i),a=loc(plan.landing),b=loc(add(plan.landing,mul(vec,2000)));L.polyline([a,b],{color:'#94a3b8',weight:.8,opacity:.5,dashArray:'3,7',interactive:false}).addTo(this.rings);}}
- if(project.display.showWindArrow&&project.wind.speedMps>0){const v=windVector(project.wind),unit=mul(v,1/Math.hypot(v.e,v.n)),center=add(plan.landing,{e:150,n:150}),tail=add(center,mul(unit,-80)),head=add(center,mul(unit,80));L.polyline([loc(tail),loc(head)],{color:'#c2410c',weight:3}).bindTooltip('風: '+project.wind.fromDeg+'°から '+project.wind.speedMps+' m/s').addTo(this.rings);}
+ for(const cp of plan.checkpoints){L.circleMarker(loc(cp),{radius:4,fillColor:'#d97706',fillOpacity:1,color:'#fff',weight:1,renderer:this.vectorRenderer}).bindTooltip(cp.label+': '+(cp.marginM/0.3048).toFixed(0)+' ft').addTo(this.graphics);}
+ if(project.display.showDistanceRings){for(const radius of [250,500,1000,2000])L.circle([project.landing.point.latDeg,project.landing.point.lonDeg],{radius,color:'#7a8797',weight:1,opacity:.5,fill:false,dashArray:'4,5',interactive:false,renderer:this.vectorRenderer}).addTo(this.rings);}
+ if(project.display.showBearingLines){for(let i=0;i<360;i+=45){const vec=headingVector(i),a=loc(plan.landing),b=loc(add(plan.landing,mul(vec,2000)));L.polyline([a,b],{color:'#94a3b8',weight:.8,opacity:.5,dashArray:'3,7',interactive:false,renderer:this.vectorRenderer}).addTo(this.rings);}}
+ if(project.display.showWindArrow&&project.wind.speedMps>0){const v=windVector(project.wind),unit=mul(v,1/Math.hypot(v.e,v.n)),center=add(plan.landing,{e:150,n:150}),tail=add(center,mul(unit,-80)),head=add(center,mul(unit,80));L.polyline([loc(tail),loc(head)],{color:'#c2410c',weight:3,renderer:this.vectorRenderer}).bindTooltip('風: '+project.wind.fromDeg+'°から '+project.wind.speedMps+' m/s').addTo(this.rings);}
  }
 }
