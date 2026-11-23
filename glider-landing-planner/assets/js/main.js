@@ -24,7 +24,7 @@ class App {
     notice = '';
     constructor(root) {
         this.root = root;
-        root.innerHTML = `<div class="glp-shell"><div class="glp-toolbar"></div><div class="glp-app-body"><aside class="glp-sidebar"></aside><section class="glp-main"><div class="glp-mapbar"><div class="glp-map-actions"><button data-action="pick-departure" class="glp-btn glp-btn-quiet">離脱地点を指定</button><button data-action="pick-landing" class="glp-btn glp-btn-quiet">着陸地点を指定</button><button data-action="fit" class="glp-btn glp-btn-quiet">全体表示</button></div><span class="glp-map-hint">地点・直線端点・紫のハンドルはドラッグできます</span></div><div class="glp-map"></div><div class="glp-overview"><div class="glp-overview-top"><strong>高度プロファイル</strong><span class="glp-chart-legend"><i class="glp-line-blue"></i>予想高度 <i class="glp-line-orange"></i>必要高度</span></div><div class="glp-chart"></div><div class="glp-metrics"></div><div class="glp-checkpoints"></div><div class="glp-diagnostics"></div></div></section></div><div class="glp-footnote">${engineNote}　｜　地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener">国土地理院</a>（地理院タイル）</div><div class="glp-print"></div><input class="glp-import-file" type="file" accept=".json,.glp.json,application/json" hidden></div>`;
+        root.innerHTML = `<div class="glp-shell"><div class="glp-toolbar"></div><div class="glp-app-body"><aside class="glp-sidebar"></aside><section class="glp-main"><div class="glp-mapbar"><div class="glp-map-actions"><button data-action="pick-departure" class="glp-btn glp-btn-quiet">離脱地点を指定</button><button data-action="pick-landing" class="glp-btn glp-btn-quiet">着陸地点を指定</button><button data-action="fit" class="glp-btn glp-btn-quiet">全体表示</button></div><span class="glp-map-hint">地点・直線端点・紫のハンドルはドラッグできます</span></div><div class="glp-map"></div><div class="glp-overview"><div class="glp-overview-top"><strong>高度プロファイル</strong><span class="glp-chart-legend"><i class="glp-line-blue"></i>離脱側予想高度 <i class="glp-line-green"></i>着陸側逆算必要高度</span></div><div class="glp-chart"></div><div class="glp-metrics"></div><div class="glp-checkpoints"></div><div class="glp-diagnostics"></div></div></section></div><div class="glp-footnote">${engineNote}　｜　地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener">国土地理院</a>（地理院タイル）</div><div class="glp-print"></div><input class="glp-import-file" type="file" accept=".json,.glp.json,application/json" hidden></div>`;
         this.map = new PlannerMap(root.querySelector('.glp-map'), {
             onPick: (type, lat, lon) => { this.pick = null; this.map.setPick(null); this.edit(p => { if (type === 'departure') {
                 p.departure.latDeg = lat;
@@ -42,7 +42,8 @@ class App {
                     p.connector.handleStartM = lengthM;
                 else
                     p.connector.handleEndM = lengthM;
-            } })
+            } }),
+            onSelectLeg: (id) => { this.selected = this.selected === id ? null : id; this.renderSidebar(); this.map.redraw(this.project, this.plan, this.selected); }
         });
         root.addEventListener('click', e => { const btn = e.target.closest('button[data-action]'); if (btn) {
             e.preventDefault();
@@ -80,6 +81,7 @@ class App {
         return `<label class="glp-field"><span>${title}${unit ? ` <em>${unit}</em>` : ''}</span><input type="number" step="${step}" value="${escapeHTML(value)}" data-path="${path}" data-scale="${scale}"></label>`;
     }
     checkbox(path, title) { return `<label class="glp-check"><input type="checkbox" data-path="${path}" ${this.getField(path) ? 'checked' : ''}><span>${title}</span></label>`; }
+    opacityControl(path, title) { const value = Math.round(Number(this.getField(path)) * 100); return `<label class="glp-opacity-field"><span>${title} <output>${value}%</output></span><input type="range" min="0" max="100" step="5" value="${value}" data-path="${path}" data-scale="100"></label>`; }
     select(path, title, items) { return `<label class="glp-field"><span>${title}</span><select data-path="${path}">${options(items, String(this.getField(path)))}</select></label>`; }
     legList(side) {
         const legs = side === 'departure' ? this.project.departureLegs : this.project.arrivalLegs;
@@ -113,20 +115,24 @@ class App {
    ${this.checkbox('display.showHandles', '地図に制御ハンドルを表示')}
    ${this.project.connector ? `<div class="glp-two">${this.control('connector.handleStartM', '始端ハンドル', 'm')}${this.control('connector.handleEndM', '終端ハンドル', 'm')}</div>` : '<p class="glp-muted">接続がオフになっています。</p>'}
    <div class="glp-adds"><button class="glp-btn glp-btn-primary" data-action="optimize">曲線を自動調整</button><button class="glp-btn glp-btn-sub" data-action="toggle-connector">${this.project.connector ? '接続を解除' : '接続を作成'}</button></div><p class="glp-tip">接線と曲率を一致させます。大きいバンク角や風で不成立になる場合があります。</p></div>
-   <div class="glp-panel"><h3>地図・表示</h3>${this.select('display.altitudeUnit', '高度表示単位', [['ft', 'ft'], ['m', 'm']])}${this.checkbox('display.showDistanceRings', '着陸点から距離リング')}${this.checkbox('display.showBearingLines', '方位線')}${this.checkbox('display.showWindArrow', '風向矢印')}</div>`;
+   <div class="glp-panel"><h3>地図・表示</h3>${this.select('display.altitudeUnit', '高度表示単位', [['ft', 'ft'], ['m', 'm']])}${this.checkbox('display.showDistanceRings', '着陸点から距離リング')}${this.checkbox('display.showBearingLines', '方位線')}${this.checkbox('display.showWindArrow', '風向矢印')}${this.checkbox('display.showDownwindMargin', 'ダウンウィンド開始の高度余裕を表示')}${this.checkbox('display.showCheckpointAltitudes', '各チェックポイント高度を地図に表示')}${this.opacityControl('display.distanceRingOpacity', '距離リングの不透明度')}${this.opacityControl('display.bearingLineOpacity', '方位線の不透明度')}</div>`;
     }
     renderToolbar() {
-        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.1</span></div></div><div class="glp-tool-group">
+        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.2</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHTML(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export">JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print">PDF印刷</button></div><div class="glp-save-state">● ${escapeHTML(this.status)}</div>`;
     }
     renderResults() {
         const p = this.plan, unit = this.project.display.altitudeUnit;
-        const gap = p.checkpoints.find(c => c.label === '自動接続 終点') ?? p.checkpoints[0];
-        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${(p.forwardAll.at(-1)?.sM ?? 0) / 1000 < 100 ? ((p.forwardAll.at(-1)?.sM ?? 0) / 1000).toFixed(2) : '—'} km</strong></div><div class="glp-stat"><small>接続区間の高度差</small><strong>${gap ? fmtAlt(gap.marginM, unit) : '—'}</strong></div><div class="glp-stat"><small>接続最大必要バンク</small><strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong></div>`;
+        const downwind = p.checkpoints.find(c => c.checkpointKind === 'downwind-start');
+        const connected = p.connector?.feasible && downwind?.marginM !== undefined;
+        const totalKm = (p.forwardAll.at(-1)?.sM ?? 0) / 1000;
+        const gapM = p.connector ? p.departure.end.h - p.connector.lossM - p.arrival.start.h : null;
+        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${totalKm < 100 ? totalKm.toFixed(2) : '—'} km</strong></div><div class="glp-stat"><small>接続高度差（参考）</small><strong>${p.connector?.feasible && gapM !== null ? fmtAlt(gapM, unit) : '評価不可'}</strong></div><div class="glp-stat"><small>接続最大必要バンク</small><strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong></div>`;
         this.root.querySelector('.glp-chart').innerHTML = chartSvg(p, this.project);
         this.root.querySelector('.glp-metrics').innerHTML = m;
-        this.root.querySelector('.glp-checkpoints').innerHTML = `<div class="glp-overview-top"><strong>チェックポイント高度余裕</strong><small>予想到達高度 − 逆算必要高度</small></div><div class="glp-tablewrap"><table class="glp-table"><thead><tr><th>地点</th><th>予想</th><th>必要</th><th>差</th></tr></thead><tbody>${p.checkpoints.map(c => `<tr><td>${label(c.label)}</td><td>${fmtAlt(c.predictedM, unit)}</td><td>${fmtAlt(c.requiredM, unit)}</td><td class="${c.marginM < 0 ? 'glp-negative' : 'glp-positive'}">${c.marginM > 0 ? '+' : ''}${fmtAlt(c.marginM, unit)}</td></tr>`).join('')}</tbody></table></div>`;
+        const typeName = (type) => type === 'predicted' ? '予想高度' : type === 'required' ? '逆算必要高度' : '目標高度';
+        this.root.querySelector('.glp-checkpoints').innerHTML = `<div class="glp-overview-top"><strong>チェックポイント高度</strong><small>すべてMSL基準／高度余裕はダウンウィンド開始点で地図表示</small></div><div class="glp-tablewrap"><table class="glp-table"><thead><tr><th>地点</th><th>計算の種類</th><th>高度 (${unit}, MSL)</th></tr></thead><tbody>${p.checkpoints.map(c => `<tr><td>${label(c.label)}</td><td>${typeName(c.altitudeType)}</td><td>${fmtAlt(c.altitudeM, unit)}</td></tr>`).join('')}</tbody></table></div>${downwind && !connected ? '<p class="glp-tip">ダウンウィンド開始の高度余裕は、接続条件が成立していないため評価不可です。</p>' : ''}`;
         const distinct = new Map();
         for (const notice of p.notices)
             distinct.set(notice.code + notice.message, notice.message);
@@ -138,16 +144,21 @@ class App {
     renderPrint() {
         const p = this.plan, pr = this.project, unit = pr.display.altitudeUnit;
         const container = this.root.querySelector('.glp-print');
+        const downwind = p.checkpoints.find(c => c.checkpointKind === 'downwind-start');
+        const margin = downwind?.marginM !== undefined ? `${downwind.marginM > 0 ? '+' : ''}${fmtAlt(downwind.marginM, unit)}` : '評価不可';
+        const typeName = (type) => type === 'predicted' ? '予想' : type === 'required' ? '必要' : '目標';
         container.innerHTML = `<div class="glp-print-head"><h1>Glider Landing Planner ｜ 飛行経路計画</h1><p>${label(pr.name)} ｜ エンジン ${ENGINE_VERSION} ｜ 出力日 ${new Date().toLocaleString('ja-JP')}</p></div><div class="glp-print-figure">${printMapSvg(p)}</div><div class="glp-print-graph">${chartSvg(p, pr)}</div>
  <div class="glp-print-data"><div>離脱高度：${fmtAlt(pr.departure.altitudeMSLM, unit)}</div><div>着陸標高：${fmtAlt(pr.landing.elevationMSLM, unit)}</div><div>速度：${(pr.defaultSpeedMps * 3.6).toFixed(1)} km/h</div><div>風：${pr.wind.fromDeg}° / ${pr.wind.speedMps} m/s</div><div>モデル：${pr.performance.model === 'fixed-ld' ? 'A 固定L/D' : 'B 簡易抗力'}</div><div>目標進入角：${pr.landing.final.pathAngleDeg}°</div></div>
- <table class="glp-print-table"><thead><tr><th>チェックポイント</th><th>予想</th><th>必要</th><th>差</th></tr></thead><tbody>${p.checkpoints.map(c => `<tr><td>${label(c.label)}</td><td>${fmtAlt(c.predictedM, unit)}</td><td>${fmtAlt(c.requiredM, unit)}</td><td>${fmtAlt(c.marginM, unit)}</td></tr>`).join('')}</tbody></table><p class="glp-print-warning">${engineNote}　計算の高度余裕は安全余裕を保証しません。高度はMSL基準。モデルBも実機ポーラーではありません。</p><p class="glp-print-source">経路図はローカルENU座標から描画（背景地図なし）。オンライン地図表示には国土地理院「地理院タイル（淡色地図）」を使用しています。<br>警告：${p.notices.filter(n => n.level !== 'info').slice(0, 5).map(n => label(n.message)).join(' / ') || '特記事項なし'}</p>`;
+ <table class="glp-print-table"><thead><tr><th>チェックポイント</th><th>高度の種類</th><th>高度 (${unit}, MSL)</th></tr></thead><tbody>${p.checkpoints.map(c => `<tr><td>${label(c.label)}</td><td>${typeName(c.altitudeType)}</td><td>${fmtAlt(c.altitudeM, unit)}</td></tr>`).join('')}</tbody></table>
+ ${downwind ? `<p class="glp-print-warning">ダウンウィンド開始｜計算上の高度余裕：${margin}</p>` : ''}
+ <p class="glp-print-warning">${engineNote}　計算の高度余裕は安全余裕を保証しません。高度はMSL基準。モデルBも実機ポーラーではありません。</p><p class="glp-print-source">経路図はローカルENU座標から描画（背景地図なし）。オンライン地図表示には国土地理院「地理院タイル（淡色地図）」を使用しています。<br>警告：${p.notices.filter(n => n.level !== 'info').slice(0, 5).map(n => label(n.message)).join(' / ') || '特記事項なし'}</p>`;
     }
     render() {
         this.renderToolbar();
         this.renderSidebar();
         this.renderResults();
         this.renderPrint();
-        this.map.redraw(this.project, this.plan);
+        this.map.redraw(this.project, this.plan, this.selected);
         const bb = this.root.querySelectorAll('.glp-map-actions button');
         bb.forEach(b => b.classList.toggle('glp-active', b.dataset.action === 'pick-' + this.pick));
     }
@@ -182,7 +193,7 @@ class App {
         let value;
         if (input instanceof HTMLInputElement && input.type === 'checkbox')
             value = input.checked;
-        else if (input instanceof HTMLInputElement && input.type === 'number') {
+        else if (input instanceof HTMLInputElement && (input.type === 'number' || input.type === 'range')) {
             if (input.value.trim() === '') {
                 if (path.endsWith('speedOverrideMps') || path.endsWith('directionDeg'))
                     value = null;
@@ -269,8 +280,9 @@ class App {
             return;
         }
         if (action === 'select-leg') {
-            this.selected = data.id ?? null;
+            this.selected = this.selected === data.id ? null : data.id ?? null;
             this.renderSidebar();
+            this.map.redraw(this.project, this.plan, this.selected);
             return;
         }
         if (action === 'add-straight' || action === 'add-turn') {
@@ -282,6 +294,7 @@ class App {
                 p.arrivalLegs.unshift(leg); });
             this.selected = leg.id;
             this.renderSidebar();
+            this.map.redraw(this.project, this.plan, this.selected);
             return;
         }
         if (action === 'delete-leg' || action === 'move-up' || action === 'move-down') {
@@ -303,6 +316,7 @@ class App {
             if (action === 'delete-leg' && this.selected === id)
                 this.selected = null;
             this.renderSidebar();
+            this.map.redraw(this.project, this.plan, this.selected);
             return;
         }
         if (action === 'preset-left' || action === 'preset-right') {

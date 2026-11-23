@@ -8,6 +8,7 @@ function validateLegs(legs:unknown,ids:Set<string>,label:string){check(Array.isA
  check(l.speedOverrideMps===null||between(l.speedOverrideMps,5,100),label+': 速度上書きが不正です。');
  check(l.directionDeg===null||l.directionDeg===undefined||between(l.directionDeg,0,360),label+': 方位指定が不正です。');
  if(l.checkpointLabel!==undefined)check(typeof l.checkpointLabel==='string'&&l.checkpointLabel.length<=70,label+': チェックポイント名が長すぎます。');
+ if(l.checkpointKind!==undefined)check(l.checkpointKind==='downwind-start',label+': チェックポイント種別が不正です。');
  if(l.type==='straight')check(between(l.lengthM,1,50000),label+': 直線距離が不正です。');
  else if(l.type==='turn'){check(['left','right'].includes(String(l.direction)),label+': 旋回方向が不正です。');check(between(l.angleDeg,1,720)&&between(l.bankDeg,1,70),label+': 旋回角・バンク角が不正です。');}
  else throw Error(label+': 未対応のレグ種別です。');
@@ -31,9 +32,18 @@ export function validateProject(input:unknown):ProjectV1 {
  check(between(l.elevationMSLM,-500,15000)&&between(l.runwayTrackDeg,0,360),'着陸標高・進入方位が不正です。');
  check(between(final.pathAngleDeg,0.1,25)&&between(final.groundLengthM,20,10000),'ファイナル角度・距離が不正です。');
  const ids=new Set<string>();validateLegs(p.departureLegs,ids,'離脱側レグ');validateLegs(p.arrivalLegs,ids,'着陸側レグ');
+ // v0.1.1 compatibility: migrate the legacy Japanese label once, retaining its identity when renamed later.
+ const arrival=p.arrivalLegs as FlightLeg[];if(!arrival.some(v=>v.checkpointKind==='downwind-start')){
+   const legacy=arrival.find(v=>v.checkpointLabel==='ダウンウィンド開始');if(legacy)legacy.checkpointKind='downwind-start';
+ }
  if(p.connector!==null){const c=obj(p.connector);check(c.type==='bezier_connector'&&c.curvaturePolicy==='match-neighbors','接続曲線種別が不正です。');check(between(c.handleStartM,1,50000)&&between(c.handleEndM,1,50000),'Bezierハンドル長が不正です。');}
  const disp=obj(p.display);check(['m','ft'].includes(String(disp.altitudeUnit)),'高度単位が不正です。');
  for(const k of ['showDistanceRings','showBearingLines','showWindArrow','showHandles'])check(typeof disp[k]==='boolean','表示設定 '+k+' が不正です。');
+ // Additive migration; preserve schemaVersion 1.0 to read existing saved files and IndexedDB snapshots.
+ const defaults:Record<string,boolean|number>={showDownwindMargin:true,showCheckpointAltitudes:false,distanceRingOpacity:0.5,bearingLineOpacity:0.5};
+ for(const [k,v] of Object.entries(defaults))if(disp[k]===undefined)disp[k]=v;
+ for(const k of ['showDownwindMargin','showCheckpointAltitudes'])check(typeof disp[k]==='boolean','表示設定 '+k+' が不正です。');
+ for(const k of ['distanceRingOpacity','bearingLineOpacity'])check(between(disp[k],0,1),'不透明度 '+k+' は0〜1で指定してください。');
  return input as ProjectV1;
 }
 export function parseProject(text:string):ProjectV1{if(text.length>2_000_000)throw Error('ファイルが大きすぎます（上限2MB）。');

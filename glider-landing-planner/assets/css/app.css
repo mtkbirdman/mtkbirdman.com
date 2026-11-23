@@ -1,4 +1,4 @@
-/* Glider Landing Planner 0.1.1 — CSS scoped to shortcode container. */
+/* Glider Landing Planner 0.1.2 — CSS scoped to shortcode container. */
 .glp-app-root,.glp-app-root *{box-sizing:border-box}
 .glp-app-root{--glp-ink:#16263a;--glp-muted:#62738b;--glp-blue:#2563eb;--glp-border:#dce4ee;--glp-panel:#fff;position:relative;left:50%;transform:translateX(-50%);width:min(1510px,calc(100vw - 22px));max-width:none!important;margin:12px 0 25px!important;font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:13px;color:var(--glp-ink);line-height:1.45}
 .glp-app-root button,.glp-app-root input,.glp-app-root select{font:inherit;line-height:1.35}
@@ -55,7 +55,7 @@
 .glp-overview{margin-top:14px;background:#fff;border:1px solid var(--glp-border);border-radius:11px;padding:15px 17px;overflow:hidden}
 .glp-overview-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .glp-overview-top strong{font-size:13px;font-weight:750}.glp-overview-top small{color:#8695a8;font-size:10px}
-.glp-chart-legend{display:flex;align-items:center;gap:7px;font-size:10px;color:#79889b}.glp-chart-legend i{display:inline-block;width:15px;border-top:3px solid}.glp-line-blue{border-color:#2563eb!important}.glp-line-orange{border-color:#db7a26!important;border-top-style:dashed!important}
+.glp-chart-legend{display:flex;align-items:center;gap:7px;font-size:10px;color:#79889b}.glp-chart-legend i{display:inline-block;width:15px;border-top:3px solid}.glp-line-blue{border-color:#2563eb!important}.glp-line-orange{border-color:#db7a26!important;border-top-style:dashed!important}.glp-line-green{border-color:#059669!important}
 .glp-chart{border:1px solid #edf1f6;border-radius:8px;overflow:hidden;margin-bottom:12px}.glp-chart svg{width:100%;min-height:140px}
 .glp-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px}.glp-stat{padding:10px 12px;background:#f4f8fc;border-radius:8px;display:flex;flex-direction:column;gap:4px;overflow:hidden}.glp-stat small{font-size:10px;color:#6c8097;white-space:normal}.glp-stat strong{font-size:17px;font-weight:780;color:#143c71;font-variant-numeric:tabular-nums}
 .glp-checkpoints{border-top:1px solid #e9eef5;padding-top:14px}.glp-tablewrap{max-height:220px;overflow:auto;border:1px solid #e5ebf2;border-radius:7px}.glp-table{border-collapse:collapse;width:100%!important;table-layout:auto;margin:0!important;min-width:430px;font-size:11px}.glp-table thead{position:sticky;top:0;background:#eff4fb}.glp-table th,.glp-table td{padding:8px 10px;border-bottom:1px solid #e9eef4;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.glp-table th:first-child,.glp-table td:first-child{text-align:left;font-weight:600}.glp-table th{font-weight:700;color:#53677e}.glp-negative{color:#aa3b28;font-weight:800}.glp-positive{color:#25607d;font-weight:700}
@@ -65,3 +65,15 @@
 @media(max-width:1120px){.glp-app-body{grid-template-columns:310px minmax(0,1fr)}.glp-toolbar{gap:7px}.glp-project-name{width:130px}.glp-sidebar{padding:12px 9px}.glp-main{padding:12px}.glp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:760px){.glp-app-root{width:calc(100vw - 12px)}.glp-shell{border-radius:9px}.glp-app-body{display:flex;flex-direction:column}.glp-main{width:100%;order:1;padding:10px}.glp-sidebar{width:100%;order:2;height:auto;max-height:none;min-height:0;overflow:visible;padding:12px;border-right:0;border-top:1px solid #e0e8f2}.glp-map{height:390px}.glp-toolbar{padding:10px}.glp-tool-group{flex:1 1 100%;justify-content:start}.glp-project-name{max-width:none;flex:1;min-width:120px}.glp-overview{padding:12px}.glp-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.glp-stat strong{font-size:15px}.glp-map-hint{display:none}.glp-brand strong{font-size:14px}.glp-panel{padding:12px}}
 @media(max-width:460px){.glp-btn{padding:6px 8px!important;font-size:11px!important}.glp-map{height:350px}.glp-chart-legend{font-size:9px}.glp-tool-group{gap:4px}.glp-metrics{gap:6px}.glp-stat{padding:9px}.glp-stat strong{font-size:14px}}
+
+/* v0.1.2: per-overlay opacity sliders and permanent checkpoint height/margin labels. */
+.glp-opacity-field{display:flex;flex-direction:column;gap:7px;margin:12px 0 8px;color:#45556b;font-size:12px}
+.glp-opacity-field>span{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.glp-opacity-field output{font-variant-numeric:tabular-nums;color:#315682;font-weight:700}
+.glp-opacity-field input[type="range"]{display:block;width:100%;height:20px;padding:0!important;margin:0!important;accent-color:#2563eb;cursor:pointer;border:0!important;background:transparent!important;box-shadow:none!important}
+.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label{background:rgba(255,255,255,.96);border:1px solid #bfd0e2;border-radius:7px;box-shadow:0 1px 5px rgba(15,23,42,.18);color:#27374b;padding:4px 7px;font-size:10px;line-height:1.4;white-space:normal;max-width:250px;pointer-events:none;font-family:inherit}
+.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label::before{border-top-color:#bfd0e2;border-bottom-color:#bfd0e2}
+.glp-map-cp-content{display:flex;flex-direction:column;gap:3px}
+.glp-map-cp-content strong{font-weight:800;color:#8b4c07}
+.glp-map-cp-content span{font-weight:600;color:#30465e}
+@media(max-width:760px){.glp-app-root .glp-map .leaflet-tooltip.glp-checkpoint-label{font-size:9px;padding:3px 5px;max-width:180px}}

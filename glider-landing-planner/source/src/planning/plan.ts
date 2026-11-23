@@ -50,20 +50,42 @@ export function buildPlan(project:ProjectV1):PlanResult {
  for(const s of arrival.samples){requiredAll.push({...s,sM:s.sM+offsetS});}
  const arrivalNeedEndS=arrival.end.sM+offsetS;
  for(const s of finalTarget){requiredAll.push({...s,sM:arrivalNeedEndS+(s.sM-predictedArrival.end.sM)});}
- const checkpoints:Checkpoint[]=[];
+ // Checkpoint heights are independent physical values: departure forecasts vs. landing-side required heights.
+ // Do not place a separate "connector end" checkpoint on top of "downwind start".
+ const checkpoints:Checkpoint[]=[{
+   id:'departure-anchor',label:'離脱地点',kind:'departure-start',group:'departure',
+   e:departure.start.e,n:departure.start.n,altitudeM:departure.start.h,altitudeType:'predicted'
+ }];
+ for(let i=0;i<departure.segments.length;i++){
+   const seg=departure.segments[i];
+   checkpoints.push({id:'departure:'+seg.leg.id+':end',label:seg.leg.checkpointLabel??`離脱側 ${i+1} 終点`,kind:'departure-end',group:'departure',
+     e:seg.end.e,n:seg.end.n,altitudeM:seg.end.h,altitudeType:'predicted',legId:seg.leg.id});
+ }
+ const marginAvailable=Boolean(connection?.feasible)&&!notices.some(n=>n.level==='error');
  for(let i=0;i<arrival.segments.length;i++){
    const req=arrival.segments[i].start;
-   const pred=predictedArrival.segments[i]?.start;
-   if(!pred)continue;
    const leg=arrival.segments[i].leg;
-   const label=leg.checkpointLabel??(leg.type==='turn'?'旋回開始 '+(i+1):'レグ開始 '+(i+1));
-   checkpoints.push({label,group:'arrival',e:req.e,n:req.n,predictedM:pred.h,requiredM:req.h,marginM:pred.h-req.h});
+   const isDownwind=leg.checkpointKind==='downwind-start';
+   const label=leg.checkpointLabel??(isDownwind?'ダウンウィンド開始':leg.type==='turn'?'旋回開始 '+(i+1):'レグ開始 '+(i+1));
+   const cp:Checkpoint={id:'arrival:'+leg.id+':start',label,kind:'arrival-start',group:'arrival',
+     e:req.e,n:req.n,altitudeM:req.h,altitudeType:'required',legId:leg.id,
+     ...(isDownwind?{checkpointKind:'downwind-start' as const}:{})};
+   // Margin is defined ONLY at the actual downwind-start checkpoint. Display it only if the connector has passed feasibility.
+   const pred=predictedArrival.segments[i]?.start;
+   if(isDownwind&&marginAvailable&&pred){cp.predictedM=pred.h;cp.requiredM=req.h;cp.marginM=pred.h-req.h;}
+   checkpoints.push(cp);
  }
- if(connection)checkpoints.unshift({label:'自動接続 終点',group:'connector',e:arrival.start.e,n:arrival.start.n,predictedM:predictedB.h,requiredM:arrival.start.h,marginM:predictedB.h-arrival.start.h});
- checkpoints.push({label:'ファイナル開始',group:'final',e:fstart.e,n:fstart.n,predictedM:predictedArrival.end.h,requiredM:finalStart.h,marginM:predictedArrival.end.h-finalStart.h});
- checkpoints.push({label:'進入終端（自然沈下との比較）',group:'final',e:lp.e,n:lp.n,predictedM:finalPredicted[points].h,requiredM:project.landing.elevationMSLM,marginM:finalPredicted[points].h-project.landing.elevationMSLM});
- if(!connection){checkpoints.length=0;forwardAll.splice(departure.samples.length);}
- for(const c of checkpoints){if(c.marginM < -0.5)notices.push({code:'ALTITUDE_DEFICIT',level:'warning',message:`${c.label}: モデル上の高度不足 ${Math.abs(c.marginM/0.3048).toFixed(0)} ft`});}
+ checkpoints.push({id:'final-start',label:'ファイナル開始',kind:'final-start',group:'final',
+   e:fstart.e,n:fstart.n,altitudeM:finalStart.h,altitudeType:'target'});
+ checkpoints.push({id:'landing-target',label:'進入目標点',kind:'landing',group:'final',
+   e:lp.e,n:lp.n,altitudeM:project.landing.elevationMSLM,altitudeType:'target'});
+ // Two checkpoints can have identical locations (e.g., a zero-length segment). Labels are not duplicated by their name.
+ const downwind=checkpoints.find(c=>c.checkpointKind==='downwind-start');
+ if(downwind&&downwind.marginM!==undefined&&downwind.marginM < -0.5)
+   notices.push({code:'ALTITUDE_DEFICIT',level:'warning',message:`ダウンウィンド開始: モデル上の高度不足 ${Math.abs(downwind.marginM/0.3048).toFixed(0)} ft`});
+ if(downwind&&downwind.marginM===undefined)
+   notices.push({code:'MARGIN_NOT_EVALUABLE',level:'info',message:'ダウンウィンド開始の高度余裕は、有効な接続経路がないため評価できません。'});
+ if(!connection){forwardAll.splice(departure.samples.length);}
  notices.push({code:'FINAL_BRAKE_UNKNOWN',level:'info',message:'ファイナル6°は幾何学的な目標線です。ブレーキ・フレア・実際の進入成立性は未評価。'});
  if(project.performance.model==='fixed-ld')notices.push({code:'TURN_SINK_UNMODELED',level:'info',message:'モデルAは旋回追加沈下を未評価。'});
  for(const l of [...project.departureLegs,...project.arrivalLegs]){if(l.type==='turn'&&l.bankDeg>project.maxBankDeg){notices.push({code:'BANK_LIMIT_EXCEEDED',level:'error',message:`レグ ${l.id} の指定バンク角 ${l.bankDeg}° が上限 ${project.maxBankDeg}° を超えています。`,legId:l.id});}}

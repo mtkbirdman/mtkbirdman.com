@@ -14,6 +14,8 @@ function validateLegs(legs, ids, label) {
         check(l.directionDeg === null || l.directionDeg === undefined || between(l.directionDeg, 0, 360), label + ': 方位指定が不正です。');
         if (l.checkpointLabel !== undefined)
             check(typeof l.checkpointLabel === 'string' && l.checkpointLabel.length <= 70, label + ': チェックポイント名が長すぎます。');
+        if (l.checkpointKind !== undefined)
+            check(l.checkpointKind === 'downwind-start', label + ': チェックポイント種別が不正です。');
         if (l.type === 'straight')
             check(between(l.lengthM, 1, 50000), label + ': 直線距離が不正です。');
         else if (l.type === 'turn') {
@@ -47,6 +49,13 @@ export function validateProject(input) {
     const ids = new Set();
     validateLegs(p.departureLegs, ids, '離脱側レグ');
     validateLegs(p.arrivalLegs, ids, '着陸側レグ');
+    // v0.1.1 compatibility: migrate the legacy Japanese label once, retaining its identity when renamed later.
+    const arrival = p.arrivalLegs;
+    if (!arrival.some(v => v.checkpointKind === 'downwind-start')) {
+        const legacy = arrival.find(v => v.checkpointLabel === 'ダウンウィンド開始');
+        if (legacy)
+            legacy.checkpointKind = 'downwind-start';
+    }
     if (p.connector !== null) {
         const c = obj(p.connector);
         check(c.type === 'bezier_connector' && c.curvaturePolicy === 'match-neighbors', '接続曲線種別が不正です。');
@@ -56,6 +65,15 @@ export function validateProject(input) {
     check(['m', 'ft'].includes(String(disp.altitudeUnit)), '高度単位が不正です。');
     for (const k of ['showDistanceRings', 'showBearingLines', 'showWindArrow', 'showHandles'])
         check(typeof disp[k] === 'boolean', '表示設定 ' + k + ' が不正です。');
+    // Additive migration; preserve schemaVersion 1.0 to read existing saved files and IndexedDB snapshots.
+    const defaults = { showDownwindMargin: true, showCheckpointAltitudes: false, distanceRingOpacity: 0.5, bearingLineOpacity: 0.5 };
+    for (const [k, v] of Object.entries(defaults))
+        if (disp[k] === undefined)
+            disp[k] = v;
+    for (const k of ['showDownwindMargin', 'showCheckpointAltitudes'])
+        check(typeof disp[k] === 'boolean', '表示設定 ' + k + ' が不正です。');
+    for (const k of ['distanceRingOpacity', 'bearingLineOpacity'])
+        check(between(disp[k], 0, 1), '不透明度 ' + k + ' は0〜1で指定してください。');
     return input;
 }
 export function parseProject(text) {

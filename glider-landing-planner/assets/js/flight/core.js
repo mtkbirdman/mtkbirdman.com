@@ -82,7 +82,7 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group) {
     current = { ...current, bankDeg: bankSigned };
     const samples = [makeSample(current, leg.id, group)];
     if (leg.guidance === 'heading') {
-        const steps = Math.max(1, Math.ceil(leg.angleDeg / 1));
+        const steps = Math.max(1, Math.ceil(leg.angleDeg / 0.25));
         const dt = timeDirection * rad(leg.angleDeg) / Math.abs(omega) / steps;
         for (let i = 0; i < steps; i++) {
             current = advanceTurn(current, dt, bankSigned, ctx);
@@ -92,8 +92,8 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group) {
     else {
         const signWanted = (leg.direction === 'right' ? 1 : -1) * timeDirection;
         let turned = 0;
-        const stepDt = timeDirection * rad(0.5) / Math.abs(omega);
-        for (let i = 0; i < Math.ceil(1080 / 0.5); i++) {
+        const stepDt = timeDirection * rad(0.25) / Math.abs(omega);
+        for (let i = 0; i < Math.ceil(1080 / 0.25); i++) {
             const next = advanceTurn(current, stepDt, bankSigned, ctx);
             if (next.groundMps < 0.05) {
                 notices.push({ code: 'TURN_TARGET_NOT_REACHED', level: 'error', message: '対地速度がほぼゼロになりました。', legId: leg.id });

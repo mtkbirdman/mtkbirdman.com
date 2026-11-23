@@ -17,7 +17,7 @@ export function evaluateConnector(start:State,endBoundary:State,project:ProjectV
  const kA=endpointCurvature(start,start.bankDeg,project),kB=endpointCurvature(endBoundary,endBoundary.bankDeg,project);
  const cp=controlPoints(A,B,tA,tB,kA,kB,a,b);
  const approximateSpan=magnitude(sub(B,A))+a+b;
- const steps=skipHeavy?56:Math.min(800,Math.max(80,Math.ceil(approximateSpan/8)));
+ const steps=skipHeavy?56:Math.min(2000,Math.max(160,Math.ceil(approximateSpan/3)));
  const points:Point2[]=[],samples:Sample[]=[],notices:Notice[]=[];
  let invalid=false,maxBank=0,length=0,loss=0,time=0;
  const w=windVector(project.wind),V=start.speedMps;

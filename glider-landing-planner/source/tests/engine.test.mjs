@@ -26,9 +26,56 @@ test('T10 5th-order Bezier endpoints and curvatures',()=>{const A={e:0,n:0},B={e
 test('T11 Bezier length numerical convergence',()=>{const cp=controlPoints({e:0,n:0},{e:400,n:300},headingVector(90),headingVector(0),0,0,80,90);function length(n){let L=0,last=point(cp,0);for(let i=1;i<=n;i++){const q=point(cp,i/n);L+=magnitude(sub(q,last));last=q;}return L;}assert.ok(Math.abs(length(100)-length(1000))<.1);});
 test('T12 model B best L/D reference',()=>{const p={model:'quadratic-drag',fixedLD:30,bestLD:32,bestLDAtMps:24};near(24/sinkRate(24,0,p),32,1e-10);assert.ok(sinkRate(24,30,p)>sinkRate(24,0,p));});
 test('T13 leg speed overrides and idealization notice',()=>{const l=straight();l.speedOverrideMps=30;const r=simulateLeg(start(),l,ctx(),1,'departure');near(r.end.speedMps,30);assert.ok(r.notices.some(i=>i.code==='SPEED_STEP_IDEALIZED'));});
-test('T14 altitude margin is predicted minus required',()=>{const p=createDemo(),r=buildPlan(p);const c=r.checkpoints[0];near(c.marginM,c.predictedM-c.requiredM,1e-9);near((c.marginM/0.3048)*.3048,c.marginM,1e-9);});
+test('T14 downwind-only margin equals predicted minus required, for a feasible connector',()=>{
+ const p=createDemo();p.arrivalLegs=trafficPreset('left');p.departureLegs=[];
+ const initial=buildPlan(p),b=initial.arrival.start,t=headingVector(b.trackDeg),f=new LocalFrame(p.landing.point);
+ const geo=f.toGeo({e:b.e-350*t.e,n:b.n-350*t.n});
+ p.departure={...geo,altitudeMSLM:500,headingDeg:b.headingDeg};
+ p.connector.handleStartM=100;p.connector.handleEndM=100;
+ const r=buildPlan(p);assert.equal(r.connector.feasible,true,JSON.stringify(r.connector.notices));
+ const d=r.checkpoints.find(c=>c.checkpointKind==='downwind-start');assert.ok(d);
+ assert.equal(d.label,'ダウンウィンド開始');near(d.marginM,d.predictedM-d.requiredM,1e-7);
+ assert.equal(r.checkpoints.filter(c=>c.marginM!==undefined).length,1);
+ assert.ok(!r.checkpoints.some(c=>c.label==='自動接続 終点'));
+});
 test('T15 JSON round trip preserves legs and project',()=>{const p=createDemo(),q=parseProject(serializeProject(p));assert.deepEqual(q,p);});
 test('T16 invalid JSON and broken field are rejected',()=>{assert.throws(()=>parseProject('{broken'));const p=createDemo();p.wind.speedMps=-1;assert.throws(()=>parseProject(JSON.stringify(p)),/風/);});
 test('ground-track 90 degree turn reaches desired ground track difference',()=>{const wind={fromDeg:270,speedMps:3},r=simulateLeg(start(0,20,wind),turn(90,'ground-track'),ctx(wind),1,'departure');assert.ok(!r.notices.some(i=>i.level==='error'));near(((r.end.trackDeg-r.samples[0].trackDeg+360)%360),90,0.025);});
 test('connector passes endpoint geometric curvature conditions even when nonzero',()=>{const p=createDemo();p.departureLegs=[{...makeTurn('right',40),id:'dturn'}];p.arrivalLegs=trafficPreset('left');const plan=buildPlan(p),c=chooseConnector(plan.departure.end,plan.arrival.start,p);assert.ok(Number.isFinite(c.lengthM));assert.ok(c.points.length>20);});
-test('when disconnected, no false altitude-margin table',()=>{const p=createDemo();p.connector=null;const r=buildPlan(p);assert.equal(r.checkpoints.length,0);assert.ok(r.notices.some(i=>i.code==='CONNECTOR_MISSING'));});
+test('when disconnected, checkpoints still show independently but no fabricated margin',()=>{const p=createDemo();p.arrivalLegs=trafficPreset('right');p.connector=null;const r=buildPlan(p);assert.ok(r.checkpoints.length>=6);assert.equal(r.checkpoints.filter(c=>c.marginM!==undefined).length,0);assert.ok(r.notices.some(i=>i.code==='CONNECTOR_MISSING'));});
+
+test('T21 legacy v0.1.1 JSON migrates only missing display fields and downwind ID',()=>{
+ const old=createDemo();old.arrivalLegs=trafficPreset('left');
+ delete old.display.showDownwindMargin;delete old.display.showCheckpointAltitudes;
+ delete old.display.distanceRingOpacity;delete old.display.bearingLineOpacity;
+ delete old.arrivalLegs[0].checkpointKind;
+ const parsed=parseProject(JSON.stringify(old));
+ assert.equal(parsed.schemaVersion,'1.0');assert.equal(parsed.display.showDownwindMargin,true);
+ assert.equal(parsed.display.showCheckpointAltitudes,false);near(parsed.display.distanceRingOpacity,0.5);
+ near(parsed.display.bearingLineOpacity,0.5);assert.equal(parsed.arrivalLegs[0].checkpointKind,'downwind-start');
+ parsed.arrivalLegs[0].checkpointLabel='Downwind entry';
+ const again=parseProject(serializeProject(parsed));
+ assert.equal(buildPlan(again).checkpoints.find(c=>c.checkpointKind==='downwind-start').label,'Downwind entry');
+});
+test('T22 opacity bounds and invalid checkpoint ID are rejected',()=>{
+ const p=createDemo();p.display.distanceRingOpacity=1.5;
+ assert.throws(()=>parseProject(JSON.stringify(p)),/不透明度/);
+ p.display.distanceRingOpacity=0;p.display.bearingLineOpacity=1;
+ assert.deepEqual(parseProject(JSON.stringify(p)).display.bearingLineOpacity,1);
+ p.arrivalLegs=trafficPreset('left');p.arrivalLegs[0].checkpointKind='unknown';
+ assert.throws(()=>parseProject(JSON.stringify(p)),/チェックポイント種別/);
+});
+test('T23 checkpoint heights are meaningfully typed and no duplicate connector endpoint',()=>{
+ const p=createDemo();p.arrivalLegs=trafficPreset('left');const r=buildPlan(p);
+ assert.equal(r.checkpoints[0].kind,'departure-start');assert.equal(r.checkpoints[0].altitudeType,'predicted');
+ assert.ok(r.checkpoints.some(c=>c.kind==='departure-end'));
+ assert.equal(r.checkpoints.find(c=>c.checkpointKind==='downwind-start').altitudeType,'required');
+ assert.equal(r.checkpoints.find(c=>c.kind==='final-start').altitudeType,'target');
+ assert.ok(!r.checkpoints.some(c=>c.group==='connector'));
+});
+test('T24 denser turn sampling retains same integral and endpoint',()=>{
+ const r=simulateLeg(start(),turn(90),ctx(),1,'departure');
+ assert.ok(r.samples.length>=361,`samples: ${r.samples.length}`);
+ const V=20,bank=30,R=V*V/(GRAVITY*Math.tan(rad(bank)));
+ near(r.end.e,R,0.005);
+});
