@@ -38,7 +38,7 @@ function legTable(title, legs, defaultSpeedMps) {
     if (!legs.length)
         return '';
     const rows = legs.map((leg, i) => `<tr><td>${i + 1}</td><td>${esc(legLabel(leg))}</td><td>${esc(leg.guidance === 'heading' ? '機首方位指定' : '対地航跡指定')}</td><td>${speed(leg.speedOverrideMps ?? defaultSpeedMps)}</td></tr>`).join('');
-    return `<section class="glp-report-section glp-report-section-legs"><h2>${esc(title)}</h2><table class="glp-report-table"><thead><tr><th>No.</th><th>内容</th><th>風補正</th><th>速度</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+    return `<section class="glp-report-section glp-report-section-legs"><h2>${esc(title)}</h2><table class="glp-report-table"><thead><tr><th>No.</th><th>内容</th><th>飛行方式</th><th>速度</th></tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 export function reportHtml(req) {
     const { project: p, plan, metricsHtml, diagnosticsHtml, title, engineVersion } = req;
@@ -47,7 +47,7 @@ export function reportHtml(req) {
     const attrs = [
         ['離脱高度（MSL）', fmtAlt(p.departure.altitudeMSLM, unit)],
         ['着陸標高（MSL）', fmtAlt(p.landing.elevationMSLM, unit)],
-        ['共通対気速度', speed(p.defaultSpeedMps)],
+        ['基準対気速度', speed(p.defaultSpeedMps)],
         ['最大バンク', `${p.maxBankDeg}°`],
         ['風向・風速', `${p.wind.fromDeg}°から / ${p.wind.speedMps} m/s`],
         ['沈下モデル', p.performance.model === 'fixed-ld' ? `A：固定L/D（${p.performance.fixedLD}）` : `B：簡易抗力（最大L/D ${p.performance.bestLD}）`],
@@ -59,7 +59,7 @@ export function reportHtml(req) {
     ];
     const conditions = attrs.map(([key, value]) => `<div class="glp-report-data-item"><small>${esc(key)}</small><strong>${esc(value)}</strong></div>`).join('');
     const leafletCss = (document.querySelector('link[href*="leaflet.css"]')?.href ?? 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.8';
+    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.9';
     const time = new Date().toLocaleString('ja-JP');
     return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(p.name)} - ${esc(title)} PDF印刷</title><link rel="stylesheet" href="${esc(leafletCss)}"><link rel="stylesheet" href="${esc(printCss)}"></head>
  <body class="glp-report"><div class="glp-report-screen-toolbar"><span>印刷専用プレビュー｜地図のタイルが読み込まれたら「印刷 / PDF保存」を選択してください。</span><button type="button" onclick="window.print()">印刷 / PDF保存</button></div>

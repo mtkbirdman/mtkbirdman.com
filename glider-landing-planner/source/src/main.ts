@@ -10,6 +10,7 @@ import {chartSvg,fmtAlt,altitudeTimeSeries,fmtElapsed} from './ui/chart.js';
 import {openPrintReport} from './ui/print.js';
 import {checkpointTable} from './ui/checkpoints.js';
 import {heightInputText,FEET_PER_METER} from './ui/height-units.js';
+import {effectiveLegSpeedMps,effectiveStraightDirectionDeg} from './ui/leg-display.js';
 const escapeHTML=(val:unknown)=>String(val??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]??c));
 const n=(value:number,d=2)=>Number.isFinite(value)?Number(value.toFixed(d)):0;
 const label=(s:string)=>escapeHTML(s);
@@ -56,13 +57,14 @@ class App {
    }).catch(()=>{ /* IndexedDB may be blocked or contain invalid legacy data: keep demo visible. */ });
  }
  private getField(path:string):unknown{let a:any=this.project;for(const k of path.split('.'))a=a[k];return a;}
- private control(path:string,title:string,unit='',step='any',scale=1):string {
+ private control(path:string,title:string,unit='',step='any',scale=1,shownWhenInherited?:number|null):string {
    const raw=this.getField(path);
    const isHeight=path==='departure.altitudeMSLM'||path==='landing.elevationMSLM';
    const heightUnit=this.project.display.altitudeUnit;
    const actualScale=isHeight&&heightUnit==='ft'?FEET_PER_METER:scale;
    const fieldUnit=isHeight?`${heightUnit}, MSL`:unit;
-   const value=isHeight&&typeof raw==='number'?heightInputText(raw,heightUnit):typeof raw==='number'?n(raw*scale,scale===3.6?2:5):raw??'';
+   const displayed=(raw===null||raw===undefined)&&shownWhenInherited!==undefined?shownWhenInherited:raw;
+   const value=isHeight&&typeof displayed==='number'?heightInputText(displayed,heightUnit):typeof displayed==='number'?n(displayed*scale,scale===3.6?2:5):displayed??'';
    return `<label class="glp-field"><span>${title}${fieldUnit?` <em>${fieldUnit}</em>`:''}</span><input type="number" step="${step}" value="${escapeHTML(value)}" data-path="${path}" data-scale="${actualScale}"></label>`;
  }
  private checkbox(path:string,title:string):string{return `<label class="glp-check"><input type="checkbox" data-path="${path}" ${this.getField(path)?'checked':''}><span>${title}</span></label>`;}
@@ -71,9 +73,11 @@ class App {
  private legEditor(side:Side,leg:FlightLeg,i:number):string {
    const modeOpts:[string,string][]=[['heading','機首方位指定（風で偏流）'],['ground-track','対地航跡指定（風を補正）']];
    const base=`${side==='departure'?'departureLegs':'arrivalLegs'}.${i}`;
-   return `<div class="glp-leg-edit"><div class="glp-two">${this.select(base+'.guidance','風補正方式',modeOpts)}${this.control(base+'.speedOverrideMps',leg.type==='turn'?'旋回速度':'滑空速度','km/h','0.1',3.6)}</div>
-    <p class="glp-tip">速度を空欄にした場合は共通対気速度を使用します。</p>
-    ${leg.type==='straight'?`<div class="glp-two">${this.control(base+'.lengthM','直線距離','m')}${this.control(base+'.directionDeg','指定方位（空欄＝継承）','°')}</div>`:`<div class="glp-two">${this.select(base+'.direction','旋回方向',[['right','右'],['left','左']])}${this.control(base+'.angleDeg','旋回角（多周旋回可）','°')}</div><div class="glp-two">${this.control(base+'.bankDeg','バンク角','°')}</div>`}
+   // Nullable model values retain their inherited meaning even when the form shows a number.
+   const speedInForce=effectiveLegSpeedMps(this.project,leg);
+   const directionInForce=effectiveStraightDirectionDeg(this.project,this.plan,side,leg);
+   return `<div class="glp-leg-edit"><div class="glp-two">${this.select(base+'.guidance','飛行方式',modeOpts)}${this.control(base+'.speedOverrideMps',leg.type==='turn'?'旋回速度':'滑空速度','km/h','0.1',3.6,speedInForce)}</div>
+    ${leg.type==='straight'?`<div class="glp-two">${this.control(base+'.lengthM','直線距離','m')}${this.control(base+'.directionDeg','目標方位','°','any',1,directionInForce)}</div>`:`<div class="glp-two">${this.select(base+'.direction','旋回方向',[['right','右'],['left','左']])}${this.control(base+'.angleDeg','旋回角','°')}</div><div class="glp-two">${this.control(base+'.bankDeg','バンク角','°')}</div>`}
     <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHTML(leg.checkpointLabel??'')}" data-path="${base}.checkpointLabel"></label></div>`;
  }
  private legList(side:Side):string {const legs=side==='departure'?this.project.departureLegs:this.project.arrivalLegs;
@@ -137,7 +141,7 @@ class App {
   const preservedScroll=sidebarScroll.scrollTop;
   sidebarScroll.innerHTML=`
    <div class="glp-panel-heading"><div class="glp-eyebrow">FLIGHT PARAMETERS</div><h2>飛行条件・経路設計</h2></div>
-   <div class="glp-panel"><h3>基本条件</h3><div class="glp-two">${this.control('defaultSpeedMps','共通対気速度','km/h','0.1',3.6)}${this.control('maxBankDeg','最大バンク','°')}</div>
+   <div class="glp-panel"><h3>基本条件</h3><div class="glp-two">${this.control('defaultSpeedMps','基準対気速度','km/h','0.1',3.6)}${this.control('maxBankDeg','最大バンク','°')}</div>
    ${this.select('performance.model','沈下計算モデル',[['fixed-ld','A：固定L/D'],['quadratic-drag','B：簡易抗力モデル']])}
    <div class="glp-two">${this.control('performance.fixedLD','モデルA：L/D')}${this.control('performance.bestLD','モデルB：最大L/D')}</div>${this.control('performance.bestLDAtMps','モデルB：最大L/D速度','km/h','0.1',3.6)}
    <div class="glp-two">${this.control('wind.fromDeg','風向','°')}${this.control('wind.speedMps','風速','m/s')}</div>
@@ -155,7 +159,7 @@ class App {
    <div class="glp-panel"><h3>地図・表示</h3>${this.checkbox('display.showDistanceRings','着陸点から距離リング')}${this.checkbox('display.showBearingLines','方位線')}${this.checkbox('display.showWindArrow','風向矢印')}${this.checkbox('display.showDownwindMargin','ダウンウィンド開始の高度余裕を表示')}${this.checkbox('display.showCheckpointAltitudes','各チェックポイント高度を地図に表示')}${this.opacityControl('display.referenceLineOpacity','補助線の不透明度')}<div class="glp-two">${this.control('display.distanceRingIntervalM','距離リング間隔','m','25')}${this.select('display.bearingLineIntervalDeg','方位線間隔',[['15','15°'],['30','30°'],['45','45°'],['60','60°'],['90','90°'],['120','120°'],['180','180°']])}</div>${this.control('display.magneticDeclinationDeg','磁気偏角（東偏＋／西偏−）','°','0.1')}<p class="glp-tip">磁気偏角は補助方位線のみへ反映。飛行計算・風向・滑走路方位は真方位基準です。</p></div>`;
   sidebarScroll.scrollTop=preservedScroll;
  }
- private renderToolbar(){(this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML=`<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.8</span></div></div><div class="glp-tool-group">
+ private renderToolbar(){(this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML=`<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.9</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHTML(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length?'disabled':''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length?'disabled':''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export">JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print">PDF印刷</button></div><div class="glp-save-state">● ${escapeHTML(this.status)}</div>`;}
  private renderResults(){const p=this.plan,unit=this.project.display.altitudeUnit;

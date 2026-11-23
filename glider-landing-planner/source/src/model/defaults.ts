@@ -1,5 +1,5 @@
 import type {ProjectV1, FlightLeg} from './types.js';
-export const ENGINE_VERSION='0.1.8-test';
+export const ENGINE_VERSION='0.1.9-test';
 let nextId=0;
 export function newId():string { nextId+=1;return 'leg-'+Date.now().toString(36)+'-'+nextId.toString(36); }
 export function makeStraight(lengthM=300):FlightLeg{return {id:newId(),type:'straight',lengthM,guidance:'heading',speedOverrideMps:null,directionDeg:null};}
@@ -13,8 +13,8 @@ export function createDemo():ProjectV1{return {
  display:{altitudeUnit:'ft',showDistanceRings:true,showBearingLines:true,showWindArrow:true,showHandles:false,showDownwindMargin:true,showCheckpointAltitudes:false,referenceLineOpacity:0.5,distanceRingIntervalM:250,bearingLineIntervalDeg:45,magneticDeclinationDeg:0}
 };}
 export function trafficPreset(side:'left'|'right'):FlightLeg[]{return [
- {...makeStraight(700),checkpointLabel:'ダウンウィンド開始',checkpointKind:'downwind-start'},
- {...makeTurn(side,90),checkpointLabel:'ベースターン開始'},
- {...makeStraight(500),checkpointLabel:'ベースレグ開始'},
- {...makeTurn(side,90),checkpointLabel:'ファイナルターン開始'}
+ {...makeStraight(700),guidance:'ground-track',checkpointLabel:'ダウンウィンド開始',checkpointKind:'downwind-start'},
+ {...makeTurn(side,90),guidance:'ground-track',checkpointLabel:'ベースターン開始'},
+ {...makeStraight(500),guidance:'ground-track',checkpointLabel:'ベースレグ開始'},
+ {...makeTurn(side,90),guidance:'ground-track',checkpointLabel:'ファイナルターン開始'}
 ];}

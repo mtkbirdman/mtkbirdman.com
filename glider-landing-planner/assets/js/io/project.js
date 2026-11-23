@@ -10,7 +10,7 @@ function validateLegs(legs, ids, label) {
         const l = obj(input), id = l.id;
         check(typeof id === 'string' && id.length > 0 && id.length <= 80 && !ids.has(id), label + ': レグIDが不正または重複しています。');
         ids.add(id);
-        check(['heading', 'ground-track'].includes(String(l.guidance)), label + ': 風補正モードが不正です。');
+        check(['heading', 'ground-track'].includes(String(l.guidance)), label + ': 飛行方式が不正です。');
         check(l.speedOverrideMps === null || between(l.speedOverrideMps, 5, 100), label + ': 速度上書きが不正です。');
         check(l.directionDeg === null || l.directionDeg === undefined || between(l.directionDeg, 0, 360), label + ': 方位指定が不正です。');
         if (l.checkpointLabel !== undefined)

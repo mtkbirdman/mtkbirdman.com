@@ -1,4 +1,4 @@
-export const ENGINE_VERSION = '0.1.8-test';
+export const ENGINE_VERSION = '0.1.9-test';
 let nextId = 0;
 export function newId() { nextId += 1; return 'leg-' + Date.now().toString(36) + '-' + nextId.toString(36); }
 export function makeStraight(lengthM = 300) { return { id: newId(), type: 'straight', lengthM, guidance: 'heading', speedOverrideMps: null, directionDeg: null }; }
@@ -15,9 +15,9 @@ export function createDemo() {
 }
 export function trafficPreset(side) {
     return [
-        { ...makeStraight(700), checkpointLabel: 'ダウンウィンド開始', checkpointKind: 'downwind-start' },
-        { ...makeTurn(side, 90), checkpointLabel: 'ベースターン開始' },
-        { ...makeStraight(500), checkpointLabel: 'ベースレグ開始' },
-        { ...makeTurn(side, 90), checkpointLabel: 'ファイナルターン開始' }
+        { ...makeStraight(700), guidance: 'ground-track', checkpointLabel: 'ダウンウィンド開始', checkpointKind: 'downwind-start' },
+        { ...makeTurn(side, 90), guidance: 'ground-track', checkpointLabel: 'ベースターン開始' },
+        { ...makeStraight(500), guidance: 'ground-track', checkpointLabel: 'ベースレグ開始' },
+        { ...makeTurn(side, 90), guidance: 'ground-track', checkpointLabel: 'ファイナルターン開始' }
     ];
 }
