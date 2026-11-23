@@ -20,3 +20,6 @@ export class LocalFrame {
  toLocal(geo:GeoPoint):Point2 { const p=xyz(geo),dx=p.x-this.originXYZ.x,dy=p.y-this.originXYZ.y,dz=p.z-this.originXYZ.z;return {e:-this.slon*dx+this.clon*dy,n:-this.slat*this.clon*dx-this.slat*this.slon*dy+this.clat*dz}; }
  toGeo(pt:Point2):GeoPoint {const {e,n}=pt;const x=this.originXYZ.x-this.slon*e-this.slat*this.clon*n,y=this.originXYZ.y+this.clon*e-this.slat*this.slon*n,z=this.originXYZ.z+this.clat*n;const lon=Math.atan2(y,x),p=Math.hypot(x,y);let lat=Math.atan2(z,p*(1-e2));for(let k=0;k<8;k++){const n0=a/Math.sqrt(1-e2*Math.sin(lat)**2);const h=p/Math.cos(lat)-n0;lat=Math.atan2(z,p*(1-e2*n0/(n0+h)));}return {latDeg:deg(lat),lonDeg:deg(lon)};}
 }
+
+/** East-positive magnetic declination; flight-state headings are always true. */
+export function magneticToTrue(magneticDeg:number,eastDeclinationDeg:number):number{return norm(magneticDeg+eastDeclinationDeg);}

@@ -1,4 +1,4 @@
-import { LocalFrame, headingVector, dot, sub, add, mul } from '../geometry/geo.js';
+import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue } from '../geometry/geo.js';
 import { windVector } from '../flight/core.js';
 const html = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
 const heightText = (m, unit) => `${Math.round(unit === 'ft' ? m / 0.3048 : m).toLocaleString('ja-JP')} ${unit}`;
@@ -130,13 +130,17 @@ export class PlannerMap {
             labelIndex++;
         }
         if (project.display.showDistanceRings) {
-            for (const radius of [250, 500, 1000, 2000])
-                L.circle([project.landing.point.latDeg, project.landing.point.lonDeg], { radius, color: '#7a8797', weight: 1, opacity: project.display.distanceRingOpacity, fill: false, dashArray: '4,5', interactive: false, renderer: this.vectorRenderer }).addTo(this.rings);
+            const step = project.display.distanceRingIntervalM;
+            for (let radius = step; radius <= 2000 + 1e-6; radius += step)
+                L.circle([project.landing.point.latDeg, project.landing.point.lonDeg], { radius, color: '#7a8797', weight: 1, opacity: project.display.referenceLineOpacity, fill: false, dashArray: '4,5', interactive: false, renderer: this.vectorRenderer }).addTo(this.rings);
         }
         if (project.display.showBearingLines) {
-            for (let i = 0; i < 360; i += 45) {
-                const vec = headingVector(i), a = loc(plan.landing), b = loc(add(plan.landing, mul(vec, 2000)));
-                L.polyline([a, b], { color: '#94a3b8', weight: .8, opacity: project.display.bearingLineOpacity, dashArray: '3,7', smoothFactor: 0, interactive: false, renderer: this.vectorRenderer }).addTo(this.rings);
+            // Magnetic declination is east-positive: true bearing = magnetic bearing + declination.
+            // The physical flight equations, runway course and wind stay true-north referenced.
+            for (let magnetic = 0; magnetic < 360; magnetic += project.display.bearingLineIntervalDeg) {
+                const trueCourse = magneticToTrue(magnetic, project.display.magneticDeclinationDeg);
+                const vec = headingVector(trueCourse), a = loc(plan.landing), b = loc(add(plan.landing, mul(vec, 2000)));
+                L.polyline([a, b], { color: '#94a3b8', weight: .8, opacity: project.display.referenceLineOpacity, dashArray: '3,7', smoothFactor: 0, interactive: false, renderer: this.vectorRenderer }).addTo(this.rings);
             }
         }
         if (project.display.showWindArrow && project.wind.speedMps > 0) {

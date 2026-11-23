@@ -21,7 +21,7 @@ function validateLegs(legs, ids, label) {
             check(between(l.lengthM, 1, 50000), label + ': 直線距離が不正です。');
         else if (l.type === 'turn') {
             check(['left', 'right'].includes(String(l.direction)), label + ': 旋回方向が不正です。');
-            check(between(l.angleDeg, 1, 720) && between(l.bankDeg, 1, 70), label + ': 旋回角・バンク角が不正です。');
+            check(typeof l.angleDeg === 'number' && Number.isFinite(l.angleDeg) && l.angleDeg > 0 && between(l.bankDeg, 1, 70), label + ': 旋回角・バンク角が不正です。');
         }
         else
             throw Error(label + ': 未対応のレグ種別です。');
@@ -61,20 +61,36 @@ export function validateProject(input) {
         const c = obj(p.connector);
         check(c.type === 'bezier_connector' && c.curvaturePolicy === 'match-neighbors', '接続曲線種別が不正です。');
         check(between(c.handleStartM, 1, 50000) && between(c.handleEndM, 1, 50000), 'Bezierハンドル長が不正です。');
+        if (c.adjustmentMode === undefined)
+            c.adjustmentMode = 'auto';
+        check(['auto', 'manual'].includes(String(c.adjustmentMode)), 'Bezier調整モードが不正です。');
     }
     const disp = obj(p.display);
     check(['m', 'ft'].includes(String(disp.altitudeUnit)), '高度単位が不正です。');
     for (const k of ['showDistanceRings', 'showBearingLines', 'showWindArrow', 'showHandles'])
         check(typeof disp[k] === 'boolean', '表示設定 ' + k + ' が不正です。');
     // Additive migration; preserve schemaVersion 1.0 to read existing saved files and IndexedDB snapshots.
-    const defaults = { showDownwindMargin: true, showCheckpointAltitudes: false, distanceRingOpacity: 0.5, bearingLineOpacity: 0.5 };
+    const defaults = { showDownwindMargin: true, showCheckpointAltitudes: false };
+    // v0.1.6: Legacy saved opacities remain readable, but are replaced by a single authoritative value.
+    if (disp.referenceLineOpacity === undefined)
+        disp.referenceLineOpacity = disp.distanceRingOpacity ?? 0.5;
+    if (disp.distanceRingIntervalM === undefined)
+        disp.distanceRingIntervalM = 250;
+    if (disp.bearingLineIntervalDeg === undefined)
+        disp.bearingLineIntervalDeg = 45;
+    if (disp.magneticDeclinationDeg === undefined)
+        disp.magneticDeclinationDeg = 0;
     for (const [k, v] of Object.entries(defaults))
         if (disp[k] === undefined)
             disp[k] = v;
     for (const k of ['showDownwindMargin', 'showCheckpointAltitudes'])
         check(typeof disp[k] === 'boolean', '表示設定 ' + k + ' が不正です。');
-    for (const k of ['distanceRingOpacity', 'bearingLineOpacity'])
-        check(between(disp[k], 0, 1), '不透明度 ' + k + ' は0〜1で指定してください。');
+    for (const k of ['referenceLineOpacity', 'distanceRingOpacity', 'bearingLineOpacity'])
+        if (disp[k] !== undefined)
+            check(between(disp[k], 0, 1), '不透明度 ' + k + ' は0〜1で指定してください。');
+    check(between(disp.distanceRingIntervalM, 25, 2000), '距離リング間隔は25〜2000mの範囲にしてください。');
+    check(typeof disp.bearingLineIntervalDeg === 'number' && [15, 30, 45, 60, 90, 120, 180].includes(disp.bearingLineIntervalDeg), '方位線間隔は15°刻みかつ360°を均等に分割する値にしてください。');
+    check(between(disp.magneticDeclinationDeg, -30, 30), '磁気偏角は-30〜+30°の範囲にしてください（東偏が正）。');
     // v0.1.4: Explicitly requested one-time bank angle update for EXISTING turn legs.
     // After updating engineVersion, future edits of bankDeg are preserved (not reset to 30).
     if (/^0\.1\.[0-3](?:-test)?$/.test(String(p.engineVersion))) {

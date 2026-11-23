@@ -5,7 +5,7 @@ import {chooseConnector} from './planning/connector.js';
 import {validateProject,parseProject,downloadProject} from './io/project.js';
 import {saveSnapshot,latestSnapshot} from './io/autosave.js';
 import {PlannerMap} from './ui/map.js';
-import {chartSvg,fmtAlt} from './ui/chart.js';
+import {chartSvg,fmtAlt,altitudeTimeSeries,fmtElapsed} from './ui/chart.js';
 import {openPrintReport} from './ui/print.js';
 import {checkpointTable} from './ui/checkpoints.js';
 import {heightInputText,FEET_PER_METER} from './ui/height-units.js';
@@ -25,7 +25,7 @@ class App {
      onPick:(type,lat,lon)=>{this.pick=null;this.map.setPick(null);this.edit(p=>{if(type==='departure'){p.departure.latDeg=lat;p.departure.lonDeg=lon;}else{p.landing.point.latDeg=lat;p.landing.point.lonDeg=lon;}});},
      onLegLength:(side,id,lengthM)=>this.edit(p=>{const l=(side==='departure'?p.departureLegs:p.arrivalLegs).find(v=>v.id===id);if(l?.type==='straight')l.lengthM=lengthM;}),
      onFinalLength:lengthM=>this.edit(p=>{p.landing.final.groundLengthM=lengthM;}),
-     onHandle:(end,lengthM)=>this.edit(p=>{if(p.connector){if(end==='start')p.connector.handleStartM=lengthM;else p.connector.handleEndM=lengthM;}}),
+     onHandle:(end,lengthM)=>this.edit(p=>{if(p.connector){p.connector.adjustmentMode='manual';if(end==='start')p.connector.handleStartM=lengthM;else p.connector.handleEndM=lengthM;}}),
      onSelectLeg:(id)=>{this.selected=this.selected===id?null:id;this.renderSidebar();this.map.redraw(this.project,this.plan,this.selected);this.updateCheckpointSelection();}
    });
    root.addEventListener('click',e=>{const btn=(e.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]');if(btn){e.preventDefault();this.handleAction(btn.dataset.action??'',btn.dataset);}});
@@ -69,7 +69,7 @@ class App {
      const base=`${group}.${i}`;
      return `<div class="glp-leg ${active?'glp-leg-active':''}"><div class="glp-leg-line"><button class="glp-leg-title" data-action="select-leg" data-id="${leg.id}" title="編集"><span class="glp-leg-symbol">${leg.type==='straight'?'━':'⤷'}</span><span>${i+1}. ${label(title)}</span></button><span class="glp-leg-buttons"><button title="上に移動" data-action="move-up" data-side="${side}" data-id="${leg.id}">↑</button><button title="下に移動" data-action="move-down" data-side="${side}" data-id="${leg.id}">↓</button><button title="削除" data-action="delete-leg" data-side="${side}" data-id="${leg.id}">×</button></span></div>
      ${active?`<div class="glp-leg-edit"><div class="glp-two">${this.select(base+'.guidance','風補正方式',modeOpts)}${this.control(base+'.speedOverrideMps','個別速度（空欄＝共通）','km/h','0.1',3.6)}</div>
-       ${leg.type==='straight'?`<div class="glp-two">${this.control(base+'.lengthM','直線距離','m')}${this.control(base+'.directionDeg','指定方位（空欄＝継承）','°')}</div>`:`<div class="glp-two">${this.select(base+'.direction','旋回方向',[['right','右'],['left','左']])}${this.control(base+'.angleDeg','旋回角','°')}</div><div class="glp-two">${this.control(base+'.bankDeg','バンク角','°')}</div>`}
+       ${leg.type==='straight'?`<div class="glp-two">${this.control(base+'.lengthM','直線距離','m')}${this.control(base+'.directionDeg','指定方位（空欄＝継承）','°')}</div>`:`<div class="glp-two">${this.select(base+'.direction','旋回方向',[['right','右'],['left','左']])}${this.control(base+'.angleDeg','旋回角（多周旋回可）','°')}</div><div class="glp-two">${this.control(base+'.bankDeg','バンク角','°')}</div>`}
        <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHTML(leg.checkpointLabel??'')}" data-path="${base}.checkpointLabel"></label></div>`:''}</div>`;
    }).join('');
    const adds=`<div class="glp-adds"><button class="glp-btn glp-btn-sub" data-action="add-straight" data-side="${side}">＋ 直線</button><button class="glp-btn glp-btn-sub" data-action="add-turn" data-side="${side}">＋ 旋回</button></div>`;
@@ -94,12 +94,12 @@ class App {
    <p class="glp-tip">新しいレグは最上流へ追加され、一覧は実際の飛行順です。</p></div>
    <div class="glp-panel"><h3><span class="glp-dot purple"></span>滑らか接続（5次Bezier）</h3>
    ${this.checkbox('display.showHandles','地図に制御ハンドルを表示')}
-   ${this.project.connector?`<div class="glp-two">${this.control('connector.handleStartM','始端ハンドル','m')}${this.control('connector.handleEndM','終端ハンドル','m')}</div>`:'<p class="glp-muted">接続がオフになっています。</p>'}
+   ${this.project.connector?this.select('connector.adjustmentMode','接続曲線の調整',[['auto','自動調整（標準）'],['manual','手動調整（ハンドル操作）']]):'<p class="glp-muted">接続がオフになっています。</p>'}
    <div class="glp-adds"><button class="glp-btn glp-btn-primary" data-action="optimize">曲線を自動調整</button><button class="glp-btn glp-btn-sub" data-action="toggle-connector">${this.project.connector?'接続を解除':'接続を作成'}</button></div><p class="glp-tip">接線と曲率を一致させます。大きいバンク角や風で不成立になる場合があります。</p></div>
-   <div class="glp-panel"><h3>地図・表示</h3>${this.checkbox('display.showDistanceRings','着陸点から距離リング')}${this.checkbox('display.showBearingLines','方位線')}${this.checkbox('display.showWindArrow','風向矢印')}${this.checkbox('display.showDownwindMargin','ダウンウィンド開始の高度余裕を表示')}${this.checkbox('display.showCheckpointAltitudes','各チェックポイント高度を地図に表示')}${this.opacityControl('display.distanceRingOpacity','距離リングの不透明度')}${this.opacityControl('display.bearingLineOpacity','方位線の不透明度')}</div>`;
+   <div class="glp-panel"><h3>地図・表示</h3>${this.checkbox('display.showDistanceRings','着陸点から距離リング')}${this.checkbox('display.showBearingLines','方位線')}${this.checkbox('display.showWindArrow','風向矢印')}${this.checkbox('display.showDownwindMargin','ダウンウィンド開始の高度余裕を表示')}${this.checkbox('display.showCheckpointAltitudes','各チェックポイント高度を地図に表示')}${this.opacityControl('display.referenceLineOpacity','補助線の不透明度')}<div class="glp-two">${this.control('display.distanceRingIntervalM','距離リング間隔','m','25')}${this.select('display.bearingLineIntervalDeg','方位線間隔',[['15','15°'],['30','30°'],['45','45°'],['60','60°'],['90','90°'],['120','120°'],['180','180°']])}</div>${this.control('display.magneticDeclinationDeg','磁気偏角（東偏＋／西偏−）','°','0.1')}<p class="glp-tip">磁気偏角は補助方位線のみへ反映。飛行計算・風向・滑走路方位は真方位基準です。</p></div>`;
   sidebarScroll.scrollTop=preservedScroll;
  }
- private renderToolbar(){(this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML=`<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.5</span></div></div><div class="glp-tool-group">
+ private renderToolbar(){(this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML=`<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.6</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHTML(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length?'disabled':''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length?'disabled':''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export">JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print">PDF印刷</button></div><div class="glp-save-state">● ${escapeHTML(this.status)}</div>`;}
  private renderResults(){const p=this.plan,unit=this.project.display.altitudeUnit;
@@ -107,14 +107,15 @@ class App {
  const connected=p.connector?.feasible&&downwind?.marginM!==undefined;
  const totalKm=(p.forwardAll.at(-1)?.sM??0)/1000;
  const gapM=p.connector?p.departure.end.h-p.connector.lossM-p.arrival.start.h:null;
- const m=`<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM,unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${totalKm<100?totalKm.toFixed(2):'—'} km</strong></div><div class="glp-stat"><small>接続高度差（参考）</small><strong>${p.connector?.feasible&&gapM!==null?fmtAlt(gapM,unit):'評価不可'}</strong></div><div class="glp-stat"><small>接続最大必要バンク</small><strong>${p.connector?p.connector.maxBankDeg.toFixed(1)+'°':'—'}</strong></div>`;
+ const flightTime=altitudeTimeSeries(p);
+ const m=`<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM,unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${Number.isFinite(totalKm)?totalKm.toFixed(2):'—'} km</strong></div><div class="glp-stat"><small>推定飛行時間${flightTime.timingProvisional?'（暫定）':''}</small><strong>${fmtElapsed(flightTime.durationS)}</strong></div><div class="glp-stat"><small>高度余裕</small><strong>${p.connector?.feasible&&gapM!==null?fmtAlt(gapM,unit):'評価不可'}</strong></div>`;
  (this.root.querySelector('.glp-chart') as HTMLElement).innerHTML=chartSvg(p,this.project);
  (this.root.querySelector('.glp-metrics') as HTMLElement).innerHTML=m;
  (this.root.querySelector('.glp-checkpoints') as HTMLElement).innerHTML=`<div class="glp-overview-top"><strong>チェックポイント高度</strong><small>滑空場基準高度（着陸標高を0とする相対高度）／MSL高度</small></div><div class="glp-tablewrap">${checkpointTable(p,this.project)}</div><p class="glp-tip">高度余裕は接続点での予想・必要高度の差です。着陸地点基準の高さではありません。</p>${downwind&&!connected?'<p class="glp-tip">ダウンウィンド開始の高度余裕は、接続条件が成立していないため評価不可です。</p>':''}`;
  const distinct=new Map<string,string>();for(const notice of p.notices)distinct.set(notice.code+notice.message,notice.message);
  const top=p.notices.filter(i=>i.level==='error');const warnings=p.notices.filter(i=>i.level==='warning');
  (this.root.querySelector('.glp-diagnostics') as HTMLElement).innerHTML=`<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length?'glp-status-bad':warnings.length?'glp-status-warn':'glp-status-note'}">${top.length?'不成立の条件あり':warnings.length?'警告あり':'近似モデル'}</span></div>
- ${this.notice?`<div class="glp-inline-message">${label(this.notice)}</div>`:''}<div class="glp-alerts">${[...distinct.values()].slice(0,12).map(t=>`<div class="glp-alert">${label(t)}</div>`).join('')||'<p>計算エラーは報告されていません。</p>'}</div>`;
+ <div class="glp-diagnostic-bank">Bezier接続最大必要バンク：<strong>${p.connector?p.connector.maxBankDeg.toFixed(1)+'°':'—'}</strong>（設定上限 ${this.project.maxBankDeg.toFixed(1)}°）</div>${this.notice?`<div class="glp-inline-message">${label(this.notice)}</div>`:''}<div class="glp-alerts">${[...distinct.values()].slice(0,12).map(t=>`<div class="glp-alert">${label(t)}</div>`).join('')||'<p>計算エラーは報告されていません。</p>'}</div>`;
  this.updateCheckpointSelection();
  }
  private updateCheckpointSelection(){
@@ -127,13 +128,28 @@ class App {
    if(!mapEl)throw new Error('地図が見つかりません');
    openPrintReport({project:this.project,plan:this.plan,mapEl,
      metricsHtml:(this.root.querySelector('.glp-metrics') as HTMLElement).innerHTML,
-     diagnosticsHtml:(this.root.querySelector('.glp-diagnostics') as HTMLElement).innerHTML,
+     diagnosticsHtml:(()=>{const diag=this.root.querySelector('.glp-diagnostics') as HTMLElement;return ['.glp-diagnostic-bank','.glp-inline-message','.glp-alerts'].map(sel=>diag.querySelector(sel)?.outerHTML??'').join('');})(),
      title:'Glider Landing Planner',engineVersion:ENGINE_VERSION});
  }
  private render(){this.renderToolbar();this.renderSidebar();this.renderResults();this.map.redraw(this.project,this.plan,this.selected);
  const bb=this.root.querySelectorAll<HTMLButtonElement>('.glp-map-actions button');bb.forEach(b=>b.classList.toggle('glp-active',b.dataset.action==='pick-'+this.pick));}
+ private optimizationSignature(p:ProjectV1):string{
+   return JSON.stringify({speed:p.defaultSpeedMps,bank:p.maxBankDeg,performance:p.performance,wind:p.wind,
+     departure:p.departure,landing:p.landing,departureLegs:p.departureLegs,arrivalLegs:p.arrivalLegs});
+ }
+ private recalculate(p:ProjectV1,previous:ProjectV1):PlanResult{
+   const preliminary=buildPlan(p);
+   if(!p.connector||p.connector.adjustmentMode!=='auto')return preliminary;
+   const modeChanged=previous.connector?.adjustmentMode!=='auto';
+   const shapeChanged=this.optimizationSignature(previous)!==this.optimizationSignature(p);
+   if(!modeChanged&&!shapeChanged)return preliminary;
+   const optimized=chooseConnector(preliminary.departure.end,preliminary.arrivalStart,p);
+   p.connector.handleStartM=optimized.handleStartM;
+   p.connector.handleEndM=optimized.handleEndM;
+   return buildPlan(p);
+ }
  private edit(mutate:(p:ProjectV1)=>void){this.editRevision++;const p=structuredClone(this.project),original=structuredClone(this.project);
- try{mutate(p);validateProject(p);const next=buildPlan(p);this.history.push(original);if(this.history.length>50)this.history.shift();this.future=[];this.project=p;this.plan=next;this.notice='';this.status='未保存';this.render();this.scheduleSave();}
+ try{mutate(p);validateProject(p);const next=this.recalculate(p,original);this.history.push(original);if(this.history.length>50)this.history.shift();this.future=[];this.project=p;this.plan=next;this.notice='';this.status='未保存';this.render();this.scheduleSave();}
  catch(e){this.notice='変更を適用できません: '+(e instanceof Error?e.message:String(e));this.renderResults();}}
  private scheduleSave(){if(this.saveTimer)window.clearTimeout(this.saveTimer);this.saveTimer=window.setTimeout(()=>{this.status='保存中…';this.renderToolbar();void saveSnapshot(this.project).then(()=>{this.status='自動保存済';this.renderToolbar();}).catch(()=>{this.status='自動保存失敗（JSONを保存してください）';this.renderToolbar();});},1000);}
  private handleChange(input:HTMLInputElement|HTMLSelectElement){const path=input.dataset.path;if(!path)return;
@@ -142,7 +158,8 @@ class App {
  else if(input instanceof HTMLInputElement&&(input.type==='number'||input.type==='range')){
    if(input.value.trim()===''){if(path.endsWith('speedOverrideMps')||path.endsWith('directionDeg'))value=null;else {this.notice='数値項目を空欄にはできません。';this.render();return;}}
    else{value=Number(input.value)/Number(input.dataset.scale??1);if(!Number.isFinite(value)){this.notice='数値が不正です。';this.render();return;}}
- }else value=input.value;
+ }else if(input instanceof HTMLSelectElement&&path==='display.bearingLineIntervalDeg')value=Number(input.value);
+ else value=input.value;
  this.edit(p=>{const keys=path.split('.');let target:any=p;for(let i=0;i<keys.length-1;i++)target=target[keys[i]];if(path.endsWith('checkpointLabel')&&!value)delete target[keys.at(-1)!];else target[keys.at(-1)!]=value;});
  }
  private handleAction(action:string,data:DOMStringMap){if(action==='fit'){this.map.fit(this.project,this.plan);return;}
@@ -165,8 +182,8 @@ class App {
  if(action==='preset-left'||action==='preset-right'){
  if(this.project.arrivalLegs.length&&!window.confirm('着陸側レグをプリセットで置き換えますか？'))return;
  this.edit(p=>{p.arrivalLegs=trafficPreset(action==='preset-left'?'left':'right');});return;}
- if(action==='toggle-connector'){this.edit(p=>{p.connector=p.connector?null:{type:'bezier_connector',handleStartM:Math.max(20,Math.hypot(this.plan.arrivalStart.e-this.plan.departure.end.e,this.plan.arrivalStart.n-this.plan.departure.end.n)*.35),handleEndM:Math.max(20,Math.hypot(this.plan.arrivalStart.e-this.plan.departure.end.e,this.plan.arrivalStart.n-this.plan.departure.end.n)*.35),curvaturePolicy:'match-neighbors'};});return;}
- if(action==='optimize'){const result=chooseConnector(this.plan.departure.end,this.plan.arrivalStart,this.project);this.edit(p=>{p.connector={type:'bezier_connector',handleStartM:result.handleStartM,handleEndM:result.handleEndM,curvaturePolicy:'match-neighbors'};});return;}
+ if(action==='toggle-connector'){this.edit(p=>{p.connector=p.connector?null:{type:'bezier_connector',handleStartM:Math.max(20,Math.hypot(this.plan.arrivalStart.e-this.plan.departure.end.e,this.plan.arrivalStart.n-this.plan.departure.end.n)*.35),handleEndM:Math.max(20,Math.hypot(this.plan.arrivalStart.e-this.plan.departure.end.e,this.plan.arrivalStart.n-this.plan.departure.end.n)*.35),curvaturePolicy:'match-neighbors',adjustmentMode:'auto'};});return;}
+ if(action==='optimize'){const result=chooseConnector(this.plan.departure.end,this.plan.arrivalStart,this.project);this.edit(p=>{p.connector={type:'bezier_connector',handleStartM:result.handleStartM,handleEndM:result.handleEndM,curvaturePolicy:'match-neighbors',adjustmentMode:'auto'};});return;}
  }
  private async doImport(input:HTMLInputElement){const file=input.files?.[0];if(!file)return;
  try{if(file.size>2_000_000)throw Error('ファイルサイズ上限は2MBです。');const p=parseProject(await file.text());

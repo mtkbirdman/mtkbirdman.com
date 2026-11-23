@@ -38,3 +38,5 @@ export class LocalFrame {
         lat = Math.atan2(z, p * (1 - e2 * n0 / (n0 + h)));
     } return { latDeg: deg(lat), lonDeg: deg(lon) }; }
 }
+/** East-positive magnetic declination; flight-state headings are always true. */
+export function magneticToTrue(magneticDeg, eastDeclinationDeg) { return norm(magneticDeg + eastDeclinationDeg); }

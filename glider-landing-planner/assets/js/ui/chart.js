@@ -20,7 +20,11 @@ export function altitudeTimeSeries(plan) {
     const arrivalEnd = arrival.at(-1)?.tS ?? joinedTime;
     const finalStartRaw = plan.finalTarget[0]?.tS ?? 0;
     arrival.push(...plan.finalTarget.slice(1).filter(finite).map(s => ({ ...s, tS: arrivalEnd + s.tS - finalStartRaw })));
-    const durationS = Math.max(0, ...departure.map(s => s.tS), ...arrival.map(s => s.tS));
+    let durationS = 0;
+    for (const s of departure)
+        durationS = Math.max(durationS, s.tS);
+    for (const s of arrival)
+        durationS = Math.max(durationS, s.tS);
     return { departure, arrival, durationS, timingProvisional: !plan.connector || !plan.connector.feasible };
 }
 export function chartSvg(plan, project, width = 780, height = 200) {
@@ -30,7 +34,13 @@ export function chartSvg(plan, project, width = 780, height = 200) {
     if (!all.length)
         return '<svg viewBox="0 0 780 200"></svg>';
     const left = 52, right = 16, top = 23, bottom = 35;
-    const ymin = Math.min(...all.map(v => v.h)), ymax = Math.max(...all.map(v => v.h));
+    let ymin = Infinity, ymax = -Infinity;
+    for (const v of all) {
+        if (v.h < ymin)
+            ymin = v.h;
+        if (v.h > ymax)
+            ymax = v.h;
+    }
     const ypad = Math.max(20, (ymax - ymin) * .14), y0 = ymin - ypad, y1 = ymax + ypad;
     const px = (t) => left + Math.max(0, t) / Math.max(1, durationS) * (width - left - right);
     const py = (y) => top + (y1 - y) / Math.max(1, y1 - y0) * (height - top - bottom);

@@ -49,7 +49,7 @@ test('v0.1.4 legacy saved JSON still imports and retains original MSL fields',()
  const p=createDemo();p.engineVersion='0.1.2-test';p.departure.altitudeMSLM=520.1;
  p.landing.elevationMSLM=35.5;p.display.altitudeUnit='m';
  const imported=parseProject(serializeProject(p));
- assert.equal(imported.engineVersion,'0.1.5-test');
+ assert.equal(imported.engineVersion,'0.1.6-test');
  near(imported.departure.altitudeMSLM,520.1);near(imported.landing.elevationMSLM,35.5);
  assert.equal(imported.display.altitudeUnit,'m');
 });

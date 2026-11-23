@@ -1,5 +1,8 @@
 import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add } from '../geometry/geo.js';
 export const GRAVITY = 9.80665;
+/** No fixed angle limit in the project format; bound computation instead. */
+export const TURN_STEP_BUDGET = 50000;
+export const TURN_MAX_STEP_DEG = 2;
 export function windVector(w) { return mul(headingVector(w.fromDeg), -w.speedMps); }
 export function airGround(headingDeg, speedMps, wind) {
     const w = windVector(wind), v = add(mul(headingVector(headingDeg), speedMps), w);
@@ -73,6 +76,13 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group) {
         }
         return { samples, end: current, notices };
     }
+    // Long thermalling turns can exceed any number of revolutions. Reject only runs whose
+    // required integration resolution would exceed the browser CPU/memory budget.
+    const stepDeg = Math.max(0.25, leg.angleDeg / TURN_STEP_BUDGET);
+    if (stepDeg > TURN_MAX_STEP_DEG) {
+        notices.push({ code: 'TURN_COMPLEXITY_LIMIT', level: 'error', message: '旋回角が計算可能なステップ数を超えました。レグを分割してください。', legId: leg.id });
+        return { samples: [makeSample(current, leg.id, group)], end: current, notices };
+    }
     const bankSigned = leg.bankDeg * (leg.direction === 'right' ? 1 : -1);
     const omega = GRAVITY * Math.tan(rad(bankSigned)) / V;
     if (!Number.isFinite(omega) || Math.abs(omega) < 1e-7) {
@@ -82,7 +92,7 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group) {
     current = { ...current, bankDeg: bankSigned };
     const samples = [makeSample(current, leg.id, group)];
     if (leg.guidance === 'heading') {
-        const steps = Math.max(1, Math.ceil(leg.angleDeg / 0.25));
+        const steps = Math.max(1, Math.ceil(leg.angleDeg / stepDeg));
         const dt = timeDirection * rad(leg.angleDeg) / Math.abs(omega) / steps;
         for (let i = 0; i < steps; i++) {
             current = advanceTurn(current, dt, bankSigned, ctx);
@@ -92,8 +102,8 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group) {
     else {
         const signWanted = (leg.direction === 'right' ? 1 : -1) * timeDirection;
         let turned = 0;
-        const stepDt = timeDirection * rad(0.25) / Math.abs(omega);
-        for (let i = 0; i < Math.ceil(1080 / 0.25); i++) {
+        const stepDt = timeDirection * rad(stepDeg) / Math.abs(omega);
+        for (let i = 0; i < TURN_STEP_BUDGET + 1; i++) {
             const next = advanceTurn(current, stepDt, bankSigned, ctx);
             if (next.groundMps < 0.05) {
                 notices.push({ code: 'TURN_TARGET_NOT_REACHED', level: 'error', message: '対地速度がほぼゼロになりました。', legId: leg.id });
@@ -125,7 +135,7 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group) {
             samples.push(makeSample(current, leg.id, group));
         }
         if (turned < leg.angleDeg - 0.02) {
-            notices.push({ code: 'TURN_TARGET_NOT_REACHED', level: 'error', message: '指定した対地航跡角の変化量に到達しませんでした。', legId: leg.id });
+            notices.push({ code: 'TURN_TARGET_NOT_REACHED', level: 'error', message: '指定した対地航跡角の変化量に到達しませんでした（風条件または計算ステップ数の制約）。', legId: leg.id });
         }
     }
     if (ctx.performance.model === 'fixed-ld')
@@ -137,10 +147,16 @@ export function simulatePath(start, legs, ctx, group, reverse = false) {
     const notices = [];
     const segments = [];
     const order = reverse ? [...legs].reverse() : legs;
+    let sampleBudget = 0;
     for (const leg of order) {
+        if (sampleBudget >= 120000) {
+            notices.push({ code: 'PATH_COMPLEXITY_LIMIT', level: 'error', message: '経路の計算点数が上限に達しました。レグ数や旋回角を減らしてください。' });
+            break;
+        }
         const begin = { ...current };
         const r = simulateLeg(current, leg, ctx, reverse ? -1 : 1, group);
         current = r.end;
+        sampleBudget += r.samples.length;
         notices.push(...r.notices);
         if (reverse)
             segments.unshift({ leg, samples: [...r.samples].reverse(), start: { ...current }, end: begin });

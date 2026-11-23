@@ -48,7 +48,7 @@ test('v0.1.3 selected leg is highlighted and a path click selects its leg',async
   polyline(_pts,opts){return layer('path',opts);},circle(_pt,opts){return layer('circle',opts);},circleMarker(_pt,opts){return layer('circle',opts);},marker(_pt,opts){return layer('marker',opts);},divIcon(x){return x;}
  };
  const {PlannerMap}=await import('../../assets/js/ui/map.js');const project=createDemo();project.arrivalLegs=trafficPreset('left');
- project.display.distanceRingOpacity=.2;project.display.bearingLineOpacity=.8;
+ project.display.referenceLineOpacity=.2;
  project.display.showCheckpointAltitudes=true;project.display.showDownwindMargin=true;
  const plan=buildPlan(project);
  const map=new PlannerMap({innerHTML:''},{onPick(){},onLegLength(){},onFinalLength(){},onHandle(){},onSelectLeg(id){selected=id;}});
@@ -58,8 +58,8 @@ test('v0.1.3 selected leg is highlighted and a path click selects its leg',async
  const base=paths.find(p=>p.options.color==='#2563eb');assert.ok(base?.handlers.click);
  base.handlers.click();assert.equal(selected,project.departureLegs[0].id);
  assert.equal(base.options.smoothFactor,0,'Leaflet simplification disabled for sampled arcs');
- assert.equal(circles.filter(c=>c.options.radius&&c.options.opacity===.2).length,4);
- assert.equal(paths.filter(p=>p.options.color==='#94a3b8'&&p.options.opacity===.8).length,8);
+ assert.equal(circles.filter(c=>c.options.radius&&c.options.opacity===.2).length,8);
+ assert.equal(paths.filter(p=>p.options.color==='#94a3b8'&&p.options.opacity===.2).length,8);
  assert.ok(circles.some(c=>String(c.tooltipContent).includes('高度余裕')));
  assert.ok(circles.some(c=>String(c.tooltipContent).includes('glp-cp-height')));
  assert.ok(circles.some(c=>/^<div class=\"glp-map-cp-content\">/.test(String(c.tooltipContent))));

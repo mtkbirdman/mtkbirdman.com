@@ -51,8 +51,9 @@ test('T21 legacy v0.1.1 JSON migrates only missing display fields and downwind I
  delete old.arrivalLegs[0].checkpointKind;
  const parsed=parseProject(JSON.stringify(old));
  assert.equal(parsed.schemaVersion,'1.0');assert.equal(parsed.display.showDownwindMargin,true);
- assert.equal(parsed.display.showCheckpointAltitudes,false);near(parsed.display.distanceRingOpacity,0.5);
- near(parsed.display.bearingLineOpacity,0.5);assert.equal(parsed.arrivalLegs[0].checkpointKind,'downwind-start');
+ assert.equal(parsed.display.showCheckpointAltitudes,false);near(parsed.display.referenceLineOpacity,0.5);
+ assert.equal(parsed.display.distanceRingIntervalM,250);assert.equal(parsed.display.bearingLineIntervalDeg,45);
+ near(parsed.display.referenceLineOpacity,0.5);assert.equal(parsed.arrivalLegs[0].checkpointKind,'downwind-start');
  parsed.arrivalLegs[0].checkpointLabel='Downwind entry';
  const again=parseProject(serializeProject(parsed));
  assert.equal(buildPlan(again).checkpoints.find(c=>c.checkpointKind==='downwind-start').label,'Downwind entry');

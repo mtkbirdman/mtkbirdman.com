@@ -89,3 +89,6 @@
 .glp-checkpoints tr[data-leg-id].glp-checkpoint-active td{background:#fff1d6!important;border-top:1px solid #f59e0b!important;border-bottom:1px solid #f59e0b!important;color:#7c3d00!important;font-weight:750!important}
 .glp-checkpoints .glp-table tr[data-leg-id]{transition:background .12s ease}
 @media(min-width:761px){.glp-app-body{align-items:stretch}.glp-sidebar-scroll:focus-within{scrollbar-color:#94a3b8 #f1f5f9}}
+
+/* v0.1.6: keep the required connector bank with the diagnostic section. */
+.glp-diagnostic-bank{margin:8px 0 10px;padding:9px 11px;background:#f1f5fa;border-left:3px solid #64748b;color:#334155;font-size:12px}

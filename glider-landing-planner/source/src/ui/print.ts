@@ -41,7 +41,7 @@ export function printableMapHtml(mapEl:HTMLElement):{html:string;width:number;he
  cloned.style.transformOrigin='top left';
  cloned.style.position='relative';
  return {
-   html:`<div class="glp-report-map-frame" style="height:${renderedHeight}px"><div class="glp-report-map-viewport">${cloned.outerHTML}</div></div>`,
+   html:`<div class="glp-report-map-frame" style="width:${Math.ceil(width*scale)}px;max-width:100%;height:${renderedHeight}px"><div class="glp-report-map-viewport">${cloned.outerHTML}</div></div>`,
    width,height,tileCount
  };
 }
@@ -66,11 +66,12 @@ export function reportHtml(req:PrintRequest):string{
   ['目標ファイナルパス角',`${p.landing.final.pathAngleDeg}°`],
   ['直線ファイナル長',`${num(p.landing.final.groundLengthM,0)} m`],
   ['滑走路真方位',`${p.landing.runwayTrackDeg}°`],
+  ['磁気偏角（東偏＋）',`${p.display.magneticDeclinationDeg}°`],
   ['高度表示単位',unit]
  ];
  const conditions=attrs.map(([key,value])=>`<div class="glp-report-data-item"><small>${esc(key)}</small><strong>${esc(value)}</strong></div>`).join('');
  const leafletCss=(document.querySelector<HTMLLinkElement>('link[href*="leaflet.css"]')?.href??'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
- const printCss=new URL('../../css/print.css',import.meta.url).href;
+ const printCss=new URL('../../css/print.css',import.meta.url).href+'?ver=0.1.6';
  const time=new Date().toLocaleString('ja-JP');
  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(p.name)} - ${esc(title)} PDF印刷</title><link rel="stylesheet" href="${esc(leafletCss)}"><link rel="stylesheet" href="${esc(printCss)}"></head>
  <body class="glp-report"><div class="glp-report-screen-toolbar"><span>印刷専用プレビュー｜地図のタイルが読み込まれたら「印刷 / PDF保存」を選択してください。</span><button type="button" onclick="window.print()">印刷 / PDF保存</button></div>

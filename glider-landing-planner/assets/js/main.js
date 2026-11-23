@@ -4,7 +4,7 @@ import { chooseConnector } from './planning/connector.js';
 import { validateProject, parseProject, downloadProject } from './io/project.js';
 import { saveSnapshot, latestSnapshot } from './io/autosave.js';
 import { PlannerMap } from './ui/map.js';
-import { chartSvg, fmtAlt } from './ui/chart.js';
+import { chartSvg, fmtAlt, altitudeTimeSeries, fmtElapsed } from './ui/chart.js';
 import { openPrintReport } from './ui/print.js';
 import { checkpointTable } from './ui/checkpoints.js';
 import { heightInputText, FEET_PER_METER } from './ui/height-units.js';
@@ -42,6 +42,7 @@ class App {
                 l.lengthM = lengthM; }),
             onFinalLength: lengthM => this.edit(p => { p.landing.final.groundLengthM = lengthM; }),
             onHandle: (end, lengthM) => this.edit(p => { if (p.connector) {
+                p.connector.adjustmentMode = 'manual';
                 if (end === 'start')
                     p.connector.handleStartM = lengthM;
                 else
@@ -111,7 +112,7 @@ class App {
             const base = `${group}.${i}`;
             return `<div class="glp-leg ${active ? 'glp-leg-active' : ''}"><div class="glp-leg-line"><button class="glp-leg-title" data-action="select-leg" data-id="${leg.id}" title="編集"><span class="glp-leg-symbol">${leg.type === 'straight' ? '━' : '⤷'}</span><span>${i + 1}. ${label(title)}</span></button><span class="glp-leg-buttons"><button title="上に移動" data-action="move-up" data-side="${side}" data-id="${leg.id}">↑</button><button title="下に移動" data-action="move-down" data-side="${side}" data-id="${leg.id}">↓</button><button title="削除" data-action="delete-leg" data-side="${side}" data-id="${leg.id}">×</button></span></div>
      ${active ? `<div class="glp-leg-edit"><div class="glp-two">${this.select(base + '.guidance', '風補正方式', modeOpts)}${this.control(base + '.speedOverrideMps', '個別速度（空欄＝共通）', 'km/h', '0.1', 3.6)}</div>
-       ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', '指定方位（空欄＝継承）', '°')}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.angleDeg', '旋回角', '°')}</div><div class="glp-two">${this.control(base + '.bankDeg', 'バンク角', '°')}</div>`}
+       ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', '指定方位（空欄＝継承）', '°')}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.angleDeg', '旋回角（多周旋回可）', '°')}</div><div class="glp-two">${this.control(base + '.bankDeg', 'バンク角', '°')}</div>`}
        <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHTML(leg.checkpointLabel ?? '')}" data-path="${base}.checkpointLabel"></label></div>` : ''}</div>`;
         }).join('');
         const adds = `<div class="glp-adds"><button class="glp-btn glp-btn-sub" data-action="add-straight" data-side="${side}">＋ 直線</button><button class="glp-btn glp-btn-sub" data-action="add-turn" data-side="${side}">＋ 旋回</button></div>`;
@@ -136,13 +137,13 @@ class App {
    <p class="glp-tip">新しいレグは最上流へ追加され、一覧は実際の飛行順です。</p></div>
    <div class="glp-panel"><h3><span class="glp-dot purple"></span>滑らか接続（5次Bezier）</h3>
    ${this.checkbox('display.showHandles', '地図に制御ハンドルを表示')}
-   ${this.project.connector ? `<div class="glp-two">${this.control('connector.handleStartM', '始端ハンドル', 'm')}${this.control('connector.handleEndM', '終端ハンドル', 'm')}</div>` : '<p class="glp-muted">接続がオフになっています。</p>'}
+   ${this.project.connector ? this.select('connector.adjustmentMode', '接続曲線の調整', [['auto', '自動調整（標準）'], ['manual', '手動調整（ハンドル操作）']]) : '<p class="glp-muted">接続がオフになっています。</p>'}
    <div class="glp-adds"><button class="glp-btn glp-btn-primary" data-action="optimize">曲線を自動調整</button><button class="glp-btn glp-btn-sub" data-action="toggle-connector">${this.project.connector ? '接続を解除' : '接続を作成'}</button></div><p class="glp-tip">接線と曲率を一致させます。大きいバンク角や風で不成立になる場合があります。</p></div>
-   <div class="glp-panel"><h3>地図・表示</h3>${this.checkbox('display.showDistanceRings', '着陸点から距離リング')}${this.checkbox('display.showBearingLines', '方位線')}${this.checkbox('display.showWindArrow', '風向矢印')}${this.checkbox('display.showDownwindMargin', 'ダウンウィンド開始の高度余裕を表示')}${this.checkbox('display.showCheckpointAltitudes', '各チェックポイント高度を地図に表示')}${this.opacityControl('display.distanceRingOpacity', '距離リングの不透明度')}${this.opacityControl('display.bearingLineOpacity', '方位線の不透明度')}</div>`;
+   <div class="glp-panel"><h3>地図・表示</h3>${this.checkbox('display.showDistanceRings', '着陸点から距離リング')}${this.checkbox('display.showBearingLines', '方位線')}${this.checkbox('display.showWindArrow', '風向矢印')}${this.checkbox('display.showDownwindMargin', 'ダウンウィンド開始の高度余裕を表示')}${this.checkbox('display.showCheckpointAltitudes', '各チェックポイント高度を地図に表示')}${this.opacityControl('display.referenceLineOpacity', '補助線の不透明度')}<div class="glp-two">${this.control('display.distanceRingIntervalM', '距離リング間隔', 'm', '25')}${this.select('display.bearingLineIntervalDeg', '方位線間隔', [['15', '15°'], ['30', '30°'], ['45', '45°'], ['60', '60°'], ['90', '90°'], ['120', '120°'], ['180', '180°']])}</div>${this.control('display.magneticDeclinationDeg', '磁気偏角（東偏＋／西偏−）', '°', '0.1')}<p class="glp-tip">磁気偏角は補助方位線のみへ反映。飛行計算・風向・滑走路方位は真方位基準です。</p></div>`;
         sidebarScroll.scrollTop = preservedScroll;
     }
     renderToolbar() {
-        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.5</span></div></div><div class="glp-tool-group">
+        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.6</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHTML(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export">JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print">PDF印刷</button></div><div class="glp-save-state">● ${escapeHTML(this.status)}</div>`;
     }
@@ -152,7 +153,8 @@ class App {
         const connected = p.connector?.feasible && downwind?.marginM !== undefined;
         const totalKm = (p.forwardAll.at(-1)?.sM ?? 0) / 1000;
         const gapM = p.connector ? p.departure.end.h - p.connector.lossM - p.arrival.start.h : null;
-        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${totalKm < 100 ? totalKm.toFixed(2) : '—'} km</strong></div><div class="glp-stat"><small>接続高度差（参考）</small><strong>${p.connector?.feasible && gapM !== null ? fmtAlt(gapM, unit) : '評価不可'}</strong></div><div class="glp-stat"><small>接続最大必要バンク</small><strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong></div>`;
+        const flightTime = altitudeTimeSeries(p);
+        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${Number.isFinite(totalKm) ? totalKm.toFixed(2) : '—'} km</strong></div><div class="glp-stat"><small>推定飛行時間${flightTime.timingProvisional ? '（暫定）' : ''}</small><strong>${fmtElapsed(flightTime.durationS)}</strong></div><div class="glp-stat"><small>高度余裕</small><strong>${p.connector?.feasible && gapM !== null ? fmtAlt(gapM, unit) : '評価不可'}</strong></div>`;
         this.root.querySelector('.glp-chart').innerHTML = chartSvg(p, this.project);
         this.root.querySelector('.glp-metrics').innerHTML = m;
         this.root.querySelector('.glp-checkpoints').innerHTML = `<div class="glp-overview-top"><strong>チェックポイント高度</strong><small>滑空場基準高度（着陸標高を0とする相対高度）／MSL高度</small></div><div class="glp-tablewrap">${checkpointTable(p, this.project)}</div><p class="glp-tip">高度余裕は接続点での予想・必要高度の差です。着陸地点基準の高さではありません。</p>${downwind && !connected ? '<p class="glp-tip">ダウンウィンド開始の高度余裕は、接続条件が成立していないため評価不可です。</p>' : ''}`;
@@ -162,7 +164,7 @@ class App {
         const top = p.notices.filter(i => i.level === 'error');
         const warnings = p.notices.filter(i => i.level === 'warning');
         this.root.querySelector('.glp-diagnostics').innerHTML = `<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length ? 'glp-status-bad' : warnings.length ? 'glp-status-warn' : 'glp-status-note'}">${top.length ? '不成立の条件あり' : warnings.length ? '警告あり' : '近似モデル'}</span></div>
- ${this.notice ? `<div class="glp-inline-message">${label(this.notice)}</div>` : ''}<div class="glp-alerts">${[...distinct.values()].slice(0, 12).map(t => `<div class="glp-alert">${label(t)}</div>`).join('') || '<p>計算エラーは報告されていません。</p>'}</div>`;
+ <div class="glp-diagnostic-bank">Bezier接続最大必要バンク：<strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong>（設定上限 ${this.project.maxBankDeg.toFixed(1)}°）</div>${this.notice ? `<div class="glp-inline-message">${label(this.notice)}</div>` : ''}<div class="glp-alerts">${[...distinct.values()].slice(0, 12).map(t => `<div class="glp-alert">${label(t)}</div>`).join('') || '<p>計算エラーは報告されていません。</p>'}</div>`;
         this.updateCheckpointSelection();
     }
     updateCheckpointSelection() {
@@ -176,7 +178,7 @@ class App {
             throw new Error('地図が見つかりません');
         openPrintReport({ project: this.project, plan: this.plan, mapEl,
             metricsHtml: this.root.querySelector('.glp-metrics').innerHTML,
-            diagnosticsHtml: this.root.querySelector('.glp-diagnostics').innerHTML,
+            diagnosticsHtml: (() => { const diag = this.root.querySelector('.glp-diagnostics'); return ['.glp-diagnostic-bank', '.glp-inline-message', '.glp-alerts'].map(sel => diag.querySelector(sel)?.outerHTML ?? '').join(''); })(),
             title: 'Glider Landing Planner', engineVersion: ENGINE_VERSION });
     }
     render() {
@@ -187,13 +189,30 @@ class App {
         const bb = this.root.querySelectorAll('.glp-map-actions button');
         bb.forEach(b => b.classList.toggle('glp-active', b.dataset.action === 'pick-' + this.pick));
     }
+    optimizationSignature(p) {
+        return JSON.stringify({ speed: p.defaultSpeedMps, bank: p.maxBankDeg, performance: p.performance, wind: p.wind,
+            departure: p.departure, landing: p.landing, departureLegs: p.departureLegs, arrivalLegs: p.arrivalLegs });
+    }
+    recalculate(p, previous) {
+        const preliminary = buildPlan(p);
+        if (!p.connector || p.connector.adjustmentMode !== 'auto')
+            return preliminary;
+        const modeChanged = previous.connector?.adjustmentMode !== 'auto';
+        const shapeChanged = this.optimizationSignature(previous) !== this.optimizationSignature(p);
+        if (!modeChanged && !shapeChanged)
+            return preliminary;
+        const optimized = chooseConnector(preliminary.departure.end, preliminary.arrivalStart, p);
+        p.connector.handleStartM = optimized.handleStartM;
+        p.connector.handleEndM = optimized.handleEndM;
+        return buildPlan(p);
+    }
     edit(mutate) {
         this.editRevision++;
         const p = structuredClone(this.project), original = structuredClone(this.project);
         try {
             mutate(p);
             validateProject(p);
-            const next = buildPlan(p);
+            const next = this.recalculate(p, original);
             this.history.push(original);
             if (this.history.length > 50)
                 this.history.shift();
@@ -238,6 +257,8 @@ class App {
                 }
             }
         }
+        else if (input instanceof HTMLSelectElement && path === 'display.bearingLineIntervalDeg')
+            value = Number(input.value);
         else
             value = input.value;
         this.edit(p => { const keys = path.split('.'); let target = p; for (let i = 0; i < keys.length - 1; i++)
@@ -362,12 +383,12 @@ class App {
             return;
         }
         if (action === 'toggle-connector') {
-            this.edit(p => { p.connector = p.connector ? null : { type: 'bezier_connector', handleStartM: Math.max(20, Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n) * .35), handleEndM: Math.max(20, Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n) * .35), curvaturePolicy: 'match-neighbors' }; });
+            this.edit(p => { p.connector = p.connector ? null : { type: 'bezier_connector', handleStartM: Math.max(20, Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n) * .35), handleEndM: Math.max(20, Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n) * .35), curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto' }; });
             return;
         }
         if (action === 'optimize') {
             const result = chooseConnector(this.plan.departure.end, this.plan.arrivalStart, this.project);
-            this.edit(p => { p.connector = { type: 'bezier_connector', handleStartM: result.handleStartM, handleEndM: result.handleEndM, curvaturePolicy: 'match-neighbors' }; });
+            this.edit(p => { p.connector = { type: 'bezier_connector', handleStartM: result.handleStartM, handleEndM: result.handleEndM, curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto' }; });
             return;
         }
     }

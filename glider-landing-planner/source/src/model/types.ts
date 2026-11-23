@@ -12,8 +12,8 @@ export interface StraightLeg extends LegBase {type:'straight';lengthM:number}
 export interface TurnLeg extends LegBase {type:'turn';direction:Direction;angleDeg:number;bankDeg:number}
 export type FlightLeg = StraightLeg|TurnLeg;
 export interface LandingConfig {point:GeoPoint;elevationMSLM:number;runwayTrackDeg:number;final:{pathAngleDeg:number;groundLengthM:number}}
-export interface BezierConnector {type:'bezier_connector';handleStartM:number;handleEndM:number;curvaturePolicy:'match-neighbors'}
-export interface DisplayConfig {altitudeUnit:'m'|'ft';showDistanceRings:boolean;showBearingLines:boolean;showWindArrow:boolean;showHandles:boolean;showDownwindMargin:boolean;showCheckpointAltitudes:boolean;distanceRingOpacity:number;bearingLineOpacity:number}
+export interface BezierConnector {type:'bezier_connector';handleStartM:number;handleEndM:number;curvaturePolicy:'match-neighbors';adjustmentMode?:'auto'|'manual'}
+export interface DisplayConfig {altitudeUnit:'m'|'ft';showDistanceRings:boolean;showBearingLines:boolean;showWindArrow:boolean;showHandles:boolean;showDownwindMargin:boolean;showCheckpointAltitudes:boolean;referenceLineOpacity:number;distanceRingIntervalM:number;bearingLineIntervalDeg:number;magneticDeclinationDeg:number;distanceRingOpacity?:number;bearingLineOpacity?:number}
 export interface ProjectV1 {schemaVersion:'1.0';engineVersion:string;projectId:string;name:string;defaultSpeedMps:number;maxBankDeg:number;performance:PerformanceConfig;wind:WindConfig;departure:FlightAnchor;landing:LandingConfig;departureLegs:FlightLeg[];arrivalLegs:FlightLeg[];connector:BezierConnector|null;display:DisplayConfig}
 export interface Sample {e:number;n:number;h:number;headingDeg:number;trackDeg:number;bankDeg:number;speedMps:number;groundMps:number;tS:number;sM:number; segmentId:string;group:'departure'|'arrival'|'connector'|'final'}
 export interface State extends Omit<Sample,'segmentId'|'group'> {}
