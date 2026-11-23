@@ -1,4 +1,5 @@
 import type {ProjectV1,FlightLeg} from '../model/types.js';
+import {ENGINE_VERSION} from '../model/defaults.js';
 const between=(n:unknown,min:number,max:number)=>typeof n==='number'&&Number.isFinite(n)&&n>=min&&n<=max;
 const obj=(v:unknown):Record<string,unknown>=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('オブジェクトが必要です。');return v as Record<string,unknown>};
 function check(ok:boolean,msg:string){if(!ok)throw Error(msg);}
@@ -44,6 +45,15 @@ export function validateProject(input:unknown):ProjectV1 {
  for(const [k,v] of Object.entries(defaults))if(disp[k]===undefined)disp[k]=v;
  for(const k of ['showDownwindMargin','showCheckpointAltitudes'])check(typeof disp[k]==='boolean','表示設定 '+k+' が不正です。');
  for(const k of ['distanceRingOpacity','bearingLineOpacity'])check(between(disp[k],0,1),'不透明度 '+k+' は0〜1で指定してください。');
+ // v0.1.4: Explicitly requested one-time bank angle update for EXISTING turn legs.
+ // After updating engineVersion, future edits of bankDeg are preserved (not reset to 30).
+ if(/^0\.1\.[0-3](?:-test)?$/.test(String(p.engineVersion))){
+   for(const leg of [...(p.departureLegs as FlightLeg[]),...(p.arrivalLegs as FlightLeg[])]){
+     if(leg.type==='turn')leg.bankDeg=30;
+   }
+   if(p.name==='新規計画（架空の初期値）')p.name='新規計画';
+   p.engineVersion=ENGINE_VERSION;
+ }
  return input as ProjectV1;
 }
 export function parseProject(text:string):ProjectV1{if(text.length>2_000_000)throw Error('ファイルが大きすぎます（上限2MB）。');

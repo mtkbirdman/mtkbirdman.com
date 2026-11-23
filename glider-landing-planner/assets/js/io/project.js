@@ -1,3 +1,4 @@
+import { ENGINE_VERSION } from '../model/defaults.js';
 const between = (n, min, max) => typeof n === 'number' && Number.isFinite(n) && n >= min && n <= max;
 const obj = (v) => { if (!v || typeof v !== 'object' || Array.isArray(v))
     throw Error('オブジェクトが必要です。'); return v; };
@@ -74,6 +75,17 @@ export function validateProject(input) {
         check(typeof disp[k] === 'boolean', '表示設定 ' + k + ' が不正です。');
     for (const k of ['distanceRingOpacity', 'bearingLineOpacity'])
         check(between(disp[k], 0, 1), '不透明度 ' + k + ' は0〜1で指定してください。');
+    // v0.1.4: Explicitly requested one-time bank angle update for EXISTING turn legs.
+    // After updating engineVersion, future edits of bankDeg are preserved (not reset to 30).
+    if (/^0\.1\.[0-3](?:-test)?$/.test(String(p.engineVersion))) {
+        for (const leg of [...p.departureLegs, ...p.arrivalLegs]) {
+            if (leg.type === 'turn')
+                leg.bankDeg = 30;
+        }
+        if (p.name === '新規計画（架空の初期値）')
+            p.name = '新規計画';
+        p.engineVersion = ENGINE_VERSION;
+    }
     return input;
 }
 export function parseProject(text) {
