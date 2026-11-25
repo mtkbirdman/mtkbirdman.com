@@ -10,13 +10,13 @@ import {buildPlan} from '../../assets/js/planning/plan.js';
 import {parseProject,serializeProject} from '../../assets/js/io/project.js';
 const near=(a,b,tol=1e-6)=>assert.ok(Math.abs(a-b)<=tol,`${a} !~= ${b} tol=${tol}`);
 const start=(heading=0,V=20,wind={fromDeg:0,speedMps:0})=>{const g=airGround(heading,V,wind);return {e:0,n:0,h:1000,headingDeg:heading,trackDeg:g.track,bankDeg:0,speedMps:V,groundMps:g.speed,tS:0,sM:0};};
-const ctx=(wind={fromDeg:0,speedMps:0},performance={model:'quadratic-drag',quadratic:{bestLD:30,bestLDAtMps:20},polarTable:null})=>({speedMps:20,wind,performance});
+const ctx=(wind={fromDeg:0,speedMps:0},performance={bestLD:30,bestLDAtMps:20})=>({speedMps:20,wind,performance});
 const straight=(lengthM=1000,guidance='heading',directionDeg=null)=>({id:'st1',type:'straight',lengthM,guidance,directionDeg,speedOverrideMps:null});
 const turn=(angleDeg=90,guidance='heading')=>({id:'t1',type:'turn',direction:'right',angleDeg,bankDeg:30,guidance,directionDeg:null,speedOverrideMps:null});
 
 test('T01 ft/m and km/h transformations round-trip',()=>{near((432/0.3048)*0.3048,432,1e-12);near((82/3.6)*3.6,82,1e-12);});
 test('T02 ENU/WGS84 round trip and locality',()=>{const f=new LocalFrame({latDeg:35.40,lonDeg:136.70});for(const p of [{latDeg:35.401,lonDeg:136.703},{latDeg:35.39,lonDeg:136.69}]){const back=f.toGeo(f.toLocal(p));near(back.latDeg,p.latDeg,1e-8);near(back.lonDeg,p.lonDeg,1e-8);}});
-test('T03 1000m steady still air at model B best L/D loses 1000/30 m',()=>{const r=simulateLeg(start(),straight(),ctx(),1,'departure');near(1000-r.end.h,1000/30,1e-7);near(r.end.sM,1000,1e-7);});
+test('T03 1000m steady still air at best L/D loses 1000/30 m',()=>{const r=simulateLeg(start(),straight(),ctx(),1,'departure');near(1000-r.end.h,1000/30,1e-7);near(r.end.sM,1000,1e-7);});
 test('T04 90 degree turn matches analytic radius and duration',()=>{const V=20,bank=30,R=V*V/(GRAVITY*Math.tan(rad(bank)));const r=simulateLeg(start(0,V),turn(),ctx(),1,'departure');near(r.end.e,R,0.02);near(r.end.n,R,0.02);near(r.end.tS,(Math.PI/2)*V/(GRAVITY*Math.tan(rad(bank))),.002);});
 test('T05 360 degree turn closes in still air',()=>{const r=simulateLeg(start(),turn(360),ctx(),1,'departure');near(r.end.e,0,.02);near(r.end.n,0,.02);near(r.end.headingDeg,0,.0001);});
 test('T06 heading steady wind drift',()=>{const wind={fromDeg:270,speedMps:5},r=simulateLeg(start(0,20,wind),straight(),ctx(wind),1,'departure');near(r.end.e,1000*5/Math.hypot(5,20),.002);});
@@ -25,7 +25,7 @@ test('T08 strong crosswind track infeasible',()=>{assert.equal(headingForTrack(0
 test('T09 forward and reversed legs reconstruct start',()=>{const wind={fromDeg:240,speedMps:3};const first=straight(500,'heading',50);const second=turn(90);const state=start(50,20,wind);const f=simulatePath(state,[first,second],ctx(wind),'departure');const b=simulatePath(f.end,[first,second],ctx(wind),'arrival',true);near(b.start.e,state.e,.05);near(b.start.n,state.n,.05);near(b.start.h,state.h,1e-4);near(b.start.headingDeg,state.headingDeg,1e-4);});
 test('T10 5th-order Bezier endpoints and curvatures',()=>{const A={e:0,n:0},B={e:400,n:300},tA=headingVector(90),tB=headingVector(0),kA=.001,kB=-.002,cp=controlPoints(A,B,tA,tB,kA,kB,80,90);near(point(cp,0).e,A.e);near(point(cp,1).n,B.n);near(curvature(cp,0),kA,1e-12);near(curvature(cp,1),kB,1e-12);const d0=derivative(cp,0),d1=derivative(cp,1);near(courseOf(d0.e,d0.n),90,1e-9);near(courseOf(d1.e,d1.n),0,1e-9);});
 test('T11 Bezier length numerical convergence',()=>{const cp=controlPoints({e:0,n:0},{e:400,n:300},headingVector(90),headingVector(0),0,0,80,90);function length(n){let L=0,last=point(cp,0);for(let i=1;i<=n;i++){const q=point(cp,i/n);L+=magnitude(sub(q,last));last=q;}return L;}assert.ok(Math.abs(length(100)-length(1000))<.1);});
-test('T12 model B best L/D reference',()=>{const p={model:'quadratic-drag',quadratic:{bestLD:32,bestLDAtMps:24},polarTable:null};near(24/sinkRate(24,0,p),32,1e-10);assert.ok(sinkRate(24,30,p)>sinkRate(24,0,p));});
+test('T12 best L/D reference',()=>{const p={bestLD:32,bestLDAtMps:24};near(24/sinkRate(24,0,p),32,1e-10);assert.ok(sinkRate(24,30,p)>sinkRate(24,0,p));});
 test('T13 leg speed overrides and idealization notice',()=>{const l=straight();l.speedOverrideMps=30;const r=simulateLeg(start(),l,ctx(),1,'departure');near(r.end.speedMps,30);assert.ok(r.notices.some(i=>i.code==='SPEED_STEP_IDEALIZED'));});
 test('T14 downwind-only margin equals predicted minus required, for a feasible connector',()=>{
  const p=previouslyPlannedProject();p.arrivalLegs=trafficPreset('left');p.departureLegs=[];
@@ -45,25 +45,11 @@ test('ground-track 90 degree turn reaches desired ground track difference',()=>{
 test('connector passes endpoint geometric curvature conditions even when nonzero',()=>{const p=createDemo();p.departureLegs=[{...makeTurn('right',40),id:'dturn'}];p.arrivalLegs=trafficPreset('left');const plan=buildPlan(p),c=chooseConnector(plan.departure.end,plan.arrival.start,p);assert.ok(Number.isFinite(c.lengthM));assert.ok(c.points.length>20);});
 test('when disconnected, checkpoints still show independently but no fabricated margin',()=>{const p=createDemo();p.arrivalLegs=trafficPreset('right');p.connector=null;const r=buildPlan(p);assert.ok(r.checkpoints.length>=6);assert.equal(r.checkpoints.filter(c=>c.marginM!==undefined).length,0);assert.ok(r.notices.some(i=>i.code==='CONNECTOR_MISSING'));});
 
-test('T21 legacy v0.1.1 JSON migrates only missing display fields and downwind ID',()=>{
- const old=createDemo();old.arrivalLegs=trafficPreset('left');
- delete old.display.showDownwindMargin;delete old.display.showCheckpointAltitudes;
- delete old.display.distanceRingOpacity;delete old.display.bearingLineOpacity;
- delete old.arrivalLegs[0].checkpointKind;
- const parsed=parseProject(JSON.stringify(old));
- assert.equal(parsed.schemaVersion,'1.2');assert.equal(parsed.display.showDownwindMargin,true);
- assert.equal(parsed.display.showCheckpointAltitudes,false);near(parsed.display.referenceLineOpacity,0.5);
- assert.equal(parsed.display.distanceRingIntervalM,250);assert.equal(parsed.display.bearingLineIntervalDeg,45);
- near(parsed.display.referenceLineOpacity,0.5);assert.equal(parsed.arrivalLegs[0].checkpointKind,'downwind-start');
- parsed.arrivalLegs[0].checkpointLabel='Downwind entry';
- const again=parseProject(serializeProject(parsed));
- assert.equal(buildPlan(again).checkpoints.find(c=>c.checkpointKind==='downwind-start').label,'Downwind entry');
-});
 test('T22 opacity bounds and invalid checkpoint ID are rejected',()=>{
- const p=createDemo();p.display.distanceRingOpacity=1.5;
+ const p=createDemo();p.display.referenceLineOpacity=1.5;
  assert.throws(()=>parseProject(JSON.stringify(p)),/不透明度/);
- p.display.distanceRingOpacity=0;p.display.bearingLineOpacity=1;
- assert.deepEqual(parseProject(JSON.stringify(p)).display.bearingLineOpacity,1);
+ p.display.referenceLineOpacity=1;
+ assert.deepEqual(parseProject(JSON.stringify(p)).display.referenceLineOpacity,1);
  p.arrivalLegs=trafficPreset('left');p.arrivalLegs[0].checkpointKind='unknown';
  assert.throws(()=>parseProject(JSON.stringify(p)),/チェックポイント種別/);
 });

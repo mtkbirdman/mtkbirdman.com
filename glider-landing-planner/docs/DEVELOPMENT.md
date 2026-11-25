@@ -1,6 +1,6 @@
-# 開発者ガイド — Glider Landing Planner v0.1.16
+# 開発者ガイド — Glider Landing Planner v0.1.17
 
-**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v0.1.16ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
+**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v0.1.17ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
 
 ## 1. 全体像と動作環境
 
@@ -39,7 +39,7 @@ glider-landing-planner/
     │   ├── flight/            # 飛行運動・沈下率
     │   ├── planning/          # 計画統合・接続判定
     │   ├── ui/                # 地図・グラフ・表・印刷・表示変換
-    │   └── io/                # JSON検証・移行・IndexedDB
+    │   └── io/                # JSON検証・IndexedDB
     └── tests/*.test.mjs       # Node.jsの組込みテストランナー
 ```
 
@@ -54,16 +54,16 @@ glider-landing-planner/
 | 入力と編集・Undo/Redo | `main.ts`の`handleChange()`、`handleAction()` | `edit()`、`applyProject()` |
 | 計算全体・高度余裕・チェックポイント | `planning/plan.ts`の`buildPlan()` | `flight/core.ts`、`planning/connector.ts` |
 | 風・直線・旋回・実効旋回角 | `flight/core.ts`の`simulateLeg()` | `headingForTrack()`、`simulatePath()` |
-| 沈下モデルB/C | `flight/polar.ts`の`createSinkModel()` | `pchip()`、`model/types.ts` |
+| 沈下率計算 | `flight/sink.ts`の`createSinkModel()` | `PerformanceConfig`、`flight/core.ts` |
 | 5次Bezier・接続成立性 | `planning/connector.ts`の`evaluateConnector()` | `chooseConnector()`、`geometry/bezier.ts` |
 | 地図上の操作・描画 | `ui/map.ts`の`PlannerMap` | `main.ts`のコールバックと`render()` |
 | 高度グラフ・結果表 | `ui/chart.ts`、`ui/checkpoints.ts` | `main.ts`の`renderResults()` |
 | PDF用印刷プレビュー | `ui/print.ts`の`openPrintReport()` | `reportHtml()`、`assets/css/print.css` |
-| JSON保存・旧形式読込 | `io/project.ts`の`serializeProject()`、`loadProject()` | `validateProject()`、`parseProject()` |
+| JSON保存・読込 | `io/project.ts`の`serializeProject()`、`loadProject()` | `validateProject()`、`parseProject()` |
 | ブラウザ自動保存 | `io/autosave.ts`の`saveSnapshot()`、`latestSnapshot()` | `main.ts`の`scheduleSave()`、起動処理 |
 | WordPress統合・表示キャッシュ | `glider-landing-planner.php` | `source/version-assets.mjs` |
 
-中心データの`ProjectV1`は、`schemaVersion: '1.2'`、計画名、速度・風・性能、離脱／着陸条件、両側の`FlightLeg[]`、任意の`BezierConnector`、表示設定を保持します。`PlanResult`は計算の戻り値であり、`PathResult`・`ConnectionResult`・`Sample`・`Checkpoint`・`Notice`を含みます。高度は内部でm MSL、速度はm/s、水平位置は着陸地点を基準とする局所ENUのmです。
+中心データの`ProjectV1`は、`schemaVersion: '1.3'`、計画名、速度・風・性能（`performance.bestLD`、`performance.bestLDAtMps`）、離脱／着陸条件、両側の`FlightLeg[]`、任意の`BezierConnector`、表示設定を保持します。`PlanResult`は計算の戻り値であり、`PathResult`・`ConnectionResult`・`Sample`・`Checkpoint`・`Notice`を含みます。高度は内部でm MSL、速度はm/s、水平位置は着陸地点を基準とする局所ENUのmです。
 
 ## 4. 起動、状態更新、計算の入口
 
@@ -71,7 +71,7 @@ glider-landing-planner/
 
 `glider-landing-planner.php`がCSS・Leaflet・`assets/js/main.js`を登録し、`main.js`は各`.glp-app-root`に`new App(root)`を作成します。コンストラクターは`createDemo()`→`buildPlan()`で初期計画を生成し、ツールバー・サイドバー・結果・地図を描画します。その後、`latestSnapshot()`を非同期実行します。
 
-保存済みデータがあり、読込中に利用者編集が発生していなければ、**`loadProject()`で検証・移行後**に`buildPlan()`し、画面へ復元します。起動中の編集で`editRevision`が変われば遅れて到着した自動復元は適用しません。復元失敗は表示に通知し、保存データを暗黙に削除しません。
+保存済みデータがあり、読込中に利用者編集が発生していなければ、**`loadProject()`で検証後**に`buildPlan()`し、画面へ復元します。起動中の編集で`editRevision`が変われば遅れて到着した自動復元は適用しません。復元失敗は表示に通知し、保存データを暗黙に削除しません。
 
 ### 4.2 一つの編集が反映されるまで
 
@@ -105,18 +105,18 @@ glider-landing-planner/
 - **`ui/checkpoints.ts`：** MSL高度と「着陸標高との差」である滑空場基準高度を区別し、ダウンウィンド開始の高度余裕行を生成する。AGLではない。
 - **`ui/print.ts`：** 表示中のLeaflet DOM（画像タイル・SVG重ね描き）を複製して、別タブに独立した印刷HTMLを出力。地図範囲は印刷ボタンを押した時点の表示範囲。印刷は`window.print()`／ブラウザ側のPDF保存であり、サーバーPDF生成ではない。
 
-## 6. データの保存・検証・移行
+## 6. データの保存・検証
 
 | 処理 | 実装 | 要点 |
 |---|---|---|
-| 現行値の検証 | `validateProject(input)` | 入力を変異させず、スキーマ1.2・数値範囲・配列・IDを検査 |
-| 旧版読込・補完 | `loadProject(input)` | `structuredClone()`後に対応旧スキーマを補完し、最後に現行形式を検証 |
+| 現行値の検証 | `validateProject(input)` | 入力を変異させず、スキーマ1.3・数値範囲・配列・IDを検査 |
+| 計画読込 | `loadProject(input)` | `structuredClone()`後にスキーマ1.3を検証。旧形式の移行なし |
 | ファイル読込 | `parseProject(text)` | JSON構文解析、2,000,000文字上限、`loadProject()` |
 | ファイル書出し | `serializeProject()`→`downloadProject()` | 現行形式を整形JSONとしてダウンロード（`.glp.json`） |
 | 自動保存 | `saveSnapshot()` | IndexedDB `glp-autosave-v1`の`snapshots`へ保存、直近10件を保持 |
 | 自動復元 | `latestSnapshot()` | 最新スナップショットを返し、`App`側で検証・表示 |
 
-`loadProject()`はスキーマ1.0の**モデルBのみ**を1.1形式へ変換し、1.1の旋回へ入力方式を補って1.2形式へ移行します。旧モデルA（`fixed-ld`）は拒否します。表示設定の一部欠損項目、歴史的なダウンウィンド印、旧`engineVersion`によるバンク角移行を扱います。**スキーマ番号だけで移行の全挙動を判断しない**でください。保存データの仕様変更時は既存fixture・読込拒否・往復試験を追加してください。
+`loadProject()`はスキーマ1.3のみを受け付けます。性能設定の旧構造、旧スキーマ1.0〜1.2の移行・補完処理はありません。自動復元も同じ検証を使用し、旧形式の場合は通知して新規計画を維持します。既存IndexedDBのストア構造は変更せず、旧データの強制削除は行いません。
 
 ## 7. ビルドとテスト
 
@@ -131,53 +131,52 @@ npm run build:offline
 npm test
 ```
 
-`npm run build:offline`は`tsc -p tsconfig.json && node version-assets.mjs`を実行し、`../assets/js`にJSを生成して相対importへ`?v=0.1.16`を付加します。`npm test`は`pretest`で同じビルドを行った後、`node --experimental-default-type=module --test tests/*.test.mjs`を実行します。`npm run build:vite`は任意・将来用であり、**現行配布方式との互換性を確認せず本番アセットへ置き換えない**でください。
+`npm run build:offline`は`tsc -p tsconfig.json && node version-assets.mjs`を実行し、`../assets/js`にJSを生成して相対importへ`?v=0.1.17`を付加します。`npm test`は`pretest`で同じビルドを行った後、`node --test tests/*.test.mjs`を実行します。`npm run build:vite`は任意・将来用であり、**現行配布方式との互換性を確認せず本番アセットへ置き換えない**でください。
 
-この文書整備時の実行環境では、既存のTypeScriptコンパイラーとNode.js 22.16.0を用いて`npm test`を実行し、**161テスト成功・失敗0**を確認しました。`npm install`のネットワーク取得、WordPress実サイトでの操作、FFFTP転送、PDFの実ブラウザ印刷は確認していません。個々の環境では再実行が必要です。
+配布前に `npm test` を実行し、すべてのテストの成功を確認してください。v0.1.17の整備時にはNode.js 22.16.0、TypeScript 5.8.3で145件すべての成功を確認しました。WordPress実サイトでの操作、FFFTP転送、PDFの実ブラウザ印刷は別途確認が必要です。
 
 ### 7.2 テストの探し方
 
-`source/tests/`はNode.jsの組込みテストです。`engine.test.mjs`で風・直線・旋回・順逆計算・Bezier・高度余裕・JSON、`heights.test.mjs`と`chart.test.mjs`で高度・グラフ、`map-render.test.mjs`で地図描画、`v012-polar.test.mjs`でポーラー、`v013-turn-target.test.mjs`で方位指定、`v016-initial-flow.test.mjs`で新規画面と初回操作を検証します。その他の`v0xx-*.test.mjs`は既存挙動の回帰テストです。名前に旧バージョンが含まれても、現行実装への回帰確認として保持されています。
+`source/tests/`はNode.jsの組込みテストです。`engine.test.mjs`で風・直線・旋回・順逆計算・Bezier・高度余裕・JSON、`heights.test.mjs`と`chart.test.mjs`で高度・グラフ、`map-render.test.mjs`で地図描画、`sink.test.mjs`で沈下率の解析式と有限値検証、`schema.test.mjs`で保存形式・UI・旧形式拒否、`v013-turn-target.test.mjs`で方位指定、`v016-initial-flow.test.mjs`で新規画面と初回操作を検証します。その他の`v0xx-*.test.mjs`は既存挙動の回帰テストです。名前に旧バージョンが含まれても、現行実装への回帰確認として保持されています。
 
 テストの成功は**ブラウザE2Eの成功を意味しません**。特に公開画面のクリック／タップ、画面サイズ、CocoonのCSS競合、タイル取得、別タブ印刷を対象端末で確認してください。
 
 ## 8. WordPressへの導入・更新
 
-1. **既存計画をJSON保存**し、既存プラグインフォルダーもバックアップする。
+1. 既存プラグインフォルダーをバックアップする。旧形式の計画は1.3では読み込めないため、必要なら旧版でJSONを保存し、旧版と併せて保管する。
 2. `npm test`を実行してビルドと回帰テストを確認する。`glider-landing-planner.php`でプラグイン版数、`source/package.json`でパッケージ版数、`model/defaults.ts`の`ENGINE_VERSION`、`main.ts`の画面版数、`ui/print.ts`のアセットクエリを必要なリリース時に整合させる。
 3. 配布する`glider-landing-planner/`フォルダー内に`glider-landing-planner.php`と`assets/css/`、`assets/js/`があることを確認する。配布用ZIPの内側を二重の`glider-landing-planner/`にしない。
-4. FFFTPではZIPを**ローカルで展開**し、WordPressの`wp-content/plugins/glider-landing-planner/`にフォルダー内容をバイナリ転送する。WordPressサーバー上でTypeScriptをビルドする必要はない。`source/`や`docs/`を公開サーバーへ転送することは実行上必須ではない。
+4. FFFTPではZIPを**ローカルで展開**し、WordPressの`wp-content/plugins/glider-landing-planner/`にフォルダー内容をバイナリ転送する。WordPressサーバー上でTypeScriptをビルドする必要はない。v0.1.16からの更新では旧 `assets/js/flight/polar.js` を削除する（上書き転送では消えない）。`source/`や`docs/`を公開サーバーへ転送することは実行上必須ではない。
 5. WordPressでプラグインを有効化し、固定ページに**`[glider_landing_planner]`**を1個配置。既存ページを使う場合はショートコードを維持する。
 6. アプリ画面を再読込し、JS/CSSキャッシュを確認。ブラウザキャッシュ、WordPress／Cocoon／CDNのキャッシュが残れば必要に応じて消去する。
-7. 新規計画、左右場周、離脱側レグ追加、直線・旋回編集、保存→読込、古いJSON、印刷プレビューをPC／スマートフォンの対象環境でスモークテストする。
+7. 新規計画、左右場周、離脱側レグ追加、直線・旋回編集、JSON保存と読込、旧JSONの拒否、印刷プレビューをPC／スマートフォンの対象環境でスモークテストする。
 
 `glider-landing-planner.php`は入口の`assets/js/main.js`へWordPressの版数クエリを付けます。**相対ES Modulesのimportはブラウザが個別にキャッシュするため**、`source/version-assets.mjs`が内部importにも`?v=<package.jsonのversion>`を付与します。**ドキュメントだけの更新では不要な版数変更を行いません。** コード／アセットを変更して配布版を上げる際は、PHP・画面・JS相対import・印刷CSS・パッケージ等を整合させて再ビルドします。
 
-## 9. Gitでの文書更新・リリース運用
+## 9. Gitでのリリース運用
 
 この配布ZIP自体には`.git`ディレクトリがないため、**実際のリポジトリのブランチ名や最新コミットは確認できません**。以下はリポジトリのルートを`glider-landing-planner`とした例です。作業前に`git status`で未コミット変更を確認してください。
 
 ```powershell
 git status --short
-git switch -c docs/restructure-v0.1.16
-# 文書ファイルを配置してから
-git diff --check
-git diff -- README.md CHANGELOG.md docs/DEVELOPMENT.md docs/THEORY.md
-git add README.md CHANGELOG.md docs/DEVELOPMENT.md docs/THEORY.md docs/archive/implementation-spec-v1.0.md
-git add -u -- docs/implementation-spec-v1.0.md
+git switch -c release/v0.1.17
+# 変更ファイルを配置してから
+npm --prefix source test
+git add -A
+git diff --cached --check
 git diff --cached --stat
-git commit -m "docs: restructure user, developer and theory guides for v0.1.16"
+git commit -m "refactor!: simplify sink model and update defaults for v0.1.17"
 ```
 
-今回は**既存のアプリ版数v0.1.16に対応した文書のみ**を更新し、実行コードに機能変更を加えません。独立した新規リリースv0.1.17を採番する場合は、上記の版数整合・ビルド・テスト・WordPress側の確認を別途行ってください。
+旧形式との互換性を持たないリリースです。スキーマ・プラグイン・パッケージ・配布アセットの版数を整合させます。
 
 ## 10. リリース前チェック
 
 - [ ] 新規計画が**離脱側0件・着陸側0件・接続なし**で始まり、方向ガイドが計算に入らない。
 - [ ] 着陸側最初のレグ追加・左右場周で自動接続し、着陸側0件に戻せば接続を外す。
 - [ ] レグ編集、機首方位指定／対地航跡指定、旋回角指定／目標方位指定、多周旋回が既存テストで維持される。
-- [ ] モデルB/Cの沈下率、補間範囲外、必要高度と予想高度、診断・評価不可が維持される。
-- [ ] 既存JSON／IndexedDB・スキーマ移行・旧モデルA拒否・Undo/Redoが維持される。
+- [ ] 簡易抗力式の沈下率、必要高度と予想高度、診断・評価不可が維持される。
+- [ ] スキーマ1.3のJSON／IndexedDB復元、旧形式の拒否、Undo/Redoを確認する。
 - [ ] TypeScriptソース変更時は`assets/js`を再生成し、相対importの版数が揃っている。
 - [ ] `npm test`が成功し、`git diff --check`に問題がない。
 - [ ] WordPress実機の地図／パネル／PDF・キャッシュを確認する（**自動テストで代替しない**）。

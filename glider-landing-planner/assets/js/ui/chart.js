@@ -1,4 +1,4 @@
-import { heightForDisplay } from './height-units.js?v=0.1.16';
+import { heightForDisplay } from './height-units.js?v=0.1.17';
 export const fmtAlt = (m, u) => `${Math.round(heightForDisplay(m, u)).toLocaleString('ja-JP')} ${u}`;
 export const fmtElapsed = (seconds) => {
     const s = Math.max(0, Math.round(seconds));
@@ -25,7 +25,7 @@ export function altitudeTimeSeries(plan) {
         durationS = Math.max(durationS, s.tS);
     for (const s of arrival)
         durationS = Math.max(durationS, s.tS);
-    // Time and geometry can remain evaluable even when the polar gives no altitude.
+    // Time and geometry can remain evaluable even when altitude calculation is invalid.
     for (const s of plan.forwardAll)
         if (Number.isFinite(s.tS))
             durationS = Math.max(durationS, s.tS);

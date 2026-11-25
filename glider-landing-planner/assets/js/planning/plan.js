@@ -1,7 +1,7 @@
-import { LocalFrame, headingVector, rad } from '../geometry/geo.js?v=0.1.16';
-import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.16';
-import { evaluateConnector } from './connector.js?v=0.1.16';
-import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.16';
+import { LocalFrame, headingVector, rad } from '../geometry/geo.js?v=0.1.17';
+import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.17';
+import { evaluateConnector } from './connector.js?v=0.1.17';
+import { createSinkModel } from '../flight/sink.js?v=0.1.17';
 export function buildPlan(project) {
     const frame = new LocalFrame(project.landing.point), lp = frame.toLocal(project.landing.point);
     const dep = frame.toLocal(project.departure);
@@ -46,15 +46,10 @@ export function buildPlan(project) {
     const speedFinal = project.defaultSpeedMps;
     const finalSol = headingForTrack(project.landing.runwayTrackDeg, speedFinal, project.wind);
     const vg = finalSol?.groundMps ?? airGround(project.landing.runwayTrackDeg, speedFinal, project.wind).speed;
-    let finalSink = null;
-    try {
-        finalSink = sinkModel.rate(speedFinal, 0);
-    }
-    catch (error) {
-        if (!(error instanceof PolarEvaluationError))
-            throw error;
-        notices.push({ code: error.code, level: 'error', message: error.message });
-    }
+    const rate = sinkModel.rate(speedFinal, 0);
+    const finalSink = Number.isFinite(rate) && rate > 0 ? rate : null;
+    if (finalSink === null)
+        notices.push({ code: 'SINK_RESULT_INVALID', level: 'error', message: '沈下率が正の有限値になりません。' });
     const finalLoss = vg > 0.001 && finalSink !== null ? final.groundLengthM * finalSink / vg : 0;
     const predictedFinalValid = predictedArrival.end.altitudeValid !== false && finalSink !== null;
     for (let i = 0; i <= points; i++) {

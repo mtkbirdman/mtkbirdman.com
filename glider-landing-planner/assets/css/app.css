@@ -126,7 +126,6 @@
 .glp-mobile-leg-actions .glp-btn{flex:1;min-width:85px}
 .glp-mobile-leg-actions .glp-mobile-remove{color:#ae3023!important;border-color:#e7c4bd!important}
 
-.glp-polar-table-editor textarea{box-sizing:border-box;width:100%;min-height:10rem;padding:.6rem;border:1px solid #aab8c9;border-radius:6px;font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical}
 
 /* The computed side of a turn input is visible but not editable. */
 .glp-field input[readonly] { opacity: .75; background: #f1f4f7; cursor: default; }

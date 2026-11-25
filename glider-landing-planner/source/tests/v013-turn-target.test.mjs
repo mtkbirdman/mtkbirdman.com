@@ -14,11 +14,11 @@ const wind={fromDeg:270,speedMps:5};
 const state=(heading=90,speedMps=25,weather={fromDeg:270,speedMps:0})=>{const g=airGround(heading,speedMps,weather);return {e:0,n:0,h:500,headingDeg:heading,trackDeg:g.track,bankDeg:0,speedMps,groundMps:g.speed,tS:0,sM:0};};
 const context=(weather={fromDeg:270,speedMps:0})=>({speedMps:25,wind:weather,performance:createDemo().performance});
 
-test('v0.1.13 starts with angle input and schema 1.2 without changing Menuma reference values',()=>{
+test('v0.1.13 starts with angle input and schema 1.3 with the new reference altitude',()=>{
   const p=createDemo(),turn=makeTurn();
-  assert.equal(p.schemaVersion,'1.2');assert.equal(turn.angleInputMode,'angle');assert.equal(turn.targetDirectionDeg,null);
+  assert.equal(p.schemaVersion,'1.3');assert.equal(turn.angleInputMode,'angle');assert.equal(turn.targetDirectionDeg,null);
   close(p.departure.altitudeMSLM-p.landing.elevationMSLM,1200*.3048,1e-10);
-  assert.equal(p.performance.model,'quadratic-drag');
+  assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});
 });
 
 test('right and left target conversion is correct for both planning directions',()=>{
@@ -119,23 +119,8 @@ test('target-mode stored anchor is updated from solved segments without touching
   close(next.departure.segments[0].leg.angleDeg,90);
 });
 
-test('schema 1.1 legacy turns migrate to angle mode preserving geometry, flight, and input',()=>{
-  const original=createDemo(); original.departureLegs=[makeTurn('left',1080)];original.arrivalLegs=[makeTurn('right',450)];
-  const baseline=buildPlan(original);
-  const old=structuredClone(original);old.schemaVersion='1.1';
-  for(const leg of [...old.departureLegs,...old.arrivalLegs]) { delete leg.angleInputMode;delete leg.targetDirectionDeg; }
-  const before=structuredClone(old);
-  const migrated=loadProject(old);
-  assert.deepEqual(old,before);
-  assert.equal(migrated.schemaVersion,'1.2');
-  for(const leg of [...migrated.departureLegs,...migrated.arrivalLegs]) {
-    assert.equal(leg.angleInputMode,'angle');assert.equal(leg.targetDirectionDeg,null);
-  }
-  close(buildPlan(migrated).departure.end.e,baseline.departure.end.e);
-  close(buildPlan(migrated).arrival.start.n,baseline.arrival.start.n);
-});
 
-test('schema 1.2 target mode roundtrips; malformed target is rejected, not normalized',()=>{
+test('schema 1.3 target mode roundtrips; malformed target is rejected, not normalized',()=>{
   const p=createDemo();p.departureLegs=[makeTarget('right',810,180)];
   const parsed=parseProject(serializeProject(p));
   assert.deepEqual(parsed,p);
@@ -145,14 +130,6 @@ test('schema 1.2 target mode roundtrips; malformed target is rejected, not norma
   }
 });
 
-test('plan and saved project retain original angle mode when reading older 1.1 JSON',()=>{
-  const p=createDemo();p.departureLegs=[makeTurn('right',720)];
-  const old=structuredClone(p);old.schemaVersion='1.1';
-  delete old.departureLegs[0].angleInputMode;delete old.departureLegs[0].targetDirectionDeg;
-  const restored=parseProject(JSON.stringify(old));
-  assert.equal(restored.departureLegs[0].angleDeg,720);
-  assert.equal(buildPlan(restored).departure.segments[0].leg.angleDeg,720);
-});
 
 test('PDF prints the resolved turn angle, without altering the report layout',()=>{
   globalThis.document={querySelector:()=>null,querySelectorAll:()=>[]};
@@ -160,7 +137,7 @@ test('PDF prints the resolved turn angle, without altering the report layout',()
   const plan=buildPlan(p);
   const mapCopy={querySelectorAll:()=>[],removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div class="leaflet"></div>'};
   const mapEl={clientWidth:900,clientHeight:420,cloneNode(){return mapCopy}};
-  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.16-test'});
+  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.17-test'});
   assert.match(html,/右旋回 80°、バンク 30°/);
   assert.doesNotMatch(html,/右旋回 90°、バンク 30°/);
   assert.match(html,/飛行経路図/);assert.match(html,/高度プロファイル/);
@@ -172,8 +149,8 @@ globalThis.HTMLInputElement=class {};
 globalThis.HTMLSelectElement=class {constructor(path,value){this.dataset={path};this.value=value}};
 function mockedApp(){
   const app=Object.create(App.prototype);app.project=createDemo();app.plan=buildPlan(app.project);
-  app.history=[];app.future=[];app.editRevision=0;app.polarEditorOpen=false;
-  app.polarDraft='';app.selected=null;app.notice='';app.status='';app.render=()=>{};app.renderResults=()=>{};
+  app.history=[];app.future=[];app.editRevision=0;
+  app.selected=null;app.notice='';app.status='';app.render=()=>{};app.renderResults=()=>{};
   app.renderSidebar=()=>{};app.scheduleSave=()=>{};
   return app;
 }
@@ -231,10 +208,10 @@ test('optimization signature includes mode and target, and editing recomputes th
   assert.notEqual(app.plan.departure.segments[0].leg.angleDeg,old);
 });
 
-test('no change to the grounded B/C sink model formulas, WordPress shortcode or magnetic convention',()=>{
+test('single sink model retains the WordPress shortcode and magnetic convention',()=>{
   const root=new URL('../',import.meta.url);
   const php=readFileSync(new URL('../glider-landing-planner.php',root),'utf8');
-  assert.match(php,/Version:\s*0\.1\.16/);assert.match(php,/glider_landing_planner/);
+  assert.match(php,/Version:\s*0\.1\.17/);assert.match(php,/glider_landing_planner/);
   const p=createDemo();assert.equal(p.display.magneticDeclinationDeg,0);
-  assert.equal(p.performance.model,'quadratic-drag');
+  assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});
 });

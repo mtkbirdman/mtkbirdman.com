@@ -1,7 +1,7 @@
-import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal } from '../geometry/geo.js?v=0.1.16';
-import { point, derivative, curvature, controlPoints, selfIntersects } from '../geometry/bezier.js?v=0.1.16';
-import { windVector, GRAVITY } from '../flight/core.js?v=0.1.16';
-import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.16';
+import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal } from '../geometry/geo.js?v=0.1.17';
+import { point, derivative, curvature, controlPoints, selfIntersects } from '../geometry/bezier.js?v=0.1.17';
+import { windVector, GRAVITY } from '../flight/core.js?v=0.1.17';
+import { createSinkModel } from '../flight/sink.js?v=0.1.17';
 const EPS = 1e-8;
 export function endpointCurvature(state, bankDeg, project) {
     if (Math.abs(bankDeg) < 0.01)
@@ -24,7 +24,7 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
     let prev = null;
     let prevTrack = start.trackDeg;
     let altitudeValid = start.altitudeValid !== false;
-    let polarNoticeAdded = false;
+    let sinkNoticeAdded = false;
     for (let i = 0; i <= steps; i++) {
         const u = i / steps, p = point(cp, u), d = derivative(cp, u), dsdu = magnitude(d), t = dsdu > EPS ? mul(d, 1 / dsdu) : tA;
         const k = dsdu > EPS ? curvature(cp, u) : NaN;
@@ -48,18 +48,14 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
             }
         }
         points.push(p);
-        let ssink = 0;
-        try {
-            ssink = sinkModel.rate(V, bank);
-        }
-        catch (error) {
-            if (!(error instanceof PolarEvaluationError))
-                throw error;
+        let ssink = sinkModel.rate(V, bank);
+        if (!Number.isFinite(ssink) || ssink <= 0) {
+            ssink = 0;
             invalid = true;
             altitudeValid = false;
-            if (!polarNoticeAdded) {
-                notices.push({ code: error.code, level: 'error', message: error.message });
-                polarNoticeAdded = true;
+            if (!sinkNoticeAdded) {
+                notices.push({ code: 'SINK_RESULT_INVALID', level: 'error', message: '沈下率が正の有限値になりません。' });
+                sinkNoticeAdded = true;
             }
         }
         if (prev) {
@@ -88,7 +84,7 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
         invalid = true;
         notices.push({ code: 'BANK_LIMIT_EXCEEDED', level: 'error', message: `Bezierの必要バンク角（最大${maxBank.toFixed(1)}°）が設定上限を超過。` });
     }
-    if (invalid && !polarNoticeAdded && !notices.some(n => n.code === 'CONNECTOR_SELF_INTERSECTION'))
+    if (invalid && !sinkNoticeAdded && !notices.some(n => n.code === 'CONNECTOR_SELF_INTERSECTION'))
         notices.push({ code: 'CONNECTOR_NO_SOLUTION', level: 'error', message: '曲線追従に必要な速度・曲率条件を満たしません。' });
     const end = samples.length ? { ...samples[samples.length - 1] } : { ...start };
     if (samples.length) {

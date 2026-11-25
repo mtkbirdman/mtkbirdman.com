@@ -31,7 +31,7 @@ export function altitudeTimeSeries(plan: PlanResult): {
         durationS = Math.max(durationS, s.tS);
     for (const s of arrival)
         durationS = Math.max(durationS, s.tS);
-    // Time and geometry can remain evaluable even when the polar gives no altitude.
+    // Time and geometry can remain evaluable even when altitude calculation is invalid.
     for (const s of plan.forwardAll)
         if (Number.isFinite(s.tS)) durationS = Math.max(durationS, s.tS);
     return { departure, arrival, durationS, timingProvisional: !plan.connector || !plan.connector.feasible };

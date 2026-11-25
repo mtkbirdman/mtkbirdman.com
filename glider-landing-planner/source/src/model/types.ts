@@ -1,21 +1,19 @@
 export type GuidanceMode = 'heading'|'ground-track';
-export type ModelKind = 'quadratic-drag'|'polar-table';
 export type Side = 'departure'|'arrival';
 export type Direction = 'left'|'right';
 export interface GeoPoint {latDeg:number;lonDeg:number}
 export interface Point2 {e:number;n:number}
 export interface FlightAnchor extends GeoPoint {altitudeMSLM:number;headingDeg:number}
 export interface WindConfig {fromDeg:number; speedMps:number}
-export interface PolarPoint {speedMps:number;sinkMps:number}
-export interface PerformanceConfig {model:ModelKind;quadratic:{bestLD:number;bestLDAtMps:number};polarTable:{points:PolarPoint[]}|null}
+export interface PerformanceConfig {bestLD:number;bestLDAtMps:number}
 export interface LegBase {id:string;guidance:GuidanceMode;speedOverrideMps:number|null;checkpointLabel?:string;checkpointKind?:'downwind-start';directionDeg:number|null}
 export interface StraightLeg extends LegBase {type:'straight';lengthM:number}
 export interface TurnLeg extends LegBase {type:'turn';direction:Direction;angleDeg:number;bankDeg:number;angleInputMode:'angle'|'target';targetDirectionDeg:number|null}
 export type FlightLeg = StraightLeg|TurnLeg;
 export interface LandingConfig {point:GeoPoint;elevationMSLM:number;runwayTrackDeg:number;final:{pathAngleDeg:number;groundLengthM:number}}
-export interface BezierConnector {type:'bezier_connector';handleStartM:number;handleEndM:number;curvaturePolicy:'match-neighbors';adjustmentMode?:'auto'|'manual'}
-export interface DisplayConfig {altitudeUnit:'m'|'ft';showDistanceRings:boolean;showBearingLines:boolean;showWindArrow:boolean;showHandles:boolean;showDownwindMargin:boolean;showCheckpointAltitudes:boolean;referenceLineOpacity:number;distanceRingIntervalM:number;bearingLineIntervalDeg:number;magneticDeclinationDeg:number;distanceRingOpacity?:number;bearingLineOpacity?:number}
-export interface ProjectV1 {schemaVersion:'1.2';engineVersion:string;projectId:string;name:string;defaultSpeedMps:number;maxBankDeg:number;performance:PerformanceConfig;wind:WindConfig;departure:FlightAnchor;landing:LandingConfig;departureLegs:FlightLeg[];arrivalLegs:FlightLeg[];connector:BezierConnector|null;display:DisplayConfig}
+export interface BezierConnector {type:'bezier_connector';handleStartM:number;handleEndM:number;curvaturePolicy:'match-neighbors';adjustmentMode:'auto'|'manual'}
+export interface DisplayConfig {altitudeUnit:'m'|'ft';showDistanceRings:boolean;showBearingLines:boolean;showWindArrow:boolean;showHandles:boolean;showDownwindMargin:boolean;showCheckpointAltitudes:boolean;referenceLineOpacity:number;distanceRingIntervalM:number;bearingLineIntervalDeg:number;magneticDeclinationDeg:number}
+export interface ProjectV1 {schemaVersion:'1.3';engineVersion:string;projectId:string;name:string;defaultSpeedMps:number;maxBankDeg:number;performance:PerformanceConfig;wind:WindConfig;departure:FlightAnchor;landing:LandingConfig;departureLegs:FlightLeg[];arrivalLegs:FlightLeg[];connector:BezierConnector|null;display:DisplayConfig}
 export interface Sample {e:number;n:number;h:number;headingDeg:number;trackDeg:number;bankDeg:number;speedMps:number;groundMps:number;altitudeValid?:boolean;tS:number;sM:number; segmentId:string;group:'departure'|'arrival'|'connector'|'final'}
 export interface State extends Omit<Sample,'segmentId'|'group'> {}
 export interface Notice {code:string;level:'info'|'warning'|'error';message:string;legId?:string}

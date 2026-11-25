@@ -12,10 +12,10 @@ import {altitudeTimeSeries} from '../../assets/js/ui/chart.js';
 const read=(p)=>readFileSync(new URL(p,import.meta.url),'utf8');
 const wind={fromDeg:270,speedMps:3};
 const start=(w={fromDeg:0,speedMps:0})=>{const a=airGround(0,20,w);return {e:0,n:0,h:1000,headingDeg:0,trackDeg:a.track,bankDeg:0,speedMps:20,groundMps:a.speed,tS:0,sM:0}};
-const ctx=(w={fromDeg:0,speedMps:0})=>({speedMps:20,wind:w,performance:{model:'quadratic-drag',quadratic:{bestLD:30,bestLDAtMps:20},polarTable:null}});
+const ctx=(w={fromDeg:0,speedMps:0})=>({speedMps:20,wind:w,performance:{bestLD:30,bestLDAtMps:20}});
 const near=(v,x,tol)=>assert.ok(Math.abs(v-x)<tol,`${v} differs from ${x}`);
 test('v0.1.6 positive unbounded turn angles survive JSON with multi-turn records',()=>{
- const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.16-test');
+ const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.17-test');
  p.departureLegs=[makeTurn('right',1080),makeTurn('left',1800),makeTurn('right',1000000)];
  const q=parseProject(serializeProject(p));assert.deepEqual(q.departureLegs.map(x=>x.angleDeg),[1080,1800,1000000]);
  p.departureLegs[0].angleDeg=0;assert.throws(()=>parseProject(JSON.stringify(p)),/旋回角/);
@@ -45,16 +45,6 @@ test('v0.1.6 magnetic declination changes only overlay true orientation',()=>{
  near(magneticToTrue(350,20),10,1e-10);
  const p=createDemo(),before=buildPlan(p);p.display.magneticDeclinationDeg=-7;
  const after=buildPlan(p);near(before.departure.end.e,after.departure.end.e,1e-9);near(before.departure.end.n,after.departure.end.n,1e-9);
-});
-test('v0.1.6 old JSON migrates shared opacity + intervals + connector mode',()=>{
- const p=previouslyPlannedProject();delete p.display.referenceLineOpacity;
- delete p.display.distanceRingIntervalM;delete p.display.bearingLineIntervalDeg;delete p.display.magneticDeclinationDeg;
- p.display.distanceRingOpacity=0.3;p.display.bearingLineOpacity=0.8;
- delete p.connector.adjustmentMode;
- const q=parseProject(JSON.stringify(p));near(q.display.referenceLineOpacity,0.3,1e-9);
- assert.equal(q.display.distanceRingIntervalM,250);assert.equal(q.display.bearingLineIntervalDeg,45);assert.equal(q.display.magneticDeclinationDeg,0);
- assert.equal(q.connector.adjustmentMode,'auto');
- assert.deepEqual(parseProject(serializeProject(q)).display.referenceLineOpacity,q.display.referenceLineOpacity);
 });
 test('v0.1.6 range checks reject invalid ring spacing/compass interval/declination/opacity',()=>{
  const p=createDemo();p.display.distanceRingIntervalM=2;assert.throws(()=>parseProject(JSON.stringify(p)),/距離リング間隔/);

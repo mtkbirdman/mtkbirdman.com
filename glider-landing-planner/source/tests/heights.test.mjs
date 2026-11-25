@@ -45,11 +45,11 @@ test('v0.1.4 checkpoint table uses landing-relative height, shows 0 at landing a
  assert.match(checkpointTable(plan,p),/離脱地点<\/td><td>370 m<\/td><td>500 m<\/td>/);
 });
 
-test('v0.1.4 legacy saved JSON still imports and retains original MSL fields',()=>{
- const p=createDemo();p.engineVersion='0.1.2-test';p.departure.altitudeMSLM=520.1;
+test('current saved JSON imports and retains original MSL fields',()=>{
+ const p=createDemo();p.departure.altitudeMSLM=520.1;
  p.landing.elevationMSLM=35.5;p.display.altitudeUnit='m';
  const imported=parseProject(serializeProject(p));
- assert.equal(imported.engineVersion,'0.1.16-test');
+ assert.equal(imported.engineVersion,'0.1.17-test');
  near(imported.departure.altitudeMSLM,520.1);near(imported.landing.elevationMSLM,35.5);
  assert.equal(imported.display.altitudeUnit,'m');
 });

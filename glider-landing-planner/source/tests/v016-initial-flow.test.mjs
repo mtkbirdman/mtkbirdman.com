@@ -34,7 +34,7 @@ function withApp(project=createDemo()){
 
 test('new plan is unplanned, with no synthetic flight leg, Bezier, or false connection error',()=>{
  const p=createDemo(),r=buildPlan(p);
- assert.equal(p.schemaVersion,'1.2');assert.equal(p.departureLegs.length,0);assert.equal(p.arrivalLegs.length,0);
+ assert.equal(p.schemaVersion,'1.3');assert.equal(p.departureLegs.length,0);assert.equal(p.arrivalLegs.length,0);
  assert.equal(p.connector,null);assert.equal(r.connector,null);assert.equal(r.departure.segments.length,0);
  assert.ok(r.notices.some(n=>n.code==='PLAN_NOT_STARTED'&&n.level==='info'));
  assert.ok(!r.notices.some(n=>n.code==='CONNECTOR_MISSING'));
@@ -57,7 +57,7 @@ test('departure directional guide is exactly 250 m from the anchor and does not 
    const frame=new LocalFrame(p.landing.point);
    const from=frame.toLocal({latDeg:guides[0].coords[0][0],lonDeg:guides[0].coords[0][1]});
    const to=frame.toLocal({latDeg:guides[0].coords[1][0],lonDeg:guides[0].coords[1][1]});
-   const displacement=sub(to,from),heading=headingVector(140);
+   const displacement=sub(to,from),heading=headingVector(95);
    assert.ok(Math.abs(Math.hypot(displacement.e,displacement.n)-250)<.001);
    assert.ok(Math.abs(dot(displacement,heading)-250)<.001);
    assert.equal(layers.filter(l=>l.kind==='marker'&&l.options.icon.className==='glp-map-add-point').length,0);
@@ -153,7 +153,7 @@ test('preset action restores a connector after a manually disconnected populated
  }finally{globalThis.window=priorWindow;}
 });
 
-test('saved old project retains its existing legs and connector, while new JSON round-trips unplanned data',()=>{
+test('saved current-schema project retains its existing legs and connector, while new JSON round-trips unplanned data',()=>{
  const old=previouslyPlannedProject();old.arrivalLegs=trafficPreset('left');
  const original=structuredClone(old);
  const loaded=parseProject(serializeProject(old));
@@ -167,10 +167,10 @@ test('saved old project retains its existing legs and connector, while new JSON 
 
 test('version and shortcode stay aligned for FF FTP release',()=>{
  const php=readFileSync(new URL('../../glider-landing-planner.php',import.meta.url),'utf8');
- assert.match(php,/Version: 0\.1\.16/);
+ assert.match(php,/Version: 0\.1\.17/);
  assert.match(php,/add_shortcode\('glider_landing_planner'/);
  const changelog=readFileSync(new URL('../../CHANGELOG.md',import.meta.url),'utf8');
- assert.match(changelog,/## \[0\.1\.16\]/);
+ assert.match(changelog,/## \[0\.1\.17\]/);
 });
 
 

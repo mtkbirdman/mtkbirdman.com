@@ -1,5 +1,5 @@
-import { createSinkModel, PolarEvaluationError } from './polar.js?v=0.1.16';
-import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add } from '../geometry/geo.js?v=0.1.16';
+import { createSinkModel } from './sink.js?v=0.1.17';
+import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add } from '../geometry/geo.js?v=0.1.17';
 export const GRAVITY = 9.80665;
 /** No fixed angle limit in the project format; bound computation instead. */
 export const TURN_STEP_BUDGET = 50000;
@@ -25,15 +25,11 @@ export function sinkRate(speedMps, bankDeg, p) {
     return createSinkModel(p).rate(speedMps, bankDeg);
 }
 function safeSink(model, speedMps, bankDeg, notices, legId) {
-    try {
-        return model.rate(speedMps, bankDeg);
-    }
-    catch (error) {
-        if (!(error instanceof PolarEvaluationError))
-            throw error;
-        notices.push({ code: error.code, level: 'error', message: error.message, ...(legId ? { legId } : {}) });
-        return null;
-    }
+    const rate = model.rate(speedMps, bankDeg);
+    if (Number.isFinite(rate) && rate > 0)
+        return rate;
+    notices.push({ code: 'SINK_RESULT_INVALID', level: 'error', message: '沈下率が正の有限値になりません。', ...(legId ? { legId } : {}) });
+    return null;
 }
 /** Choose the nearest positive number of turns that ends at the desired true bearing.
  * Arrival legs are designed backwards, but direction still means real-flight left/right.

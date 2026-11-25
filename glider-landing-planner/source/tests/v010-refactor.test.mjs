@@ -88,29 +88,8 @@ test('v0.1.10 validation has no mutation side effects, including on rejected rec
  assert.deepEqual(JSON.parse(serializeProject(current)),current);
 });
 
-test('v0.1.10 legacy loading creates a migrated copy, preserving the source object',()=>{
- const legacy=createDemo();
- legacy.engineVersion='0.1.3-test';
- legacy.schemaVersion='1.0';
- legacy.performance={model:'quadratic-drag',fixedLD:30,bestLD:30,bestLDAtMps:20};
- legacy.arrivalLegs=trafficPreset('right');
- legacy.arrivalLegs[1].bankDeg=12;
- delete legacy.arrivalLegs[0].checkpointKind;
- delete legacy.display.bearingLineIntervalDeg;
- delete legacy.display.referenceLineOpacity;
- legacy.display.distanceRingOpacity=0.4;
- const original=structuredClone(legacy);
- const result=loadProject(legacy);
- assert.deepEqual(legacy,original,'migration must not mutate the input');
- assert.equal(result.engineVersion,'0.1.16-test');
- assert.equal(result.arrivalLegs[1].bankDeg,30);
- assert.equal(result.arrivalLegs[0].checkpointKind,'downwind-start');
- assert.equal(result.display.bearingLineIntervalDeg,45);
- assert.equal(result.display.referenceLineOpacity,0.4);
- assert.equal(parseProject(JSON.stringify(legacy)).display.referenceLineOpacity,0.4);
-});
 
-test('v0.1.10 legacy migration never disguises an invalid checkpoint kind',()=>{
+test('current format rejects an invalid checkpoint kind',()=>{
  const bad=createDemo();bad.arrivalLegs=trafficPreset('left');
  bad.arrivalLegs[0].checkpointKind='invalid';
  assert.throws(()=>loadProject(bad),/チェックポイント種別/);

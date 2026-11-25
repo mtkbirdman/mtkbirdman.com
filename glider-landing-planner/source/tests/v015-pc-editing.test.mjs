@@ -135,7 +135,7 @@ test('v0.1.15 selected desktop leg has an explicit delete button; numeric edits 
     assert.match(html,/このレグを削除/);
     const sidebar={scrollTop:235,innerHTML:''};
     app.root={querySelector(sel){return sel==='.glp-sidebar-scroll'?sidebar:null}};
-    app.polarEditorOpen=false;app.renderSidebar();
+    app.renderSidebar();
     assert.equal(sidebar.scrollTop,235,'normal re-render preserves scroll position');
   }finally{globalThis.window=originalWindow;}
 });
@@ -157,12 +157,12 @@ test('v0.1.15 marker/route selection scrolls only the desktop editor',()=>{
   }finally{globalThis.window=originalWindow;}
 });
 
-test('v0.1.15 flight data and JSON schema are unchanged by the UI-only release',()=>{
+test('current schema round-trips and map/print editing restrictions remain',()=>{
   const p=createDemo();
-  assert.equal(ENGINE_VERSION,'0.1.16-test');
-  assert.equal(p.schemaVersion,'1.2');
+  assert.equal(ENGINE_VERSION,'0.1.17-test');
+  assert.equal(p.schemaVersion,'1.3');
   assert.deepEqual(parseProject(serializeProject(p)),p);
-  assert.equal(p.performance.model,'quadratic-drag');
+  assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});
   const src=readFileSync(new URL('../src/ui/map.ts',import.meta.url),'utf8');
   assert.doesNotMatch(src,/onLegLength|onFinalLength|title: 'ドラッグで直線/);
   assert.match(src,/onHandle\(end,/);

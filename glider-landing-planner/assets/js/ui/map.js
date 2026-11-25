@@ -1,9 +1,9 @@
-import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue } from '../geometry/geo.js?v=0.1.16';
-import { windVector } from '../flight/core.js?v=0.1.16';
-import { isCompactLayout } from './responsive.js?v=0.1.16';
-import { escapeHtml } from './escape-html.js?v=0.1.16';
-import { fmtAlt } from './chart.js?v=0.1.16';
-import { INITIAL_LANDING_POINT, INITIAL_MAP_ZOOM } from '../model/defaults.js?v=0.1.16';
+import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue } from '../geometry/geo.js?v=0.1.17';
+import { windVector } from '../flight/core.js?v=0.1.17';
+import { isCompactLayout } from './responsive.js?v=0.1.17';
+import { escapeHtml } from './escape-html.js?v=0.1.17';
+import { fmtAlt } from './chart.js?v=0.1.17';
+import { INITIAL_LANDING_POINT, INITIAL_MAP_ZOOM } from '../model/defaults.js?v=0.1.17';
 const marginText = (m, unit) => `${m > 0 ? '+' : ''}${fmtAlt(m, unit)}`;
 export class PlannerMap {
     cb;

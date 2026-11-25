@@ -1,16 +1,16 @@
-import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js?v=0.1.16';
-import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js?v=0.1.16';
-import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js?v=0.1.16';
-import { chooseConnector } from './planning/connector.js?v=0.1.16';
-import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js?v=0.1.16';
-import { saveSnapshot, latestSnapshot } from './io/autosave.js?v=0.1.16';
-import { PlannerMap } from './ui/map.js?v=0.1.16';
-import { chartSvg, fmtAlt, altitudeTimeSeries, fmtElapsed } from './ui/chart.js?v=0.1.16';
-import { openPrintReport } from './ui/print.js?v=0.1.16';
-import { checkpointTable } from './ui/checkpoints.js?v=0.1.16';
-import { heightInputText, FEET_PER_METER } from './ui/height-units.js?v=0.1.16';
-import { escapeHtml } from './ui/escape-html.js?v=0.1.16';
-import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js?v=0.1.16';
+import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js?v=0.1.17';
+import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js?v=0.1.17';
+import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js?v=0.1.17';
+import { chooseConnector } from './planning/connector.js?v=0.1.17';
+import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js?v=0.1.17';
+import { saveSnapshot, latestSnapshot } from './io/autosave.js?v=0.1.17';
+import { PlannerMap } from './ui/map.js?v=0.1.17';
+import { chartSvg, fmtAlt, altitudeTimeSeries, fmtElapsed } from './ui/chart.js?v=0.1.17';
+import { openPrintReport } from './ui/print.js?v=0.1.17';
+import { checkpointTable } from './ui/checkpoints.js?v=0.1.17';
+import { heightInputText, FEET_PER_METER } from './ui/height-units.js?v=0.1.17';
+import { escapeHtml } from './ui/escape-html.js?v=0.1.17';
+import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js?v=0.1.17';
 const n = (value, d = 2) => Number.isFinite(value) ? Number(value.toFixed(d)) : 0;
 const options = (items, selected) => items.map(([v, t]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${t}</option>`).join('');
 const engineNote = '教育・机上検討用。実際の飛行可否、地形・障害物、フレア・スポイラー性能は評価しません。';
@@ -28,8 +28,6 @@ export class App {
     notice = '';
     editRevision = 0;
     mobilePanel = null;
-    polarEditorOpen = false;
-    polarDraft = '';
     constructor(root) {
         this.root = root;
         root.innerHTML = `<div class="glp-shell"><div class="glp-toolbar"></div><div class="glp-app-body"><aside class="glp-sidebar"><div class="glp-sidebar-scroll"></div></aside><section class="glp-main"><div class="glp-mapbar"><div class="glp-map-actions"><button data-action="pick-departure" class="glp-btn glp-btn-quiet">離脱地点を指定</button><button data-action="pick-landing" class="glp-btn glp-btn-quiet">着陸地点を指定</button><button data-action="fit" class="glp-btn glp-btn-quiet">全体表示</button></div><span class="glp-map-hint">地図上の経路・地点を選択して編集できます。紫のBezier制御ハンドルのみドラッグ可能です</span></div><div class="glp-map"></div><div class="glp-overview"><div class="glp-overview-top"><strong>高度プロファイル</strong><span class="glp-chart-legend"><i class="glp-line-blue"></i>離脱側予想高度 <i class="glp-line-green"></i>着陸側逆算必要高度</span></div><div class="glp-chart"></div><div class="glp-metrics"></div><div class="glp-checkpoints"></div><div class="glp-diagnostics"></div></div></section></div><div class="glp-footnote">${engineNote}　｜　地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener">国土地理院</a>（地理院タイル）</div><input class="glp-import-file" type="file" accept=".json,.glp.json,application/json" hidden><section class="glp-mobile-editor" hidden aria-label="地図から経路を編集"><div class="glp-mobile-editor-head"></div><div class="glp-mobile-editor-content"></div></section></div>`;
@@ -76,11 +74,6 @@ export class App {
                 this.handleAction(btn.dataset.action ?? '', btn.dataset);
             }
         });
-        root.addEventListener('input', e => {
-            const el = e.target;
-            if (el.matches('.glp-polar-draft'))
-                this.polarDraft = el.value;
-        });
         root.addEventListener('change', e => {
             const el = e.target;
             if (el.matches('[data-path]'))
@@ -101,7 +94,7 @@ export class App {
                 valid = loadProject(p);
             }
             catch (e) {
-                this.notice = '自動保存データが不正なため復元できません: ' + (e instanceof Error ? e.message : String(e));
+                this.notice = '自動保存データを復元できません（新規計画を表示）: ' + (e instanceof Error ? e.message : String(e));
                 this.renderResults();
                 return;
             }
@@ -115,8 +108,6 @@ export class App {
             this.mobilePanel = null;
             this.render();
             this.map.fit(this.project, this.plan);
-            // Persist migrated old bank angles once; failure must not discard the restored plan.
-            void saveSnapshot(this.project).catch(() => { this.status = '自動保存に失敗（JSON保存を推奨）'; this.renderToolbar(); });
         }).catch(() => { });
     }
     getField(path) {
@@ -260,19 +251,12 @@ export class App {
         body.scrollTop = lastScroll;
     }
     renderSidebar() {
-        const perf = this.project.performance;
-        const modelEditor = this.polarEditorOpen
-            ? `<div class="glp-polar-table-editor"><p class="glp-tip">速度（km/h）, 沈下率（m/s）を1行に1組。4〜64点。適用するまで計算条件は変わりません。</p><textarea class="glp-polar-draft" rows="8" spellcheck="false" placeholder="70, 0.8">${escapeHtml(this.polarDraft)}</textarea><div class="glp-adds"><button class="glp-btn glp-btn-primary" data-action="polar-apply">ポーラーを適用</button><button class="glp-btn glp-btn-quiet" data-action="polar-cancel">キャンセル</button></div></div>`
-            : perf.model === 'quadratic-drag'
-                ? `<div class="glp-two">${this.control('performance.quadratic.bestLD', '最大滑空比')}${this.control('performance.quadratic.bestLDAtMps', '最良滑空速度', 'km/h', '0.1', 3.6)}</div>`
-                : `<p class="glp-tip">速度別ポーラー：${perf.polarTable?.points.length ?? 0}点 / ${perf.polarTable ? (perf.polarTable.points[0].speedMps * 3.6).toFixed(1) + '〜' + (perf.polarTable.points.at(-1).speedMps * 3.6).toFixed(1) : '未設定'} km/h。範囲外は評価不可。</p><button class="glp-btn glp-btn-sub" data-action="polar-edit">ポーラーデータを編集</button>`;
         const sidebarScroll = this.root.querySelector('.glp-sidebar-scroll');
         const preservedScroll = sidebarScroll.scrollTop;
         sidebarScroll.innerHTML = `
    <div class="glp-panel-heading"><div class="glp-eyebrow">FLIGHT PARAMETERS</div><h2>飛行条件・経路設計</h2></div>
    <div class="glp-panel"><h3>基本条件</h3><div class="glp-two">${this.control('defaultSpeedMps', '基準対気速度', 'km/h', '0.1', 3.6)}${this.control('maxBankDeg', '最大バンク', '°')}</div>
-   ${this.select('performance.model', '沈下計算モデル', [['quadratic-drag', 'B：簡易抗力モデル'], ['polar-table', 'C：速度別ポーラーモデル']])}
-   ${modelEditor}
+   <div class="glp-two">${this.control('performance.bestLD', '最大滑空比')}${this.control('performance.bestLDAtMps', '最良滑空速度', 'km/h', '0.1', 3.6)}</div>
    <div class="glp-two">${this.control('wind.fromDeg', '風向', '°')}${this.control('wind.speedMps', '風速', 'm/s')}</div>
    ${this.select('display.altitudeUnit', '高度入力・表示単位（MSL）', [['ft', 'ft'], ['m', 'm']])}</div>
    <div class="glp-panel" data-point-editor="departure"><h3><span class="glp-dot blue"></span>離脱地点・条件</h3><div class="glp-two">${this.control('departure.latDeg', '緯度', '°')}${this.control('departure.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('departure.altitudeMSLM', '離脱高度')}${this.control('departure.headingDeg', '開始機首方位', '°')}</div><p class="glp-tip">地図の「離脱地点を指定」で位置を選ぶか、緯度・経度を入力してください。</p></div>
@@ -289,7 +273,7 @@ export class App {
         sidebarScroll.scrollTop = preservedScroll;
     }
     renderToolbar() {
-        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.16</span></div></div><div class="glp-tool-group">
+        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.17</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHtml(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" >JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" >PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
     }
@@ -498,12 +482,6 @@ export class App {
             });
             return;
         }
-        if (path === 'performance.model' && value === 'polar-table' && !this.project.performance.polarTable) {
-            this.polarDraft = '';
-            this.polarEditorOpen = true;
-            this.renderSidebar();
-            return;
-        }
         this.edit(project => {
             const keys = path.split('.');
             let target = project;
@@ -517,41 +495,6 @@ export class App {
         });
     }
     handleAction(action, data) {
-        if (action === 'polar-edit') {
-            this.polarDraft = this.project.performance.polarTable?.points.map(p => `${Number((p.speedMps * 3.6).toFixed(5))}, ${p.sinkMps}`).join('\n') ?? '';
-            this.polarEditorOpen = true;
-            this.renderSidebar();
-            return;
-        }
-        if (action === 'polar-cancel') {
-            this.polarEditorOpen = false;
-            this.renderSidebar();
-            return;
-        }
-        if (action === 'polar-apply') {
-            try {
-                const rows = this.polarDraft.trim().split(/\r?\n/).map(line => {
-                    const values = line.trim().split(/[,;\s]+/);
-                    if (values.length !== 2 || values.some(v => !v || !Number.isFinite(Number(v))))
-                        throw Error('各行は「速度（km/h）, 沈下率（m/s）」の数値2つで指定してください。');
-                    return { speedMps: Number(values[0]) / 3.6, sinkMps: Number(values[1]) };
-                });
-                rows.sort((a, b) => a.speedMps - b.speedMps);
-                const applied = this.edit(project => {
-                    project.performance.polarTable = { points: rows };
-                    project.performance.model = 'polar-table';
-                });
-                if (applied) {
-                    this.polarEditorOpen = false;
-                    this.renderSidebar();
-                }
-            }
-            catch (error) {
-                this.notice = 'ポーラーテーブルの入力エラー: ' + (error instanceof Error ? error.message : String(error));
-                this.renderResults();
-            }
-            return;
-        }
         // Actions that do not change the flight project.
         if (action === 'fit') {
             this.map.fit(this.project, this.plan);
@@ -599,7 +542,6 @@ export class App {
         }
         if (action === 'redo' && this.future.length) {
             this.editRevision++;
-            this.polarEditorOpen = false;
             this.history.push(structuredClone(this.project));
             const project = this.future.pop();
             this.applyProject(project, buildPlan(project), '未保存');
@@ -607,7 +549,6 @@ export class App {
         }
         if (action === 'new') {
             if (window.confirm('現在の計画を破棄して新規計画を作成しますか？（先にJSON保存を推奨）')) {
-                this.polarEditorOpen = false;
                 // A new plan starts with the same unoptimized control handles as first launch.
                 // Import/restore/undo continue to preserve their saved connector geometry.
                 this.editRevision++;
@@ -752,7 +693,6 @@ export class App {
             if (!window.confirm('JSONの内容で現在のプロジェクトを置き換えますか？'))
                 return;
             this.editRevision++;
-            this.polarEditorOpen = false;
             this.history.push(structuredClone(this.project));
             if (this.history.length > 50)
                 this.history.shift();
