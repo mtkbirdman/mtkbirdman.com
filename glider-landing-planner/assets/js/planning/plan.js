@@ -1,7 +1,7 @@
-import { LocalFrame, headingVector, rad } from '../geometry/geo.js?v=0.1.13';
-import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.13';
-import { evaluateConnector } from './connector.js?v=0.1.13';
-import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.13';
+import { LocalFrame, headingVector, rad } from '../geometry/geo.js?v=0.1.14';
+import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.14';
+import { evaluateConnector } from './connector.js?v=0.1.14';
+import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.14';
 export function buildPlan(project) {
     const frame = new LocalFrame(project.landing.point), lp = frame.toLocal(project.landing.point);
     const dep = frame.toLocal(project.departure);

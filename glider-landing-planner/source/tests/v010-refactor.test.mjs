@@ -101,7 +101,7 @@ test('v0.1.10 legacy loading creates a migrated copy, preserving the source obje
  const original=structuredClone(legacy);
  const result=loadProject(legacy);
  assert.deepEqual(legacy,original,'migration must not mutate the input');
- assert.equal(result.engineVersion,'0.1.13-test');
+ assert.equal(result.engineVersion,'0.1.14-test');
  assert.equal(result.arrivalLegs[1].bankDeg,30);
  assert.equal(result.arrivalLegs[0].checkpointKind,'downwind-start');
  assert.equal(result.display.bearingLineIntervalDeg,45);

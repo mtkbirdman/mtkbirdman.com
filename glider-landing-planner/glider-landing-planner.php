@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Glider Landing Planner
  * Description: 教育・机上検討用グライダー着陸経路シミュレーター。[glider_landing_planner]で固定ページへ表示します。
- * Version: 0.1.13
+ * Version: 0.1.14
  * Requires PHP: 7.4
  * Text Domain: glider-landing-planner
  * License: GPL-2.0-or-later
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) { exit; }
 
 function glp_register_assets() {
     $base = plugin_dir_url(__FILE__);
-    $ver = '0.1.13';
+    $ver = '0.1.14';
     wp_register_style('glp-leaflet', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', array(), '1.9.4');
     wp_register_style('glp-app', $base . 'assets/css/app.css', array('glp-leaflet'), $ver);
     wp_register_script('glp-leaflet', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', array(), '1.9.4', true);

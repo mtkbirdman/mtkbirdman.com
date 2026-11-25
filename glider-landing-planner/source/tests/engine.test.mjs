@@ -15,7 +15,7 @@ const turn=(angleDeg=90,guidance='heading')=>({id:'t1',type:'turn',direction:'ri
 
 test('T01 ft/m and km/h transformations round-trip',()=>{near((432/0.3048)*0.3048,432,1e-12);near((82/3.6)*3.6,82,1e-12);});
 test('T02 ENU/WGS84 round trip and locality',()=>{const f=new LocalFrame({latDeg:35.40,lonDeg:136.70});for(const p of [{latDeg:35.401,lonDeg:136.703},{latDeg:35.39,lonDeg:136.69}]){const back=f.toGeo(f.toLocal(p));near(back.latDeg,p.latDeg,1e-8);near(back.lonDeg,p.lonDeg,1e-8);}});
-test('T03 1000m steady still air fixed L/D loses 1000/30 m',()=>{const r=simulateLeg(start(),straight(),ctx(),1,'departure');near(1000-r.end.h,1000/30,1e-7);near(r.end.sM,1000,1e-7);});
+test('T03 1000m steady still air at model B best L/D loses 1000/30 m',()=>{const r=simulateLeg(start(),straight(),ctx(),1,'departure');near(1000-r.end.h,1000/30,1e-7);near(r.end.sM,1000,1e-7);});
 test('T04 90 degree turn matches analytic radius and duration',()=>{const V=20,bank=30,R=V*V/(GRAVITY*Math.tan(rad(bank)));const r=simulateLeg(start(0,V),turn(),ctx(),1,'departure');near(r.end.e,R,0.02);near(r.end.n,R,0.02);near(r.end.tS,(Math.PI/2)*V/(GRAVITY*Math.tan(rad(bank))),.002);});
 test('T05 360 degree turn closes in still air',()=>{const r=simulateLeg(start(),turn(360),ctx(),1,'departure');near(r.end.e,0,.02);near(r.end.n,0,.02);near(r.end.headingDeg,0,.0001);});
 test('T06 heading steady wind drift',()=>{const wind={fromDeg:270,speedMps:5},r=simulateLeg(start(0,20,wind),straight(),ctx(wind),1,'departure');near(r.end.e,1000*5/Math.hypot(5,20),.002);});

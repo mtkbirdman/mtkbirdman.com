@@ -4,7 +4,7 @@ import {createDemo, makeTurn} from '../../assets/js/model/defaults.js';
 import {airGround, closestTurnAngle, simulateLeg} from '../../assets/js/flight/core.js';
 import {buildPlan, rememberResolvedTurnAngles} from '../../assets/js/planning/plan.js';
 import {effectiveTurnValues} from '../../assets/js/ui/leg-display.js';
-import {loadProject, validateProject, parseProject, serializeProject, requiresLegacyAApproval} from '../../assets/js/io/project.js';
+import {loadProject, validateProject, parseProject, serializeProject} from '../../assets/js/io/project.js';
 import {reportHtml} from '../../assets/js/ui/print.js';
 import {readFileSync} from 'node:fs';
 const close=(a,b,tol=1e-5)=>assert.ok(Math.abs(a-b)<tol,`expected ${a} ≈ ${b}`);
@@ -134,14 +134,6 @@ test('schema 1.1 legacy turns migrate to angle mode preserving geometry, flight,
   close(buildPlan(migrated).arrival.start.n,baseline.arrival.start.n);
 });
 
-test('schema 1.0 model A remains approval-only when migrated to schema 1.2',()=>{
-  const old=createDemo();old.schemaVersion='1.0';old.performance={model:'fixed-ld',fixedLD:30,bestLD:34,bestLDAtMps:25};
-  assert.equal(requiresLegacyAApproval(old),true);
-  assert.throws(()=>loadProject(old),/LEGACY_MODEL_A_APPROVAL_REQUIRED/);
-  const next=loadProject(old,true);
-  assert.equal(next.schemaVersion,'1.2');assert.equal(next.performance.model,'quadratic-drag');
-});
-
 test('schema 1.2 target mode roundtrips; malformed target is rejected, not normalized',()=>{
   const p=createDemo();p.departureLegs=[makeTarget('right',810,180)];
   const parsed=parseProject(serializeProject(p));
@@ -167,7 +159,7 @@ test('PDF prints the resolved turn angle, without altering the report layout',()
   const plan=buildPlan(p);
   const mapCopy={querySelectorAll:()=>[],removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div class="leaflet"></div>'};
   const mapEl={clientWidth:900,clientHeight:420,cloneNode(){return mapCopy}};
-  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.13-test'});
+  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.14-test'});
   assert.match(html,/右旋回 80°、バンク 30°/);
   assert.doesNotMatch(html,/右旋回 90°、バンク 30°/);
   assert.match(html,/飛行経路図/);assert.match(html,/高度プロファイル/);
@@ -179,7 +171,7 @@ globalThis.HTMLInputElement=class {};
 globalThis.HTMLSelectElement=class {constructor(path,value){this.dataset={path};this.value=value}};
 function mockedApp(){
   const app=Object.create(App.prototype);app.project=createDemo();app.plan=buildPlan(app.project);
-  app.history=[];app.future=[];app.editRevision=0;app.pendingLegacy=null;app.polarEditorOpen=false;
+  app.history=[];app.future=[];app.editRevision=0;app.polarEditorOpen=false;
   app.polarDraft='';app.selected=null;app.notice='';app.status='';app.render=()=>{};app.renderResults=()=>{};
   app.renderSidebar=()=>{};app.scheduleSave=()=>{};
   return app;
@@ -190,14 +182,14 @@ test('PC and mobile shared editor displays both fields with only selected one wr
   const leg=makeTarget('right',450,180);app.project.departureLegs=[leg];app.plan=buildPlan(app.project);
   const html=app.legEditor('departure',leg,0);
   assert.match(html,/目標方位を指定/);assert.match(html,/旋回後の目標方位/);
-  assert.match(html,/旋回角[^\n]*（自動計算）/);
+  assert.doesNotMatch(html,/（自動計算）/);
   assert.match(html,/readonly value="450"/);
   assert.match(html,/data-path="departureLegs\.0\.targetDirectionDeg"/);
   const angleLeg=makeTurn('left',270);app.project.arrivalLegs=[angleLeg];app.plan=buildPlan(app.project);
   const arrivalHtml=app.legEditor('arrival',angleLeg,0);
   assert.match(arrivalHtml,/旋回前の目標方位/);
   assert.match(arrivalHtml,/data-path="arrivalLegs\.0\.angleDeg"/);
-  assert.match(arrivalHtml,/（自動計算）/);
+  assert.doesNotMatch(arrivalHtml,/（自動計算）/);
 });
 
 test('changing modes initializes the target from actual track and switching back freezes the effective angle',()=>{
@@ -241,7 +233,7 @@ test('optimization signature includes mode and target, and editing recomputes th
 test('no change to the grounded B/C sink model formulas, WordPress shortcode or magnetic convention',()=>{
   const root=new URL('../',import.meta.url);
   const php=readFileSync(new URL('../glider-landing-planner.php',root),'utf8');
-  assert.match(php,/Version:\s*0\.1\.13/);assert.match(php,/glider_landing_planner/);
+  assert.match(php,/Version:\s*0\.1\.14/);assert.match(php,/glider_landing_planner/);
   const p=createDemo();assert.equal(p.display.magneticDeclinationDeg,0);
   assert.equal(p.performance.model,'quadratic-drag');
 });

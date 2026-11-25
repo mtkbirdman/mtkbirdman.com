@@ -1,4 +1,4 @@
-import { add, sub, mul, magnitude, cross, leftNormal } from './geo.js?v=0.1.13';
+import { add, sub, mul, magnitude, cross, leftNormal } from './geo.js?v=0.1.14';
 const C = [1, 5, 10, 10, 5, 1];
 export function point(cp, t) { let e = 0, n = 0; for (let i = 0; i < 6; i++) {
     const k = C[i] * (1 - t) ** (5 - i) * t ** i;

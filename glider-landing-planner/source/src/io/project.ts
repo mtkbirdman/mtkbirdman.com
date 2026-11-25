@@ -116,27 +116,17 @@ export function validateProject(input:unknown):ProjectV1 {
   return input as ProjectV1;
 }
 
-/** Legacy fixed-L/D values have different physics and require explicit approval. */
-export function requiresLegacyAApproval(input:unknown):boolean {
-  const p=obj(input);
-  return p.schemaVersion==='1.0' && obj(p.performance).model==='fixed-ld';
-}
-
-/** Upgrade external data once. Never change the caller's object or silently convert model A. */
-export function loadProject(input:unknown, approveLegacyA=false):ProjectV1 {
+/** Upgrade supported external JSON once, without changing the caller's object. */
+export function loadProject(input:unknown):ProjectV1 {
   const p=structuredClone(obj(input));
   check(p.schemaVersion==='1.0' || p.schemaVersion==='1.1' || p.schemaVersion==='1.2','未対応のschemaVersionです（対応: 1.0 / 1.1 / 1.2）。');
   if(p.schemaVersion==='1.0'){
     const old=obj(p.performance);
-    check(old.model==='fixed-ld'||old.model==='quadratic-drag','旧モデル種別が不正です。');
-    check(between(old.fixedLD,2,100) && between(old.bestLD,2,100) && between(old.bestLDAtMps,5,100),'旧モデルの性能値が不正です。');
-    if(old.model==='fixed-ld' && !approveLegacyA){
-      throw Error('LEGACY_MODEL_A_APPROVAL_REQUIRED: 旧モデルAは計算結果が変わるため、承認後に変換してください。');
-    }
-    const isA=old.model==='fixed-ld';
+    check(old.model==='quadratic-drag','旧形式は簡易抗力モデルBのみ読込可能です。');
+    check(between(old.bestLD,2,100) && between(old.bestLDAtMps,5,100),'旧モデルの性能値が不正です。');
     p.performance={
       model:'quadratic-drag',
-      quadratic: {bestLD:isA?old.fixedLD:old.bestLD, bestLDAtMps:isA?p.defaultSpeedMps:old.bestLDAtMps},
+      quadratic: {bestLD:old.bestLD, bestLDAtMps:old.bestLDAtMps},
       polarTable:null
     };
     p.schemaVersion='1.1';
@@ -198,9 +188,9 @@ export function loadProject(input:unknown, approveLegacyA=false):ProjectV1 {
   return validateProject(p);
 }
 
-export function parseProject(text:string, approveLegacyA=false):ProjectV1 {
+export function parseProject(text:string):ProjectV1 {
   if(text.length>2_000_000)throw Error('ファイルが大きすぎます（上限2MB）。');
-  return loadProject(JSON.parse(text) as unknown,approveLegacyA);
+  return loadProject(JSON.parse(text) as unknown);
 }
 
 export function serializeProject(project:ProjectV1):string {

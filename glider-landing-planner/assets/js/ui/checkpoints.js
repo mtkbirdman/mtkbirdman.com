@@ -1,5 +1,5 @@
-import { fmtAlt } from './chart.js?v=0.1.13';
-import { escapeHtml } from './escape-html.js?v=0.1.13';
+import { fmtAlt } from './chart.js?v=0.1.14';
+import { escapeHtml } from './escape-html.js?v=0.1.14';
 export function landingRelativeHeight(checkpoint, project) {
     return checkpoint.altitudeM - project.landing.elevationMSLM;
 }

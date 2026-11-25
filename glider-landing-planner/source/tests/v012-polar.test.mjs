@@ -7,7 +7,7 @@ import {simulateLeg, sinkRate, airGround, GRAVITY} from '../../assets/js/flight/
 import {buildPlan} from '../../assets/js/planning/plan.js';
 import {checkpointRows} from '../../assets/js/ui/checkpoints.js';
 import {altitudeTimeSeries, chartSvg} from '../../assets/js/ui/chart.js';
-import {loadProject, parseProject, requiresLegacyAApproval, serializeProject, validateProject} from '../../assets/js/io/project.js';
+import {loadProject, parseProject, serializeProject, validateProject} from '../../assets/js/io/project.js';
 const near=(a,b,tol=1e-8)=>assert.ok(Math.abs(a-b)<=tol,`${a} != ${b}`);
 const performance=(E=34,V=25)=>({model:'quadratic-drag',quadratic:{bestLD:E,bestLDAtMps:V},polarTable:null});
 const synthetic=(lo=15,hi=45,count=16)=>{
@@ -118,33 +118,30 @@ test('C input rejects missing, repeated, unordered and non-positive points',()=>
   assert.throws(()=>validateProject(broken),/正の有限値/);
 });
 
-function legacyA(){
+function oldModelB(){
   const p=createDemo();p.schemaVersion='1.0';p.engineVersion='0.1.11-test';
-  p.performance={model:'fixed-ld',fixedLD:28,bestLD:34,bestLDAtMps:25};
+  p.performance={model:'quadratic-drag',fixedLD:28,bestLD:31,bestLDAtMps:22};
   p.defaultSpeedMps=24.5;
   return p;
 }
-test('legacy model A requires approval; approved conversion matches only reference straight-flight sink',()=>{
-  const old=legacyA(), before=structuredClone(old);
-  assert.equal(requiresLegacyAApproval(old),true);
-  assert.throws(()=>loadProject(old),/LEGACY_MODEL_A_APPROVAL_REQUIRED/);
-  const modern=loadProject(old,true);
-  assert.equal(modern.schemaVersion,'1.2');
-  assert.deepEqual(modern.performance,{model:'quadratic-drag',quadratic:{bestLD:28,bestLDAtMps:24.5},polarTable:null});
-  near(createSinkModel(modern.performance).rate(24.5,0),24.5/28);
-  assert.notEqual(createSinkModel(modern.performance).rate(20,0),20/28);
+
+test('unsupported old model is rejected without automatic conversion or modifying input',()=>{
+  const old=oldModelB();old.performance.model='fixed-ld';
+  const before=structuredClone(old);
+  assert.throws(()=>loadProject(old),/簡易抗力モデルBのみ/);
+  assert.throws(()=>parseProject(JSON.stringify(old)),/簡易抗力モデルBのみ/);
   assert.deepEqual(old,before);
-  assert.equal(parseProject(serializeProject(modern)).schemaVersion,'1.2');
 });
 
 test('legacy B is migrated automatically with identical analytic sink and unchanged positions/legs',()=>{
-  const old=legacyA();old.performance={model:'quadratic-drag',fixedLD:28,bestLD:31,bestLDAtMps:22};
+  const old=oldModelB();
   old.departureLegs[0].speedOverrideMps=30;
   const modern=loadProject(old);
   near(createSinkModel(modern.performance).rate(27,30),27**3/(2*31*22**2)+22**2/(2*31*27*Math.cos(Math.PI/6)**2));
   assert.deepEqual(modern.departure,old.departure);
   assert.deepEqual(modern.arrivalLegs,old.arrivalLegs);
   assert.equal(modern.departureLegs[0].speedOverrideMps,30);
+  assert.equal(parseProject(serializeProject(modern)).schemaVersion,'1.2');
 });
 
 test('old fixed-L/D model cannot be saved as the current 1.2 format',()=>{

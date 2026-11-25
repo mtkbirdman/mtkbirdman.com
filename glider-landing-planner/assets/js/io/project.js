@@ -1,4 +1,4 @@
-import { ENGINE_VERSION } from '../model/defaults.js?v=0.1.13';
+import { ENGINE_VERSION } from '../model/defaults.js?v=0.1.14';
 const between = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 function obj(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -103,26 +103,17 @@ export function validateProject(input) {
     check(between(display.magneticDeclinationDeg, -30, 30), '磁気偏角は-30〜+30°の範囲にしてください（東偏が正）。');
     return input;
 }
-/** Legacy fixed-L/D values have different physics and require explicit approval. */
-export function requiresLegacyAApproval(input) {
-    const p = obj(input);
-    return p.schemaVersion === '1.0' && obj(p.performance).model === 'fixed-ld';
-}
-/** Upgrade external data once. Never change the caller's object or silently convert model A. */
-export function loadProject(input, approveLegacyA = false) {
+/** Upgrade supported external JSON once, without changing the caller's object. */
+export function loadProject(input) {
     const p = structuredClone(obj(input));
     check(p.schemaVersion === '1.0' || p.schemaVersion === '1.1' || p.schemaVersion === '1.2', '未対応のschemaVersionです（対応: 1.0 / 1.1 / 1.2）。');
     if (p.schemaVersion === '1.0') {
         const old = obj(p.performance);
-        check(old.model === 'fixed-ld' || old.model === 'quadratic-drag', '旧モデル種別が不正です。');
-        check(between(old.fixedLD, 2, 100) && between(old.bestLD, 2, 100) && between(old.bestLDAtMps, 5, 100), '旧モデルの性能値が不正です。');
-        if (old.model === 'fixed-ld' && !approveLegacyA) {
-            throw Error('LEGACY_MODEL_A_APPROVAL_REQUIRED: 旧モデルAは計算結果が変わるため、承認後に変換してください。');
-        }
-        const isA = old.model === 'fixed-ld';
+        check(old.model === 'quadratic-drag', '旧形式は簡易抗力モデルBのみ読込可能です。');
+        check(between(old.bestLD, 2, 100) && between(old.bestLDAtMps, 5, 100), '旧モデルの性能値が不正です。');
         p.performance = {
             model: 'quadratic-drag',
-            quadratic: { bestLD: isA ? old.fixedLD : old.bestLD, bestLDAtMps: isA ? p.defaultSpeedMps : old.bestLDAtMps },
+            quadratic: { bestLD: old.bestLD, bestLDAtMps: old.bestLDAtMps },
             polarTable: null
         };
         p.schemaVersion = '1.1';
@@ -189,10 +180,10 @@ export function loadProject(input, approveLegacyA = false) {
         p.engineVersion = ENGINE_VERSION;
     return validateProject(p);
 }
-export function parseProject(text, approveLegacyA = false) {
+export function parseProject(text) {
     if (text.length > 2_000_000)
         throw Error('ファイルが大きすぎます（上限2MB）。');
-    return loadProject(JSON.parse(text), approveLegacyA);
+    return loadProject(JSON.parse(text));
 }
 export function serializeProject(project) {
     return JSON.stringify(validateProject(project), null, 2);

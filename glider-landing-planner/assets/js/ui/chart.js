@@ -1,4 +1,4 @@
-import { heightForDisplay } from './height-units.js?v=0.1.13';
+import { heightForDisplay } from './height-units.js?v=0.1.14';
 export const fmtAlt = (m, u) => `${Math.round(heightForDisplay(m, u)).toLocaleString('ja-JP')} ${u}`;
 export const fmtElapsed = (seconds) => {
     const s = Math.max(0, Math.round(seconds));

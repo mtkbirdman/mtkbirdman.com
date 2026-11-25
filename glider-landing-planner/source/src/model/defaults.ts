@@ -1,7 +1,7 @@
 import type {ProjectV1, FlightLeg, GeoPoint} from './types.js';
 import {LocalFrame, headingVector, mul} from '../geometry/geo.js';
 
-export const ENGINE_VERSION = '0.1.13-test';
+export const ENGINE_VERSION = '0.1.14-test';
 
 // New-plan location: Menuma reference point (not a surveyed runway threshold or touchdown point).
 // See README.md for the published location and elevation reference.

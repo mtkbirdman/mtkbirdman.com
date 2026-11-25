@@ -3,8 +3,8 @@ import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js';
 import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js';
 import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js';
 import { chooseConnector } from './planning/connector.js';
-import { validateProject, loadProject, parseProject, downloadProject, requiresLegacyAApproval } from './io/project.js';
-import { saveSnapshot, latestSnapshot, saveLegacyBackup, latestLegacyBackup } from './io/autosave.js';
+import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js';
+import { saveSnapshot, latestSnapshot } from './io/autosave.js';
 import { PlannerMap } from './ui/map.js';
 import { chartSvg, fmtAlt, altitudeTimeSeries, fmtElapsed } from './ui/chart.js';
 import { openPrintReport } from './ui/print.js';
@@ -43,8 +43,6 @@ export class App {
     private mobilePanel: MobilePanel = null;
     private polarEditorOpen = false;
     private polarDraft = '';
-    private pendingLegacy: unknown | null = null;
-    private legacyBackupAvailable = false;
     constructor(private root: HTMLElement) {
         root.innerHTML = `<div class="glp-shell"><div class="glp-toolbar"></div><div class="glp-app-body"><aside class="glp-sidebar"><div class="glp-sidebar-scroll"></div></aside><section class="glp-main"><div class="glp-mapbar"><div class="glp-map-actions"><button data-action="pick-departure" class="glp-btn glp-btn-quiet">離脱地点を指定</button><button data-action="pick-landing" class="glp-btn glp-btn-quiet">着陸地点を指定</button><button data-action="fit" class="glp-btn glp-btn-quiet">全体表示</button></div><span class="glp-map-hint">地点・直線端点・紫のハンドルはドラッグできます</span></div><div class="glp-map"></div><div class="glp-overview"><div class="glp-overview-top"><strong>高度プロファイル</strong><span class="glp-chart-legend"><i class="glp-line-blue"></i>離脱側予想高度 <i class="glp-line-green"></i>着陸側逆算必要高度</span></div><div class="glp-chart"></div><div class="glp-metrics"></div><div class="glp-checkpoints"></div><div class="glp-diagnostics"></div></div></section></div><div class="glp-footnote">${engineNote}　｜　地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener">国土地理院</a>（地理院タイル）</div><input class="glp-import-file" type="file" accept=".json,.glp.json,application/json" hidden><section class="glp-mobile-editor" hidden aria-label="地図から経路を編集"><div class="glp-mobile-editor-head"></div><div class="glp-mobile-editor-content"></div></section></div>`;
         this.map = new PlannerMap(root.querySelector('.glp-map') as HTMLElement, {
@@ -86,31 +84,13 @@ export class App {
                 void this.doImport(el as HTMLInputElement);
         });
         this.render();
-        void latestLegacyBackup().then(backup => {
-            if (backup) { this.legacyBackupAvailable = true; this.renderToolbar(); }
-        }).catch(() => {});
         this.map.showNewProject(this.project);
         // Redraw touch hit areas and endpoint + buttons when rotating or resizing a device.
         window.matchMedia?.(COMPACT_LAYOUT_QUERY).addEventListener?.('change', () => { this.map.redraw(this.project, this.plan, this.selected); this.renderMobilePanel(); });
         const revisionAtStartup = this.editRevision;
-        void latestSnapshot().then(async p => {
+        void latestSnapshot().then(p => {
             if (!p || this.editRevision !== revisionAtStartup)
                 return; // Don't overwrite edits made while IndexedDB was loading.
-            if (requiresLegacyAApproval(p)) {
-                try { await saveLegacyBackup(p); }
-                catch (error) {
-                    this.notice = '旧モデルAのバックアップに失敗したため移行を停止しました: ' + String(error);
-                    this.renderResults();
-                    return;
-                }
-                if (this.editRevision !== revisionAtStartup) return;
-                this.legacyBackupAvailable = true;
-                this.pendingLegacy = structuredClone(p);
-                this.status = '旧モデルAの移行承認待ち（自動保存停止中）';
-                this.renderToolbar();
-                this.renderResults();
-                return;
-            }
             let valid: ProjectV1;
             try {
                 valid = loadProject(p);
@@ -164,11 +144,11 @@ export class App {
         const turnValues = leg.type === 'turn' ? effectiveTurnValues(this.plan, side, leg) : null;
         const turnTargetLabel = side === 'departure' ? '旋回後の目標方位' : '旋回前の目標方位';
         const turnAngleField = leg.type === 'turn' && leg.angleInputMode === 'target'
-            ? `<label class="glp-field"><span>旋回角 <em>°</em>（自動計算）</span><input type="number" readonly value="${n(turnValues!.angleDeg, 5)}"></label>`
+            ? `<label class="glp-field"><span>旋回角 <em>°</em></span><input type="number" readonly value="${n(turnValues!.angleDeg, 5)}"></label>`
             : this.control(base + '.angleDeg', '旋回角', '°');
         const targetField = leg.type === 'turn' && leg.angleInputMode === 'target'
             ? this.control(base + '.targetDirectionDeg', turnTargetLabel, '°')
-            : `<label class="glp-field"><span>${turnTargetLabel} <em>°</em>（自動計算）</span><input type="number" readonly value="${turnValues?.boundaryDeg === null || turnValues === null ? '' : n(turnValues.boundaryDeg, 5)}" placeholder="評価不可"></label>`;
+            : `<label class="glp-field"><span>${turnTargetLabel} <em>°</em></span><input type="number" readonly value="${turnValues?.boundaryDeg === null || turnValues === null ? '' : n(turnValues.boundaryDeg, 5)}" placeholder="評価不可"></label>`;
         return `<div class="glp-leg-edit"><div class="glp-two">${this.select(base + '.guidance', '飛行方式', modeOpts)}${this.control(base + '.speedOverrideMps', leg.type === 'turn' ? '旋回速度' : '滑空速度', 'km/h', '0.1', 3.6, speedInForce)}</div>
     ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', '目標方位', '°', 'any', 1, directionInForce)}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.bankDeg', 'バンク角', '°')}</div>${this.select(base + '.angleInputMode', '入力方式', [['angle', '旋回角を指定'], ['target', '目標方位を指定']])}<div class="glp-two">${turnAngleField}${targetField}</div>`}
     <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHtml(leg.checkpointLabel ?? '')}" data-path="${base}.checkpointLabel"></label></div>`;
@@ -282,9 +262,9 @@ export class App {
         sidebarScroll.scrollTop = preservedScroll;
     }
     private renderToolbar() {
-        (this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.13</span></div></div><div class="glp-tool-group">
+        (this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.14</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHtml(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
-  <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" ${this.pendingLegacy ? 'disabled' : ''}>JSON保存</button>${this.legacyBackupAvailable ? '<button class="glp-btn glp-btn-quiet" data-action="legacy-backup">旧Aバックアップ</button>' : ''}<button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" ${this.pendingLegacy ? 'disabled' : ''}>PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
+  <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" >JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" >PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
     }
     private renderResults() {
         const p = this.plan, unit = this.project.display.altitudeUnit;
@@ -302,8 +282,7 @@ export class App {
             distinct.set(notice.code + notice.message, notice.message);
         const top = p.notices.filter(i => i.level === 'error');
         const warnings = p.notices.filter(i => i.level === 'warning');
-        const migrationBanner = this.pendingLegacy ? `<div class="glp-inline-message"><strong>旧モデルAの保存計画があります。</strong>モデルBへ変換すると旋回・異なる速度での高度損失が変わります。元データは保護済みです。<div class="glp-adds"><button class="glp-btn glp-btn-sub" data-action="legacy-backup">元のJSONを保存</button><button class="glp-btn glp-btn-primary" data-action="legacy-approve">モデルBへ変換して開く</button></div></div>` : '';
-        (this.root.querySelector('.glp-diagnostics') as HTMLElement).innerHTML = migrationBanner + `<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length ? 'glp-status-bad' : warnings.length ? 'glp-status-warn' : 'glp-status-note'}">${top.length ? '不成立の条件あり' : warnings.length ? '警告あり' : '近似モデル'}</span></div>
+        (this.root.querySelector('.glp-diagnostics') as HTMLElement).innerHTML = `<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length ? 'glp-status-bad' : warnings.length ? 'glp-status-warn' : 'glp-status-note'}">${top.length ? '不成立の条件あり' : warnings.length ? '警告あり' : '近似モデル'}</span></div>
  <div class="glp-diagnostic-bank">Bezier接続最大必要バンク：<strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong>（設定上限 ${this.project.maxBankDeg.toFixed(1)}°）</div>${this.notice ? `<div class="glp-inline-message">${escapeHtml(this.notice)}</div>` : ''}<div class="glp-alerts">${[...distinct.values()].slice(0, 12).map(t => `<div class="glp-alert">${escapeHtml(t)}</div>`).join('') || '<p>計算エラーは報告されていません。</p>'}</div>`;
         this.updateCheckpointSelection();
     }
@@ -379,11 +358,6 @@ export class App {
     private edit(mutate: (p: ProjectV1) => void): boolean {
         // Reject a late startup autosave when any user edit was attempted.
         this.editRevision++;
-        if (this.pendingLegacy) {
-            this.notice = '旧モデルAの移行承認、または「新規」を選択してください。元データは自動保存されず保護されています。';
-            this.renderResults();
-            return false;
-        }
         const original = this.project;
         const project = structuredClone(original);
         try {
@@ -409,7 +383,6 @@ export class App {
         }
     }
     private scheduleSave(): void {
-        if (this.pendingLegacy) return;
         if (this.saveTimer !== undefined)
             window.clearTimeout(this.saveTimer);
         const revision = this.editRevision;
@@ -535,31 +508,6 @@ export class App {
             }
             return;
         }
-        if (action === 'legacy-backup') {
-            void (async () => {
-                const original = this.pendingLegacy ?? await latestLegacyBackup();
-                if (!original) throw Error('バックアップが見つかりません。');
-                const blob = new Blob([JSON.stringify(original, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const anchor = document.createElement('a');
-                anchor.href = url; anchor.download = 'glider-plan-legacy-model-A-backup.json'; anchor.click();
-                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-            })().catch(error => { this.notice = '旧JSONの保存に失敗しました: ' + String(error); this.renderResults(); });
-            return;
-        }
-        if (action === 'legacy-approve' && this.pendingLegacy) {
-            if (!window.confirm('旧モデルAをモデルBへ変換します。元JSONの保存を推奨します。速度変更・旋回時の高度損失が変わることを了承しますか？')) return;
-            try {
-                const project = loadProject(this.pendingLegacy, true);
-                const plan = buildPlan(project);
-                this.pendingLegacy = null;
-                this.editRevision++;
-                this.history = []; this.future = []; this.selected = null;
-                this.applyProject(project, plan, '旧モデルAを変換しました');
-                this.map.fit(this.project, this.plan);
-            } catch (error) { this.notice = String(error); this.renderResults(); }
-            return;
-        }
         // Actions that do not change the flight project.
         if (action === 'fit') {
             this.map.fit(this.project, this.plan);
@@ -607,7 +555,6 @@ export class App {
         }
         if (action === 'redo' && this.future.length) {
             this.editRevision++;
-            this.pendingLegacy = null;
             this.polarEditorOpen = false;
             this.history.push(structuredClone(this.project));
             const project = this.future.pop()!;
@@ -616,8 +563,7 @@ export class App {
         }
         if (action === 'new') {
             if (window.confirm('現在の計画を破棄して新規計画を作成しますか？（先にJSON保存を推奨）')) {
-                this.pendingLegacy = null;
-                this.polarEditorOpen = false;
+                    this.polarEditorOpen = false;
                 // A new plan starts with the same unoptimized control handles as first launch.
                 // Import/restore/undo continue to preserve their saved connector geometry.
                 this.editRevision++;
@@ -748,14 +694,11 @@ export class App {
             if (file.size > 2000000)
                 throw Error('ファイルサイズ上限は2MBです。');
             const rawText = await file.text();
-            const legacyA = requiresLegacyAApproval(JSON.parse(rawText) as unknown);
-            if (legacyA && !window.confirm('旧モデルAからBへ変換すると高度損失が変わります。元JSONを保管したうえで変換しますか？')) return;
-            const project = parseProject(rawText, legacyA);
+            const project = parseProject(rawText);
             const plan = buildPlan(project);
             if (!window.confirm('JSONの内容で現在のプロジェクトを置き換えますか？'))
                 return;
             this.editRevision++;
-            this.pendingLegacy = null;
             this.polarEditorOpen = false;
             this.history.push(structuredClone(this.project));
             if (this.history.length > 50)
