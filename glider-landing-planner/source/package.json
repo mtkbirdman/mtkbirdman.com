@@ -1,12 +1,13 @@
 {
   "name": "glider-landing-planner",
-  "version": "0.1.9",
+  "version": "0.1.13",
   "private": true,
   "type": "module",
   "description": "WordPress glider landing planner test build",
   "scripts": {
-    "build:offline": "tsc -p tsconfig.json",
+    "build:offline": "tsc -p tsconfig.json && node version-assets.mjs",
     "build:vite": "vite build",
+    "pretest": "npm run build:offline",
     "test": "node --experimental-default-type=module --test tests/*.test.mjs"
   },
   "devDependencies": {

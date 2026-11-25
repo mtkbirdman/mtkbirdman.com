@@ -11,10 +11,10 @@ import {altitudeTimeSeries} from '../../assets/js/ui/chart.js';
 const read=(p)=>readFileSync(new URL(p,import.meta.url),'utf8');
 const wind={fromDeg:270,speedMps:3};
 const start=(w={fromDeg:0,speedMps:0})=>{const a=airGround(0,20,w);return {e:0,n:0,h:1000,headingDeg:0,trackDeg:a.track,bankDeg:0,speedMps:20,groundMps:a.speed,tS:0,sM:0}};
-const ctx=(w={fromDeg:0,speedMps:0})=>({speedMps:20,wind:w,performance:{model:'fixed-ld',fixedLD:30,bestLD:30,bestLDAtMps:20}});
+const ctx=(w={fromDeg:0,speedMps:0})=>({speedMps:20,wind:w,performance:{model:'quadratic-drag',quadratic:{bestLD:30,bestLDAtMps:20},polarTable:null}});
 const near=(v,x,tol)=>assert.ok(Math.abs(v-x)<tol,`${v} differs from ${x}`);
 test('v0.1.6 positive unbounded turn angles survive JSON with multi-turn records',()=>{
- const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.9-test');
+ const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.13-test');
  p.departureLegs=[makeTurn('right',1080),makeTurn('left',1800),makeTurn('right',1000000)];
  const q=parseProject(serializeProject(p));assert.deepEqual(q.departureLegs.map(x=>x.angleDeg),[1080,1800,1000000]);
  p.departureLegs[0].angleDeg=0;assert.throws(()=>parseProject(JSON.stringify(p)),/旋回角/);
@@ -24,7 +24,7 @@ test('v0.1.6 five complete still-air heading circles close and integrate time/lo
  assert.equal(r.notices.some(x=>x.level==='error'),false);
  near(r.end.e,0,.03);near(r.end.n,0,.03);near(r.end.headingDeg,0,.0001);
  const t=rad(1800)*20/(GRAVITY*Math.tan(rad(30)));
- near(r.end.tS,t,.01);near(1000-r.end.h,(20/30)*t,.01);
+ near(r.end.tS,t,.01);near(1000-r.end.h,(20/30)*(1+1/Math.cos(rad(30))**2)/2*t,.01);
  assert.ok(r.samples.length>6000);
 });
 test('v0.1.6 three complete ground-track turns reach cumulative 1080 with wind',()=>{
@@ -69,10 +69,10 @@ test('v0.1.6 editable auto/manual Bezier mode is saved and valid',()=>{
 test('v0.1.6 auto-adjust is triggered only on flight geometry/conditions, manual handle changes disable auto',()=>{
  const code=read('../src/main.ts');
  assert.match(code,/private optimizationSignature\(/);
- assert.match(code,/modeChanged=previous\.connector\?\.adjustmentMode!=='auto'/);
- assert.match(code,/shapeChanged=this\.optimizationSignature\(previous\)!==this\.optimizationSignature\(p\)/);
- assert.match(code,/chooseConnector\(preliminary\.departure\.end,preliminary\.arrivalStart,p\)/);
- assert.match(code,/p\.connector\.adjustmentMode='manual'/);
+ assert.match(code,/modeChanged\s*=\s*previous\.connector\?\.adjustmentMode\s*!==\s*'auto'/);
+ assert.match(code,/shapeChanged\s*=\s*this\.optimizationSignature\(previous\)\s*!==\s*this\.optimizationSignature\(p\)/);
+ assert.match(code,/chooseConnector\(preliminary\.departure\.end,\s*preliminary\.arrivalStart,\s*p\)/);
+ assert.match(code,/p\.connector\.adjustmentMode\s*=\s*'manual'/);
  assert.doesNotMatch(code,/this\.control\('connector\.handleStartM'/);
  assert.match(code,/接続曲線の調整/);
 });
@@ -87,17 +87,17 @@ test('v0.1.6 results include flight time and margin; diagnostic contains bank, P
  const main=read('../src/main.ts'),print=read('../src/ui/print.ts'),css=read('../../assets/css/print.css');
  assert.match(main,/推定飛行時間/);assert.match(main,/高度余裕<\/small>/);
  assert.match(main,/Bezier接続最大必要バンク/);
- assert.match(main,/diag\.querySelector\(sel\)\?\.outerHTML/);
+ assert.match(main,/diagnostics\.querySelector\(selector\)\?\.outerHTML/);
  assert.match(print,/<h2>計算上の診断<\/h2>/);
  assert.doesNotMatch(print,/diagnosticsHtml\.innerHTML/);
  assert.match(css,/glp-report-map-frame\{[^\n]*background:#fff/);
- assert.match(print,/width:\$\{Math\.ceil\(width\*scale\)\}px/);
+ assert.match(print,/width:\$\{Math\.ceil\(width\s*\*\s*scale\)\}px/);
 });
 test('v0.1.6 ring count and magnetic bearing options are in UI and map source',()=>{
  const main=read('../src/main.ts'),map=read('../src/ui/map.ts');
  assert.match(main,/display\.referenceLineOpacity/);assert.match(main,/display\.distanceRingIntervalM/);
  assert.match(main,/display\.bearingLineIntervalDeg/);assert.match(main,/display\.magneticDeclinationDeg/);
- assert.match(map,/magneticToTrue\(magnetic,project\.display\.magneticDeclinationDeg\)/);
- assert.match(map,/radius\+=step/);
- assert.match(map,/magnetic\+=project\.display\.bearingLineIntervalDeg/);
+ assert.match(map,/magneticToTrue\(magnetic,\s*project\.display\.magneticDeclinationDeg\)/);
+ assert.match(map,/radius\s*\+=\s*step/);
+ assert.match(map,/magnetic\s*\+=\s*project\.display\.bearingLineIntervalDeg/);
 });

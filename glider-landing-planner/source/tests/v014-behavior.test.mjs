@@ -10,7 +10,7 @@ const read=(relative)=>readFileSync(new URL(relative,import.meta.url),'utf8');
 
 test('v0.1.4: new plan and newly added turns start at 30 degrees, handles default off',()=>{
   const p=createDemo();
-  assert.equal(ENGINE_VERSION,'0.1.9-test');
+  assert.equal(ENGINE_VERSION,'0.1.13-test');
   assert.equal(p.engineVersion,ENGINE_VERSION);
   assert.equal(p.name,'新規計画');
   assert.equal(p.display.showHandles,false);
@@ -46,11 +46,11 @@ test('v0.1.4: existing legacy departure/arrival turn banks migrate once to 30 an
 test('v0.1.4: auto-save recovery is silent and guarded against overwriting user edits',()=>{
   const main=read('../src/main.ts');
   assert.doesNotMatch(main,/window\.confirm\('前回の自動保存プロジェクトがあります/);
-  assert.match(main,/this\.editRevision!==revisionAtStartup/);
-  assert.match(main,/this\.status='自動保存から復元しました'/);
+  assert.match(main,/this\.editRevision\s*!==\s*revisionAtStartup/);
+  assert.match(main,/this\.status\s*=\s*'自動保存から復元しました'/);
   assert.match(main,/自動保存データが不正なため復元できません/);
   assert.match(main,/void saveSnapshot\(this\.project\)/);
-  assert.match(main,/\[\['ft','ft'\],\['m','m'\]\]/);
+  assert.match(main,/\[\['ft',\s*'ft'\],\s*\['m',\s*'m'\]\]/);
 });
 
 test('v0.1.4: height table shows independent airfield-relative and MSL values without group rows',()=>{
@@ -82,5 +82,5 @@ test('v0.1.4: left menu no fixed height, table no vertical inner scroll',()=>{
   assert.match(css,/\.glp-sidebar-scroll\{position:sticky;top:40px;max-height:calc\(100dvh - 52px\)/);
   assert.match(css,/\.glp-tablewrap\{max-height:none;overflow-x:auto;overflow-y:visible/);
   assert.doesNotMatch(css,/height:min\(1050px/);
-  assert.match(read('../../glider-landing-planner.php'),/Version: 0\.1\.9/);
+  assert.match(read('../../glider-landing-planner.php'),/Version: 0\.1\.13/);
 });

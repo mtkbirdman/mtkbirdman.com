@@ -1,6 +1,6 @@
-import { chartSvg, fmtAlt } from './chart.js';
-import { checkpointTable } from './checkpoints.js';
-const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+import { chartSvg, fmtAlt } from './chart.js?v=0.1.13';
+import { checkpointTable } from './checkpoints.js?v=0.1.13';
+import { escapeHtml } from './escape-html.js?v=0.1.13';
 const num = (value, digits = 1) => Number(value.toFixed(digits)).toLocaleString('ja-JP');
 const speed = (value) => `${num(value * 3.6)} km/h`;
 const legLabel = (leg) => leg.type === 'straight' ? `直線 ${num(leg.lengthM, 0)} m` : `${leg.direction === 'right' ? '右' : '左'}旋回 ${num(leg.angleDeg, 0)}°、バンク ${num(leg.bankDeg, 0)}°`;
@@ -34,44 +34,45 @@ export function printableMapHtml(mapEl) {
         width, height, tileCount
     };
 }
-function legTable(title, legs, defaultSpeedMps) {
+function legTable(title, legs, defaultSpeedMps, solvedAngles) {
     if (!legs.length)
         return '';
-    const rows = legs.map((leg, i) => `<tr><td>${i + 1}</td><td>${esc(legLabel(leg))}</td><td>${esc(leg.guidance === 'heading' ? '機首方位指定' : '対地航跡指定')}</td><td>${speed(leg.speedOverrideMps ?? defaultSpeedMps)}</td></tr>`).join('');
-    return `<section class="glp-report-section glp-report-section-legs"><h2>${esc(title)}</h2><table class="glp-report-table"><thead><tr><th>No.</th><th>内容</th><th>飛行方式</th><th>速度</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+    const rows = legs.map((leg, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(legLabel(leg.type === 'turn' ? { ...leg, angleDeg: solvedAngles.get(leg.id) ?? leg.angleDeg } : leg))}</td><td>${escapeHtml(leg.guidance === 'heading' ? '機首方位指定' : '対地航跡指定')}</td><td>${speed(leg.speedOverrideMps ?? defaultSpeedMps)}</td></tr>`).join('');
+    return `<section class="glp-report-section glp-report-section-legs"><h2>${escapeHtml(title)}</h2><table class="glp-report-table"><thead><tr><th>No.</th><th>内容</th><th>飛行方式</th><th>速度</th></tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 export function reportHtml(req) {
     const { project: p, plan, metricsHtml, diagnosticsHtml, title, engineVersion } = req;
     const map = printableMapHtml(req.mapEl);
     const unit = p.display.altitudeUnit;
+    const solvedAngles = new Map([...plan.departure.segments, ...plan.arrival.segments].filter(s => s.leg.type === 'turn').map(s => [s.leg.id, s.leg.type === 'turn' ? s.leg.angleDeg : 0]));
     const attrs = [
         ['離脱高度（MSL）', fmtAlt(p.departure.altitudeMSLM, unit)],
         ['着陸標高（MSL）', fmtAlt(p.landing.elevationMSLM, unit)],
         ['基準対気速度', speed(p.defaultSpeedMps)],
         ['最大バンク', `${p.maxBankDeg}°`],
         ['風向・風速', `${p.wind.fromDeg}°から / ${p.wind.speedMps} m/s`],
-        ['沈下モデル', p.performance.model === 'fixed-ld' ? `A：固定L/D（${p.performance.fixedLD}）` : `B：簡易抗力（最大L/D ${p.performance.bestLD}）`],
+        ['沈下モデル', p.performance.model === 'quadratic-drag' ? `B：簡易抗力（最大L/D ${p.performance.quadratic.bestLD}、最良滑空速度 ${speed(p.performance.quadratic.bestLDAtMps)}）` : `C：速度別ポーラー（${p.performance.polarTable?.points.length ?? 0}点、${p.performance.polarTable ? speed(p.performance.polarTable.points[0].speedMps) + '〜' + speed(p.performance.polarTable.points.at(-1).speedMps) : '未設定'}）`],
         ['目標ファイナルパス角', `${p.landing.final.pathAngleDeg}°`],
         ['直線ファイナル長', `${num(p.landing.final.groundLengthM, 0)} m`],
         ['滑走路真方位', `${p.landing.runwayTrackDeg}°`],
         ['磁気偏角（東偏＋）', `${p.display.magneticDeclinationDeg}°`],
         ['高度表示単位', unit]
     ];
-    const conditions = attrs.map(([key, value]) => `<div class="glp-report-data-item"><small>${esc(key)}</small><strong>${esc(value)}</strong></div>`).join('');
+    const conditions = attrs.map(([key, value]) => `<div class="glp-report-data-item"><small>${escapeHtml(key)}</small><strong>${escapeHtml(value)}</strong></div>`).join('');
     const leafletCss = (document.querySelector('link[href*="leaflet.css"]')?.href ?? 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.9';
+    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.13';
     const time = new Date().toLocaleString('ja-JP');
-    return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(p.name)} - ${esc(title)} PDF印刷</title><link rel="stylesheet" href="${esc(leafletCss)}"><link rel="stylesheet" href="${esc(printCss)}"></head>
+    return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(p.name)} - ${escapeHtml(title)} PDF印刷</title><link rel="stylesheet" href="${escapeHtml(leafletCss)}"><link rel="stylesheet" href="${escapeHtml(printCss)}"></head>
  <body class="glp-report"><div class="glp-report-screen-toolbar"><span>印刷専用プレビュー｜地図のタイルが読み込まれたら「印刷 / PDF保存」を選択してください。</span><button type="button" onclick="window.print()">印刷 / PDF保存</button></div>
  <main class="glp-report-document">
- <header class="glp-report-head"><div><h1>${esc(title)}</h1><p>飛行経路計画（教育・机上検討用）</p></div><p>${esc(p.name)}<br>エンジン ${esc(engineVersion)}｜${esc(time)}</p></header>
+ <header class="glp-report-head"><div><h1>${escapeHtml(title)}</h1><p>飛行経路計画（教育・机上検討用）</p></div><p>${escapeHtml(p.name)}<br>エンジン ${escapeHtml(engineVersion)}｜${escapeHtml(time)}</p></header>
  <section class="glp-report-section glp-report-map-section"><h2>飛行経路図</h2>${map.html}<p class="glp-report-caption">地図：国土地理院「地理院タイル（淡色地図）」に飛行経路・高度情報等を追記。<br>地図は現在の画面表示範囲を使用しています。印刷前に地図の縮尺・範囲を調整してください。</p></section>
  <section class="glp-report-section glp-report-chart-section"><h2>高度プロファイル</h2><div class="glp-report-chart">${chartSvg(plan, p)}</div><p class="glp-report-caption">青：離脱側予想高度（Bezier接続を含む）。緑：着陸側の逆算必要高度。横軸は推定経過飛行時間。</p></section>
  <section class="glp-report-section"><h2>計算結果</h2><div class="glp-report-metrics">${metricsHtml}</div></section>
  <section class="glp-report-section"><h2>飛行条件</h2><div class="glp-report-data">${conditions}</div></section>
  <section class="glp-report-section"><h2>チェックポイント高度</h2>${checkpointTable(plan, p, true)}</section>
- ${legTable('離脱側レグ（飛行順）', p.departureLegs, p.defaultSpeedMps)}
- ${legTable('着陸側レグ（飛行順・逆方向編集）', p.arrivalLegs, p.defaultSpeedMps)}
+ ${legTable('離脱側レグ（飛行順）', p.departureLegs, p.defaultSpeedMps, solvedAngles)}
+ ${legTable('着陸側レグ（飛行順・逆方向編集）', p.arrivalLegs, p.defaultSpeedMps, solvedAngles)}
  <section class="glp-report-section"><h2>計算上の診断</h2><div class="glp-report-diagnostics">${diagnosticsHtml}</div></section>
  <footer class="glp-report-footer">教育・机上検討用。実際の飛行可否・地形・障害物・フレア・スポイラー性能は評価していません。計算上の高度余裕は安全余裕を保証しません。<br>地図出典：国土地理院（地理院タイル） https://maps.gsi.go.jp/development/ichiran.html</footer>
  </main></body></html>`;

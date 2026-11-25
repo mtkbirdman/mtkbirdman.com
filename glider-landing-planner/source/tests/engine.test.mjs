@@ -9,7 +9,7 @@ import {buildPlan} from '../../assets/js/planning/plan.js';
 import {parseProject,serializeProject} from '../../assets/js/io/project.js';
 const near=(a,b,tol=1e-6)=>assert.ok(Math.abs(a-b)<=tol,`${a} !~= ${b} tol=${tol}`);
 const start=(heading=0,V=20,wind={fromDeg:0,speedMps:0})=>{const g=airGround(heading,V,wind);return {e:0,n:0,h:1000,headingDeg:heading,trackDeg:g.track,bankDeg:0,speedMps:V,groundMps:g.speed,tS:0,sM:0};};
-const ctx=(wind={fromDeg:0,speedMps:0},performance={model:'fixed-ld',fixedLD:30,bestLD:30,bestLDAtMps:20})=>({speedMps:20,wind,performance});
+const ctx=(wind={fromDeg:0,speedMps:0},performance={model:'quadratic-drag',quadratic:{bestLD:30,bestLDAtMps:20},polarTable:null})=>({speedMps:20,wind,performance});
 const straight=(lengthM=1000,guidance='heading',directionDeg=null)=>({id:'st1',type:'straight',lengthM,guidance,directionDeg,speedOverrideMps:null});
 const turn=(angleDeg=90,guidance='heading')=>({id:'t1',type:'turn',direction:'right',angleDeg,bankDeg:30,guidance,directionDeg:null,speedOverrideMps:null});
 
@@ -24,7 +24,7 @@ test('T08 strong crosswind track infeasible',()=>{assert.equal(headingForTrack(0
 test('T09 forward and reversed legs reconstruct start',()=>{const wind={fromDeg:240,speedMps:3};const first=straight(500,'heading',50);const second=turn(90);const state=start(50,20,wind);const f=simulatePath(state,[first,second],ctx(wind),'departure');const b=simulatePath(f.end,[first,second],ctx(wind),'arrival',true);near(b.start.e,state.e,.05);near(b.start.n,state.n,.05);near(b.start.h,state.h,1e-4);near(b.start.headingDeg,state.headingDeg,1e-4);});
 test('T10 5th-order Bezier endpoints and curvatures',()=>{const A={e:0,n:0},B={e:400,n:300},tA=headingVector(90),tB=headingVector(0),kA=.001,kB=-.002,cp=controlPoints(A,B,tA,tB,kA,kB,80,90);near(point(cp,0).e,A.e);near(point(cp,1).n,B.n);near(curvature(cp,0),kA,1e-12);near(curvature(cp,1),kB,1e-12);const d0=derivative(cp,0),d1=derivative(cp,1);near(courseOf(d0.e,d0.n),90,1e-9);near(courseOf(d1.e,d1.n),0,1e-9);});
 test('T11 Bezier length numerical convergence',()=>{const cp=controlPoints({e:0,n:0},{e:400,n:300},headingVector(90),headingVector(0),0,0,80,90);function length(n){let L=0,last=point(cp,0);for(let i=1;i<=n;i++){const q=point(cp,i/n);L+=magnitude(sub(q,last));last=q;}return L;}assert.ok(Math.abs(length(100)-length(1000))<.1);});
-test('T12 model B best L/D reference',()=>{const p={model:'quadratic-drag',fixedLD:30,bestLD:32,bestLDAtMps:24};near(24/sinkRate(24,0,p),32,1e-10);assert.ok(sinkRate(24,30,p)>sinkRate(24,0,p));});
+test('T12 model B best L/D reference',()=>{const p={model:'quadratic-drag',quadratic:{bestLD:32,bestLDAtMps:24},polarTable:null};near(24/sinkRate(24,0,p),32,1e-10);assert.ok(sinkRate(24,30,p)>sinkRate(24,0,p));});
 test('T13 leg speed overrides and idealization notice',()=>{const l=straight();l.speedOverrideMps=30;const r=simulateLeg(start(),l,ctx(),1,'departure');near(r.end.speedMps,30);assert.ok(r.notices.some(i=>i.code==='SPEED_STEP_IDEALIZED'));});
 test('T14 downwind-only margin equals predicted minus required, for a feasible connector',()=>{
  const p=createDemo();p.arrivalLegs=trafficPreset('left');p.departureLegs=[];
@@ -50,7 +50,7 @@ test('T21 legacy v0.1.1 JSON migrates only missing display fields and downwind I
  delete old.display.distanceRingOpacity;delete old.display.bearingLineOpacity;
  delete old.arrivalLegs[0].checkpointKind;
  const parsed=parseProject(JSON.stringify(old));
- assert.equal(parsed.schemaVersion,'1.0');assert.equal(parsed.display.showDownwindMargin,true);
+ assert.equal(parsed.schemaVersion,'1.2');assert.equal(parsed.display.showDownwindMargin,true);
  assert.equal(parsed.display.showCheckpointAltitudes,false);near(parsed.display.referenceLineOpacity,0.5);
  assert.equal(parsed.display.distanceRingIntervalM,250);assert.equal(parsed.display.bearingLineIntervalDeg,45);
  near(parsed.display.referenceLineOpacity,0.5);assert.equal(parsed.arrivalLegs[0].checkpointKind,'downwind-start');

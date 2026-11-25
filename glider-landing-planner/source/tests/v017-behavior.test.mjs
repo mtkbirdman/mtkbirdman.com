@@ -7,9 +7,9 @@ import {parseProject,serializeProject} from '../../assets/js/io/project.js';
 const read=(file)=>readFileSync(new URL(file,import.meta.url),'utf8');
 
 test('v0.1.8 WordPress version and engine version match',()=>{
- assert.equal(ENGINE_VERSION,'0.1.9-test');
- assert.match(read('../../glider-landing-planner.php'),/Version: 0\.1\.9/);
- assert.match(read('../src/main.ts'),/テスト版 v0\.1\.9/);
+ assert.equal(ENGINE_VERSION,'0.1.13-test');
+ assert.match(read('../../glider-landing-planner.php'),/Version: 0\.1\.13/);
+ assert.match(read('../src/main.ts'),/テスト版 v0\.1\.13/);
 });
 test('v0.1.7 departure checkpoints count turns and straights independently',()=>{
  const p=createDemo();p.departureLegs=[makeStraight(200),makeTurn('left',90),makeStraight(150),makeTurn('right',270)];
@@ -28,16 +28,16 @@ test('v0.1.7 user-customized checkpoint names survive unchanged',()=>{
 });
 test('v0.1.7 main reuses one editor for sidebar and bottom-sheet',()=>{
  const main=read('../src/main.ts');
- assert.match(main,/private legEditor\(side:Side,leg:FlightLeg,i:number\)/);
- assert.match(main,/this\.legEditor\(side,leg,i\)/);
- assert.match(main,/this\.legEditor\(side,leg,index\)/);
- assert.match(main,/leg\.type==='turn'\?'旋回速度':'滑空速度'/);
- assert.match(main,/onSelectLeg:\(id\)=>this\.selectLeg\(id,true\)/);
- assert.match(main,/onSelectPoint:\(point\)=>\{this\.selected=null/);
- assert.match(main,/this\.openMobilePanel\(\{kind:'point',point\}\)/);
- assert.match(main,/onAddAtEnd:\(side\)=>this\.openMobilePanel/);
+ assert.match(main,/private legEditor\(side:\s*Side,\s*leg:\s*FlightLeg,\s*i:\s*number\)/);
+ assert.match(main,/this\.legEditor\(side,\s*leg,\s*i\)/);
+ assert.match(main,/this\.legEditor\(side,\s*leg,\s*index\)/);
+ assert.match(main,/leg\.type\s*===\s*'turn'\s*\?\s*'旋回速度'\s*:\s*'滑空速度'/);
+ assert.match(main,/onSelectLeg:\s*\(id\)\s*=>\s*this\.selectLeg\(id,\s*true\)/);
+ assert.match(main,/onSelectPoint:\s*\(point\)\s*=>\s*\{\s*this\.selected\s*=\s*null/);
+ assert.match(main,/this\.openMobilePanel\(\{\s*kind:\s*'point',\s*point\s*\}\)/);
+ assert.match(main,/onAddAtEnd:\s*\(side\)\s*=>\s*this\.openMobilePanel/);
  assert.match(main,/data-action="preset-left"/);
- assert.match(main,/this\.openMobilePanel\(\{kind:'leg',id:leg\.id\}\)/);
+ assert.match(main,/this\.selectLeg\(leg\.id,\s*true\)/);
 });
 test('v0.1.7 5th-order Bezier connector policy remains unchanged',()=>{
  const p=createDemo();assert.equal(p.connector.curvaturePolicy,'match-neighbors');

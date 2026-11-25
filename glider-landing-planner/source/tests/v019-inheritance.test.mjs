@@ -8,17 +8,17 @@ import {serializeProject,parseProject} from '../../assets/js/io/project.js';
 const read=file=>readFileSync(new URL(file,import.meta.url),'utf8');
 const close=(a,b,tol=1e-7)=>assert.ok(Math.abs(a-b)<tol,`${a} differs from ${b}`);
 
-test('v0.1.9 versions agree across source, WordPress, print, and documentation',()=>{
- assert.equal(ENGINE_VERSION,'0.1.9-test');
- assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.9/);
- assert.match(read('../src/main.ts'),/テスト版 v0\.1\.9/);
- assert.match(read('../src/ui/print.ts'),/ver=0\.1\.9/);
- assert.match(read('../../README.md'),/v0\.1\.9/);
+test('v0.1.10 versions agree across source, WordPress, print, and documentation',()=>{
+ assert.equal(ENGINE_VERSION,'0.1.13-test');
+ assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.13/);
+ assert.match(read('../src/main.ts'),/テスト版 v0\.1\.13/);
+ assert.match(read('../src/ui/print.ts'),/ver=0\.1\.13/);
+ assert.match(read('../../README.md'),/v0\.1\.13/);
 });
 
 test('v0.1.9 displays inherited baseline speed without converting it to an override',()=>{
  const p=createDemo();const leg=makeStraight(300);p.departureLegs=[leg];
- close(effectiveLegSpeedMps(p,leg),80/3.6);
+ close(effectiveLegSpeedMps(p,leg),90/3.6);
  assert.equal(leg.speedOverrideMps,null);
  p.defaultSpeedMps=105/3.6;
  close(effectiveLegSpeedMps(p,leg),105/3.6);
@@ -83,10 +83,10 @@ test('v0.1.9 form and report labels use updated wording without changing data ke
  const main=read('../src/main.ts');const print=read('../src/ui/print.ts');
  for(const word of ['基準対気速度','飛行方式','目標方位','滑空速度','旋回速度'])assert.ok(main.includes(word),word);
  for(const word of ['共通対気速度','風補正方式','指定方位（空欄＝継承）','多周旋回可','速度を空欄にした場合'])assert.ok(!main.includes(word),word);
- assert.match(main,/effectiveLegSpeedMps\(this\.project,leg\)/);
- assert.match(main,/effectiveStraightDirectionDeg\(this\.project,this\.plan,side,leg\)/);
- assert.match(main,/this\.control\(base\+'\.speedOverrideMps'[^\n]*speedInForce\)/);
- assert.match(main,/this\.control\(base\+'\.directionDeg'[^\n]*directionInForce\)/);
+ assert.match(main,/effectiveLegSpeedMps\(this\.project,\s*leg\)/);
+ assert.match(main,/effectiveStraightDirectionDeg\(this\.project,\s*this\.plan,\s*side,\s*leg\)/);
+ assert.match(main,/this\.control\(base\s*\+\s*'\.speedOverrideMps'[^\n]*speedInForce\)/);
+ assert.match(main,/this\.control\(base\s*\+\s*'\.directionDeg'[^\n]*directionInForce\)/);
  assert.match(print,/<th>飛行方式<\/th>/);
  assert.match(print,/基準対気速度/);
 });

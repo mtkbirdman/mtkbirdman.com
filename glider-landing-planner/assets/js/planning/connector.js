@@ -1,6 +1,7 @@
-import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal } from '../geometry/geo.js';
-import { point, derivative, curvature, controlPoints, selfIntersects } from '../geometry/bezier.js';
-import { windVector, sinkRate, GRAVITY } from '../flight/core.js';
+import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal } from '../geometry/geo.js?v=0.1.13';
+import { point, derivative, curvature, controlPoints, selfIntersects } from '../geometry/bezier.js?v=0.1.13';
+import { windVector, GRAVITY } from '../flight/core.js?v=0.1.13';
+import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.13';
 const EPS = 1e-8;
 export function endpointCurvature(state, bankDeg, project) {
     if (Math.abs(bankDeg) < 0.01)
@@ -10,7 +11,7 @@ export function endpointCurvature(state, bankDeg, project) {
     const dV = { e: v * Math.cos(rad(state.headingDeg)) * omega, n: -v * Math.sin(rad(state.headingDeg)) * omega };
     return (Vg.e * dV.n - Vg.n * dV.e) / (magnitude(Vg) ** 3);
 }
-export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy = false) {
+export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy = false, sinkModel = createSinkModel(project.performance)) {
     const A = { e: start.e, n: start.n }, B = { e: endBoundary.e, n: endBoundary.n };
     const tA = headingVector(start.trackDeg), tB = headingVector(endBoundary.trackDeg);
     const kA = endpointCurvature(start, start.bankDeg, project), kB = endpointCurvature(endBoundary, endBoundary.bankDeg, project);
@@ -21,8 +22,9 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
     let invalid = false, maxBank = 0, length = 0, loss = 0, time = 0;
     const w = windVector(project.wind), V = start.speedMps;
     let prev = null;
-    let nowState = { ...start };
     let prevTrack = start.trackDeg;
+    let altitudeValid = start.altitudeValid !== false;
+    let polarNoticeAdded = false;
     for (let i = 0; i <= steps; i++) {
         const u = i / steps, p = point(cp, u), d = derivative(cp, u), dsdu = magnitude(d), t = dsdu > EPS ? mul(d, 1 / dsdu) : tA;
         const k = dsdu > EPS ? curvature(cp, u) : NaN;
@@ -46,7 +48,20 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
             }
         }
         points.push(p);
-        const ssink = sinkRate(V, bank, project.performance);
+        let ssink = 0;
+        try {
+            ssink = sinkModel.rate(V, bank);
+        }
+        catch (error) {
+            if (!(error instanceof PolarEvaluationError))
+                throw error;
+            invalid = true;
+            altitudeValid = false;
+            if (!polarNoticeAdded) {
+                notices.push({ code: error.code, level: 'error', message: error.message });
+                polarNoticeAdded = true;
+            }
+        }
         if (prev) {
             const ds = magnitude(sub(p, prev.p));
             length += ds;
@@ -54,12 +69,13 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
                 const dt = ds * 0.5 * (1 / G + 1 / prev.g);
                 time += dt;
                 const dh = dt * 0.5 * (ssink + prev.sink);
-                loss += dh;
+                if (altitudeValid)
+                    loss += dh;
             }
             else
                 invalid = true;
         }
-        const s = { e: p.e, n: p.n, h: start.h - loss, headingDeg: heading, trackDeg: courseOf(t.e, t.n), bankDeg: bank, speedMps: V, groundMps: G, tS: start.tS + time, sM: start.sM + length, segmentId: 'connector', group: 'connector' };
+        const s = { e: p.e, n: p.n, h: start.h - loss, headingDeg: heading, trackDeg: courseOf(t.e, t.n), bankDeg: bank, speedMps: V, groundMps: G, tS: start.tS + time, sM: start.sM + length, segmentId: 'connector', group: 'connector', ...(altitudeValid ? {} : { altitudeValid: false }) };
         samples.push(s);
         prev = { p, g: G, sink: ssink };
         prevTrack = s.trackDeg;
@@ -72,7 +88,7 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
         invalid = true;
         notices.push({ code: 'BANK_LIMIT_EXCEEDED', level: 'error', message: `Bezierの必要バンク角（最大${maxBank.toFixed(1)}°）が設定上限を超過。` });
     }
-    if (invalid && !notices.some(n => n.code === 'CONNECTOR_SELF_INTERSECTION'))
+    if (invalid && !polarNoticeAdded && !notices.some(n => n.code === 'CONNECTOR_SELF_INTERSECTION'))
         notices.push({ code: 'CONNECTOR_NO_SOLUTION', level: 'error', message: '曲線追従に必要な速度・曲率条件を満たしません。' });
     const end = samples.length ? { ...samples[samples.length - 1] } : { ...start };
     if (samples.length) {
@@ -84,19 +100,17 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
         if (Math.abs(endBoundary.speedMps - V) > 1e-4)
             notices.push({ code: 'SPEED_STEP_IDEALIZED', level: 'warning', message: 'Bezier終点で個別速度との不連続があります。' });
     }
-    if (project.performance.model === 'fixed-ld')
-        notices.push({ code: 'TURN_SINK_UNMODELED', level: 'info', message: 'モデルAのBezier接続区間では旋回追加沈下を評価していません。' });
-    return { points, samples, end, lengthM: length, lossM: loss, maxBankDeg: maxBank, feasible: !invalid, notices, handleStartM: a, handleEndM: b };
+    return { points, samples, end, lengthM: length, lossM: loss, maxBankDeg: maxBank, feasible: !invalid, altitudeValid, notices, handleStartM: a, handleEndM: b };
 }
-export function chooseConnector(start, end, project) {
+export function chooseConnector(start, end, project, sinkModel = createSinkModel(project.performance)) {
     const length = Math.hypot(end.e - start.e, end.n - start.n);
     if (length < 1) {
-        return evaluateConnector(start, end, project, 5, 5);
+        return evaluateConnector(start, end, project, 5, 5, false, sinkModel);
     }
     let best = null, bestScore = Infinity;
     for (const x of [0.16, 0.27, 0.40, 0.58, 0.8, 1.1])
         for (const y of [0.16, 0.27, 0.40, 0.58, 0.8, 1.1]) {
-            const r = evaluateConnector(start, end, project, Math.max(10, length * x), Math.max(10, length * y), true);
+            const r = evaluateConnector(start, end, project, Math.max(10, length * x), Math.max(10, length * y), true, sinkModel);
             const score = (r.feasible ? 0 : 1e7) + r.maxBankDeg * 120 + r.lengthM + Math.max(0, r.maxBankDeg - project.maxBankDeg) * 1e4;
             if (score < bestScore) {
                 bestScore = score;
@@ -105,7 +119,7 @@ export function chooseConnector(start, end, project) {
         }
     if (!best)
         throw Error('connector search failed');
-    const r = evaluateConnector(start, end, project, best.handleStartM, best.handleEndM);
+    const r = evaluateConnector(start, end, project, best.handleStartM, best.handleEndM, false, sinkModel);
     if (!r.feasible)
         r.notices.push({ code: 'CONNECTOR_NO_SOLUTION', level: 'error', message: '探索範囲内で制約を満たすBezier接続は見つかりませんでした。' });
     return r;

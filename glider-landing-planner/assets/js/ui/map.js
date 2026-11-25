@@ -1,11 +1,11 @@
-import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue } from '../geometry/geo.js';
-import { windVector } from '../flight/core.js';
-import { isCompactLayout } from './responsive.js';
-const html = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
-const heightText = (m, unit) => `${Math.round(unit === 'ft' ? m / 0.3048 : m).toLocaleString('ja-JP')} ${unit}`;
-const marginText = (m, unit) => `${m > 0 ? '+' : ''}${heightText(m, unit)}`;
+import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue } from '../geometry/geo.js?v=0.1.13';
+import { windVector } from '../flight/core.js?v=0.1.13';
+import { isCompactLayout } from './responsive.js?v=0.1.13';
+import { escapeHtml } from './escape-html.js?v=0.1.13';
+import { fmtAlt } from './chart.js?v=0.1.13';
+import { INITIAL_LANDING_POINT, INITIAL_MAP_ZOOM } from '../model/defaults.js?v=0.1.13';
+const marginText = (m, unit) => `${m > 0 ? '+' : ''}${fmtAlt(m, unit)}`;
 export class PlannerMap {
-    element;
     cb;
     map;
     graphics;
@@ -15,30 +15,43 @@ export class PlannerMap {
     picking = null;
     ready = false;
     constructor(element, cb) {
-        this.element = element;
         this.cb = cb;
         if (typeof L === 'undefined') {
             element.innerHTML = '<div class="glp-map-unavailable">地図ライブラリの読込に失敗しました。インターネット接続・CDN制限をご確認ください。</div>';
             return;
         }
-        this.map = L.map(element, { zoomControl: true, preferCanvas: false }).setView([35.4, 136.7], 14);
+        this.map = L.map(element, { zoomControl: true, preferCanvas: false }).setView([INITIAL_LANDING_POINT.latDeg, INITIAL_LANDING_POINT.lonDeg], INITIAL_MAP_ZOOM);
         // SVG remains necessary in Cocoon, and SVG simplification is disabled for smooth sampled arcs.
         this.vectorRenderer = L.svg({ padding: 0.5 });
         L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener">国土地理院</a>', maxZoom: 18, minZoom: 3 }).addTo(this.map);
         this.graphics = L.layerGroup().addTo(this.map);
         this.rings = L.layerGroup().addTo(this.map);
         this.controls = L.layerGroup().addTo(this.map);
-        this.map.on('click', (ev) => { if (this.picking) {
-            this.cb.onPick(this.picking, ev.latlng.lat, ev.latlng.lng);
-            this.setPick(null);
-        } });
+        this.map.on('click', (ev) => {
+            if (this.picking) {
+                this.cb.onPick(this.picking, ev.latlng.lat, ev.latlng.lng);
+                this.setPick(null);
+            }
+        });
         this.ready = true;
         setTimeout(() => this.map.invalidateSize(), 250);
     }
-    setPick(mode) { this.picking = mode; if (this.ready)
-        this.map.getContainer().style.cursor = mode ? 'crosshair' : ''; }
-    fit(project, plan) { if (!this.ready)
-        return; const frame = new LocalFrame(project.landing.point); const pts = [project.departure, project.landing.point, ...[...plan.departure.samples, ...(plan.connector?.samples ?? []), ...plan.arrival.samples, ...plan.finalTarget].filter((_, i) => i % Math.max(1, Math.ceil((plan.forwardAll.length + plan.requiredAll.length) / 120)) === 0).map(p => frame.toGeo(p))]; this.map.fitBounds(L.latLngBounds(pts.map(p => [p.latDeg, p.lonDeg])), { padding: [45, 45], maxZoom: 16 }); }
+    setPick(mode) {
+        this.picking = mode;
+        if (this.ready)
+            this.map.getContainer().style.cursor = mode ? 'crosshair' : '';
+    }
+    showNewProject(project) {
+        if (this.ready)
+            this.map.setView([project.landing.point.latDeg, project.landing.point.lonDeg], INITIAL_MAP_ZOOM);
+    }
+    fit(project, plan) {
+        if (!this.ready)
+            return;
+        const frame = new LocalFrame(project.landing.point);
+        const pts = [project.departure, project.landing.point, ...[...plan.departure.samples, ...(plan.connector?.samples ?? []), ...plan.arrival.samples, ...plan.finalTarget].filter((_, i) => i % Math.max(1, Math.ceil((plan.forwardAll.length + plan.requiredAll.length) / 120)) === 0).map(p => frame.toGeo(p))];
+        this.map.fitBounds(L.latLngBounds(pts.map(p => [p.latDeg, p.lonDeg])), { padding: [45, 45], maxZoom: 16 });
+    }
     redraw(project, plan, selectedLegId = null) {
         if (!this.ready)
             return;
@@ -52,12 +65,14 @@ export class PlannerMap {
             const line = L.polyline(points.map(loc), { color, weight, opacity: .95, dashArray, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, bubblingMouseEvents: false });
             if (legId && this.cb.onSelectLeg) {
                 // A wider, nearly transparent hit target makes narrow curved legs tappable on phones.
-                const click = (ev) => { if (this.picking) {
-                    this.cb.onPick(this.picking, ev.latlng.lat, ev.latlng.lng);
-                    this.setPick(null);
-                }
-                else
-                    this.cb.onSelectLeg?.(legId); };
+                const click = (ev) => {
+                    if (this.picking) {
+                        this.cb.onPick(this.picking, ev.latlng.lat, ev.latlng.lng);
+                        this.setPick(null);
+                    }
+                    else
+                        this.cb.onSelectLeg?.(legId);
+                };
                 line.on('click', click);
                 if (isCompactLayout())
                     L.polyline(points.map(loc), { color, weight: 22, opacity: .002, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, bubblingMouseEvents: false }).on('click', click).addTo(this.graphics);
@@ -82,19 +97,25 @@ export class PlannerMap {
         }
         const depIcon = L.divIcon({ className: 'glp-map-point', html: '<span class="glp-point glp-point-blue">離</span>', iconSize: [25, 25], iconAnchor: [12, 12] });
         const landIcon = L.divIcon({ className: 'glp-map-point', html: '<span class="glp-point glp-point-green">着</span>', iconSize: [25, 25], iconAnchor: [12, 12] });
-        L.marker([project.departure.latDeg, project.departure.lonDeg], { draggable: true, icon: depIcon, title: '離脱地点：ドラッグで変更' }).on('dragend', (e) => { const x = e.target.getLatLng(); this.cb.onPick('departure', x.lat, x.lng); }).on('click', () => { if (!this.picking)
-            this.cb.onSelectPoint?.('departure'); }).addTo(this.controls);
-        L.marker([project.landing.point.latDeg, project.landing.point.lonDeg], { draggable: true, icon: landIcon, title: '接地点：ドラッグで変更' }).on('dragend', (e) => { const x = e.target.getLatLng(); this.cb.onPick('landing', x.lat, x.lng); }).on('click', () => { if (!this.picking)
-            this.cb.onSelectPoint?.('landing'); }).addTo(this.controls);
+        L.marker([project.departure.latDeg, project.departure.lonDeg], { draggable: true, icon: depIcon, title: '離脱地点：ドラッグで変更' }).on('dragend', (e) => { const x = e.target.getLatLng(); this.cb.onPick('departure', x.lat, x.lng); }).on('click', () => {
+            if (!this.picking)
+                this.cb.onSelectPoint?.('departure');
+        }).addTo(this.controls);
+        L.marker([project.landing.point.latDeg, project.landing.point.lonDeg], { draggable: true, icon: landIcon, title: '接地点：ドラッグで変更' }).on('dragend', (e) => { const x = e.target.getLatLng(); this.cb.onPick('landing', x.lat, x.lng); }).on('click', () => {
+            if (!this.picking)
+                this.cb.onSelectPoint?.('landing');
+        }).addTo(this.controls);
         // Add buttons remain tied to their physically meaningful extension ends.
         if (isCompactLayout() && this.cb.onAddAtEnd) {
             for (const [side, point, color] of [['departure', plan.departure.end, 'blue'], ['arrival', plan.arrival.start, 'green']]) {
                 const icon = L.divIcon({ className: 'glp-map-add-point', html: `<span class="glp-map-add-badge glp-map-add-${color}" aria-label="${side === 'departure' ? '離脱' : '着陸'}側レグを追加">＋</span>`, iconSize: [44, 44], iconAnchor: [22, 22] });
-                L.marker(loc(point), { icon, keyboard: true, zIndexOffset: 1000, title: side === 'departure' ? '離脱側へ経路を追加' : '着陸側へ経路を追加' }).on('click', () => { if (!this.picking)
-                    this.cb.onAddAtEnd?.(side); }).addTo(this.controls);
+                L.marker(loc(point), { icon, keyboard: true, zIndexOffset: 1000, title: side === 'departure' ? '離脱側へ経路を追加' : '着陸側へ経路を追加' }).on('click', () => {
+                    if (!this.picking)
+                        this.cb.onAddAtEnd?.(side);
+                }).addTo(this.controls);
             }
         }
-        const smallIcon = (name) => L.divIcon({ className: 'glp-map-point', html: '<span class="glp-handle">' + html(name) + '</span>', iconSize: [19, 19], iconAnchor: [9, 9] });
+        const smallIcon = (name) => L.divIcon({ className: 'glp-map-point', html: '<span class="glp-handle">' + escapeHtml(name) + '</span>', iconSize: [19, 19], iconAnchor: [9, 9] });
         for (const side of ['departure', 'arrival']) {
             const path = side === 'departure' ? plan.departure : plan.arrival;
             for (const segment of path.segments) {
@@ -137,15 +158,15 @@ export class PlannerMap {
             const lines = [];
             // Permanent map labels stay short and horizontal; details remain in the hover tooltip and table.
             if (showHeights) {
-                lines.push(`<span class="glp-cp-height">${html(heightText(cp.altitudeM, project.display.altitudeUnit))}</span>`);
+                lines.push(`<span class="glp-cp-height">${escapeHtml(cp.altitudeValid === false ? '評価不可' : fmtAlt(cp.altitudeM, project.display.altitudeUnit))}</span>`);
             }
             if (showMargin && downwind) {
-                const value = downwind.marginM === undefined ? '評価不可' : html(marginText(downwind.marginM, project.display.altitudeUnit));
+                const value = downwind.marginM === undefined ? '評価不可' : escapeHtml(marginText(downwind.marginM, project.display.altitudeUnit));
                 lines.push(`<strong class="glp-cp-margin">高度余裕 ${value}</strong>`);
             }
-            const hover = cluster.map(c => `${c.label}: ${heightText(c.altitudeM, project.display.altitudeUnit)} MSL`).join(' / ');
+            const hover = cluster.map(c => `${c.label}: ${c.altitudeValid === false ? '評価不可' : fmtAlt(c.altitudeM, project.display.altitudeUnit) + ' MSL'}`).join(' / ');
             const marker = L.circleMarker(loc(cp), { radius: 4, fillColor: downwind ? '#b45309' : '#d97706', fillOpacity: 1, color: '#fff', weight: 1, interactive: true, bubblingMouseEvents: false, renderer: this.vectorRenderer });
-            marker.bindTooltip(lines.length ? `<div class="glp-map-cp-content">${lines.join('')}</div>` : html(hover), lines.length ? { permanent: true, direction: labelIndex % 2 ? 'bottom' : 'top', offset: [0, labelIndex % 2 ? 8 : -5], opacity: 0.96, className: 'glp-checkpoint-label', interactive: false } : { permanent: false });
+            marker.bindTooltip(lines.length ? `<div class="glp-map-cp-content">${lines.join('')}</div>` : escapeHtml(hover), lines.length ? { permanent: true, direction: labelIndex % 2 ? 'bottom' : 'top', offset: [0, labelIndex % 2 ? 8 : -5], opacity: 0.96, className: 'glp-checkpoint-label', interactive: false } : { permanent: false });
             marker.addTo(this.graphics);
             labelIndex++;
         }

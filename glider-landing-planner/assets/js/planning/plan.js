@@ -1,10 +1,12 @@
-import { LocalFrame, headingVector, rad } from '../geometry/geo.js';
-import { airGround, headingForTrack, sinkRate, simulatePath } from '../flight/core.js';
-import { evaluateConnector } from './connector.js';
+import { LocalFrame, headingVector, rad } from '../geometry/geo.js?v=0.1.13';
+import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.13';
+import { evaluateConnector } from './connector.js?v=0.1.13';
+import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.13';
 export function buildPlan(project) {
     const frame = new LocalFrame(project.landing.point), lp = frame.toLocal(project.landing.point);
     const dep = frame.toLocal(project.departure);
-    const ctx = { speedMps: project.defaultSpeedMps, wind: project.wind, performance: project.performance };
+    const sinkModel = createSinkModel(project.performance);
+    const ctx = { speedMps: project.defaultSpeedMps, wind: project.wind, performance: project.performance, sinkModel };
     const d0 = airGround(project.departure.headingDeg, project.defaultSpeedMps, project.wind);
     const departureStart = { ...dep, h: project.departure.altitudeMSLM, headingDeg: project.departure.headingDeg, trackDeg: d0.track, bankDeg: 0, speedMps: project.defaultSpeedMps, groundMps: d0.speed, tS: 0, sM: 0 };
     const departure = simulatePath(departureStart, project.departureLegs, ctx, 'departure');
@@ -20,7 +22,7 @@ export function buildPlan(project) {
     const notices = [...departure.notices, ...arrival.notices];
     if (!solved)
         notices.push({ code: 'WIND_TRACK_INFEASIBLE', level: 'error', message: 'ファイナルの対地進入方向を維持できる速度・風の組み合わせではありません。' });
-    const connection = project.connector ? evaluateConnector(departure.end, arrival.start, project, project.connector.handleStartM, project.connector.handleEndM) : null;
+    const connection = project.connector ? evaluateConnector(departure.end, arrival.start, project, project.connector.handleStartM, project.connector.handleEndM, false, sinkModel) : null;
     if (connection)
         notices.push(...connection.notices);
     else
@@ -31,8 +33,9 @@ export function buildPlan(project) {
         forwardAll.push(...connection.samples.slice(1).map(v => ({ ...v })));
         predictedB = { ...connection.end };
     }
-    const predArrivalStart = { ...arrival.start, h: predictedB.h, tS: predictedB.tS, sM: predictedB.sM };
-    const predictedArrival = simulatePath(predArrivalStart, project.arrivalLegs, ctx, 'arrival', false);
+    const predArrivalStart = { ...arrival.start, h: predictedB.h, tS: predictedB.tS, sM: predictedB.sM, ...(predictedB.altitudeValid === false ? { altitudeValid: false } : {}) };
+    // Use exactly the turns resolved during reverse planning (including their revolution counts).
+    const predictedArrival = simulatePath(predArrivalStart, arrival.segments.map(segment => segment.leg.type === 'turn' ? { ...segment.leg, angleInputMode: 'angle' } : segment.leg), ctx, 'arrival', false);
     notices.push(...predictedArrival.notices.filter(n => n.level === 'error'));
     forwardAll.push(...predictedArrival.samples.slice(1).map(v => ({ ...v })));
     const points = 48;
@@ -41,13 +44,23 @@ export function buildPlan(project) {
     const speedFinal = project.defaultSpeedMps;
     const finalSol = headingForTrack(project.landing.runwayTrackDeg, speedFinal, project.wind);
     const vg = finalSol?.groundMps ?? airGround(project.landing.runwayTrackDeg, speedFinal, project.wind).speed;
-    const finalLoss = vg > 0.001 ? final.groundLengthM * sinkRate(speedFinal, 0, project.performance) / vg : 0;
+    let finalSink = null;
+    try {
+        finalSink = sinkModel.rate(speedFinal, 0);
+    }
+    catch (error) {
+        if (!(error instanceof PolarEvaluationError))
+            throw error;
+        notices.push({ code: error.code, level: 'error', message: error.message });
+    }
+    const finalLoss = vg > 0.001 && finalSink !== null ? final.groundLengthM * finalSink / vg : 0;
+    const predictedFinalValid = predictedArrival.end.altitudeValid !== false && finalSink !== null;
     for (let i = 0; i <= points; i++) {
         const u = i / points, dist = u * final.groundLengthM;
         const e = fstart.e + heading.e * dist, n = fstart.n + heading.n * dist;
         const offsetS = predictedArrival.end.sM + dist, offsetTime = predictedArrival.end.tS + (vg > 0 ? dist / vg : 0);
         finalTarget.push({ e, n, h: project.landing.elevationMSLM + (final.groundLengthM - dist) * Math.tan(rad(final.pathAngleDeg)), headingDeg: finalSol?.headingDeg ?? targetHeading, trackDeg: project.landing.runwayTrackDeg, bankDeg: 0, speedMps: speedFinal, groundMps: vg, tS: offsetTime, sM: offsetS, segmentId: 'final', group: 'final' });
-        finalPredicted.push({ e, n, h: predictedArrival.end.h - (dist / final.groundLengthM) * finalLoss, headingDeg: finalSol?.headingDeg ?? targetHeading, trackDeg: project.landing.runwayTrackDeg, bankDeg: 0, speedMps: speedFinal, groundMps: vg, tS: offsetTime, sM: offsetS, segmentId: 'final', group: 'final' });
+        finalPredicted.push({ e, n, h: predictedArrival.end.h - (dist / final.groundLengthM) * finalLoss, headingDeg: finalSol?.headingDeg ?? targetHeading, trackDeg: project.landing.runwayTrackDeg, bankDeg: 0, speedMps: speedFinal, groundMps: vg, tS: offsetTime, sM: offsetS, segmentId: 'final', group: 'final', ...(predictedFinalValid ? {} : { altitudeValid: false }) });
     }
     forwardAll.push(...finalPredicted.slice(1));
     const requiredAll = [];
@@ -63,7 +76,7 @@ export function buildPlan(project) {
     // Do not place a separate "connector end" checkpoint on top of "downwind start".
     const checkpoints = [{
             id: 'departure-anchor', label: '離脱地点', kind: 'departure-start', group: 'departure',
-            e: departure.start.e, n: departure.start.n, altitudeM: departure.start.h, altitudeType: 'predicted'
+            e: departure.start.e, n: departure.start.n, altitudeM: departure.start.h, altitudeType: 'predicted', altitudeValid: departure.start.altitudeValid !== false
         }];
     let departureStraightCount = 0, departureTurnCount = 0;
     for (let i = 0; i < departure.segments.length; i++) {
@@ -71,9 +84,9 @@ export function buildPlan(project) {
         const sequence = seg.leg.type === 'turn' ? ++departureTurnCount : ++departureStraightCount;
         const generated = seg.leg.type === 'turn' ? `離脱側 第${sequence}旋回 終点` : `離脱側 直線${sequence} 終点`;
         checkpoints.push({ id: 'departure:' + seg.leg.id + ':end', label: seg.leg.checkpointLabel ?? generated, kind: 'departure-end', group: 'departure',
-            e: seg.end.e, n: seg.end.n, altitudeM: seg.end.h, altitudeType: 'predicted', legId: seg.leg.id });
+            e: seg.end.e, n: seg.end.n, altitudeM: seg.end.h, altitudeType: 'predicted', altitudeValid: seg.end.altitudeValid !== false, legId: seg.leg.id });
     }
-    const marginAvailable = Boolean(connection?.feasible) && !notices.some(n => n.level === 'error');
+    const marginAvailable = Boolean(connection?.feasible) && departure.end.altitudeValid !== false && arrival.start.altitudeValid !== false && !notices.some(n => n.level === 'error');
     let arrivalStraightCount = 0, arrivalTurnCount = 0;
     for (let i = 0; i < arrival.segments.length; i++) {
         const req = arrival.segments[i].start;
@@ -89,11 +102,11 @@ export function buildPlan(project) {
         const generated = leg.type === 'turn' ? `着陸側 第${arrivalTurnCount}旋回 開始` : `着陸側 直線${arrivalStraightCount} 開始`;
         const label = leg.checkpointLabel ?? (isDownwind ? 'ダウンウィンド開始' : generated);
         const cp = { id: 'arrival:' + leg.id + ':start', label, kind: 'arrival-start', group: 'arrival',
-            e: req.e, n: req.n, altitudeM: req.h, altitudeType: 'required', legId: leg.id,
+            e: req.e, n: req.n, altitudeM: req.h, altitudeType: 'required', altitudeValid: req.altitudeValid !== false, legId: leg.id,
             ...(isDownwind ? { checkpointKind: 'downwind-start' } : {}) };
         // Margin is defined ONLY at the actual downwind-start checkpoint. Display it only if the connector has passed feasibility.
         const pred = predictedArrival.segments[i]?.start;
-        if (isDownwind && marginAvailable && pred) {
+        if (isDownwind && marginAvailable && pred && pred.altitudeValid !== false && req.altitudeValid !== false) {
             cp.predictedM = pred.h;
             cp.requiredM = req.h;
             cp.marginM = pred.h - req.h;
@@ -113,9 +126,7 @@ export function buildPlan(project) {
     if (!connection) {
         forwardAll.splice(departure.samples.length);
     }
-    notices.push({ code: 'FINAL_BRAKE_UNKNOWN', level: 'info', message: 'ファイナル6°は幾何学的な目標線です。ブレーキ・フレア・実際の進入成立性は未評価。' });
-    if (project.performance.model === 'fixed-ld')
-        notices.push({ code: 'TURN_SINK_UNMODELED', level: 'info', message: 'モデルAは旋回追加沈下を未評価。' });
+    notices.push({ code: 'FINAL_BRAKE_UNKNOWN', level: 'info', message: `ファイナル${final.pathAngleDeg}°は幾何学的な目標線です。ブレーキ・フレア・実際の進入成立性は未評価。` });
     for (const l of [...project.departureLegs, ...project.arrivalLegs]) {
         if (l.type === 'turn' && l.bankDeg > project.maxBankDeg) {
             notices.push({ code: 'BANK_LIMIT_EXCEEDED', level: 'error', message: `レグ ${l.id} の指定バンク角 ${l.bankDeg}° が上限 ${project.maxBankDeg}° を超えています。`, legId: l.id });
@@ -125,5 +136,19 @@ export function buildPlan(project) {
         notices.push({ code: 'BOUNDARY_DISCONTINUITY', level: 'warning', message: 'Bezierと着陸側経路の機首方位が不連続になる場合があります。' });
     }
     const valid = !notices.some(n => n.level === 'error');
-    return { departure, arrival, connector: connection, forwardAll, requiredAll, finalTarget, checkpoints, notices, arrivalStart: arrival.start, finalStart, landing: lp, valid };
+    return { departure, arrival, connector: connection, forwardAll, requiredAll, finalTarget, checkpoints, notices, arrivalStart: arrival.start, finalStart, landing: lp, valid, altitudeValid: departure.end.altitudeValid !== false && arrival.start.altitudeValid !== false && connection?.altitudeValid !== false && predictedFinalValid };
+}
+/** Save the latest resolved angle as the reference for choosing revolutions on the next edit.
+ * Never alter angle-driven turns or the target bearing. */
+export function rememberResolvedTurnAngles(project, plan) {
+    for (const [legs, segments] of [
+        [project.departureLegs, plan.departure.segments],
+        [project.arrivalLegs, plan.arrival.segments]
+    ]) {
+        for (const segment of segments) {
+            const saved = legs.find(leg => leg.id === segment.leg.id);
+            if (saved?.type === 'turn' && saved.angleInputMode === 'target' && segment.leg.type === 'turn')
+                saved.angleDeg = segment.leg.angleDeg;
+        }
+    }
 }

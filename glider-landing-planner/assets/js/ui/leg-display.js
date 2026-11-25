@@ -1,4 +1,4 @@
-import { norm } from '../geometry/geo.js';
+import { norm } from '../geometry/geo.js?v=0.1.13';
 /** The input field shows the value currently in force without freezing inheritance. */
 export function effectiveLegSpeedMps(project, leg) {
     return leg.speedOverrideMps ?? project.defaultSpeedMps;
@@ -25,4 +25,16 @@ export function effectiveStraightDirectionDeg(project, plan, side, leg) {
             ? norm(project.departure.headingDeg) : norm(plan.departure.end.trackDeg);
     return leg.guidance === 'heading'
         ? norm(plan.finalStart.headingDeg) : norm(plan.finalStart.trackDeg);
+}
+/** Angle actually integrated and the true bearing at the intended turn boundary.
+ * The arrival boundary is before the turn in real flight (segments are stored forward). */
+export function effectiveTurnValues(plan, side, leg) {
+    const path = side === 'departure' ? plan.departure : plan.arrival;
+    const segment = path.segments.find(s => s.leg.id === leg.id);
+    const end = side === 'departure' ? segment?.samples.at(-1) : segment?.samples[0];
+    const failed = path.notices.some(n => n.legId === leg.id && n.level === 'error');
+    return {
+        angleDeg: segment?.leg.type === 'turn' ? segment.leg.angleDeg : leg.angleDeg,
+        boundaryDeg: end && !failed ? norm(leg.guidance === 'heading' ? end.headingDeg : end.trackDeg) : null
+    };
 }

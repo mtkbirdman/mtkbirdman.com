@@ -1,21 +1,20 @@
-import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js';
-import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js';
-import { buildPlan } from './planning/plan.js';
-import { chooseConnector } from './planning/connector.js';
-import { validateProject, parseProject, downloadProject } from './io/project.js';
-import { saveSnapshot, latestSnapshot } from './io/autosave.js';
-import { PlannerMap } from './ui/map.js';
-import { chartSvg, fmtAlt, altitudeTimeSeries, fmtElapsed } from './ui/chart.js';
-import { openPrintReport } from './ui/print.js';
-import { checkpointTable } from './ui/checkpoints.js';
-import { heightInputText, FEET_PER_METER } from './ui/height-units.js';
-import { effectiveLegSpeedMps, effectiveStraightDirectionDeg } from './ui/leg-display.js';
-const escapeHTML = (val) => String(val ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] ?? c));
+import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js?v=0.1.13';
+import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js?v=0.1.13';
+import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js?v=0.1.13';
+import { chooseConnector } from './planning/connector.js?v=0.1.13';
+import { validateProject, loadProject, parseProject, downloadProject, requiresLegacyAApproval } from './io/project.js?v=0.1.13';
+import { saveSnapshot, latestSnapshot, saveLegacyBackup, latestLegacyBackup } from './io/autosave.js?v=0.1.13';
+import { PlannerMap } from './ui/map.js?v=0.1.13';
+import { chartSvg, fmtAlt, altitudeTimeSeries, fmtElapsed } from './ui/chart.js?v=0.1.13';
+import { openPrintReport } from './ui/print.js?v=0.1.13';
+import { checkpointTable } from './ui/checkpoints.js?v=0.1.13';
+import { heightInputText, FEET_PER_METER } from './ui/height-units.js?v=0.1.13';
+import { escapeHtml } from './ui/escape-html.js?v=0.1.13';
+import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js?v=0.1.13';
 const n = (value, d = 2) => Number.isFinite(value) ? Number(value.toFixed(d)) : 0;
-const label = (s) => escapeHTML(s);
 const options = (items, selected) => items.map(([v, t]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${t}</option>`).join('');
 const engineNote = '教育・机上検討用。実際の飛行可否、地形・障害物、フレア・スポイラー性能は評価しません。';
-class App {
+export class App {
     root;
     project = createDemo();
     plan = buildPlan(this.project);
@@ -29,36 +28,61 @@ class App {
     notice = '';
     editRevision = 0;
     mobilePanel = null;
+    polarEditorOpen = false;
+    polarDraft = '';
+    pendingLegacy = null;
+    legacyBackupAvailable = false;
     constructor(root) {
         this.root = root;
         root.innerHTML = `<div class="glp-shell"><div class="glp-toolbar"></div><div class="glp-app-body"><aside class="glp-sidebar"><div class="glp-sidebar-scroll"></div></aside><section class="glp-main"><div class="glp-mapbar"><div class="glp-map-actions"><button data-action="pick-departure" class="glp-btn glp-btn-quiet">離脱地点を指定</button><button data-action="pick-landing" class="glp-btn glp-btn-quiet">着陸地点を指定</button><button data-action="fit" class="glp-btn glp-btn-quiet">全体表示</button></div><span class="glp-map-hint">地点・直線端点・紫のハンドルはドラッグできます</span></div><div class="glp-map"></div><div class="glp-overview"><div class="glp-overview-top"><strong>高度プロファイル</strong><span class="glp-chart-legend"><i class="glp-line-blue"></i>離脱側予想高度 <i class="glp-line-green"></i>着陸側逆算必要高度</span></div><div class="glp-chart"></div><div class="glp-metrics"></div><div class="glp-checkpoints"></div><div class="glp-diagnostics"></div></div></section></div><div class="glp-footnote">${engineNote}　｜　地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener">国土地理院</a>（地理院タイル）</div><input class="glp-import-file" type="file" accept=".json,.glp.json,application/json" hidden><section class="glp-mobile-editor" hidden aria-label="地図から経路を編集"><div class="glp-mobile-editor-head"></div><div class="glp-mobile-editor-content"></div></section></div>`;
         this.map = new PlannerMap(root.querySelector('.glp-map'), {
-            onPick: (type, lat, lon) => { this.pick = null; this.map.setPick(null); this.selected = null; this.edit(p => { if (type === 'departure') {
-                p.departure.latDeg = lat;
-                p.departure.lonDeg = lon;
-            }
-            else {
-                p.landing.point.latDeg = lat;
-                p.landing.point.lonDeg = lon;
-            } }); this.openMobilePanel({ kind: 'point', point: type }); },
-            onLegLength: (side, id, lengthM) => this.edit(p => { const l = (side === 'departure' ? p.departureLegs : p.arrivalLegs).find(v => v.id === id); if (l?.type === 'straight')
-                l.lengthM = lengthM; }),
+            onPick: (type, lat, lon) => {
+                this.pick = null;
+                this.map.setPick(null);
+                this.selected = null;
+                this.edit(p => {
+                    if (type === 'departure') {
+                        p.departure.latDeg = lat;
+                        p.departure.lonDeg = lon;
+                    }
+                    else {
+                        p.landing.point.latDeg = lat;
+                        p.landing.point.lonDeg = lon;
+                    }
+                });
+                this.openMobilePanel({ kind: 'point', point: type });
+            },
+            onLegLength: (side, id, lengthM) => this.edit(p => {
+                const l = (side === 'departure' ? p.departureLegs : p.arrivalLegs).find(v => v.id === id);
+                if (l?.type === 'straight')
+                    l.lengthM = lengthM;
+            }),
             onFinalLength: lengthM => this.edit(p => { p.landing.final.groundLengthM = lengthM; }),
-            onHandle: (end, lengthM) => this.edit(p => { if (p.connector) {
-                p.connector.adjustmentMode = 'manual';
-                if (end === 'start')
-                    p.connector.handleStartM = lengthM;
-                else
-                    p.connector.handleEndM = lengthM;
-            } }),
+            onHandle: (end, lengthM) => this.edit(p => {
+                if (p.connector) {
+                    p.connector.adjustmentMode = 'manual';
+                    if (end === 'start')
+                        p.connector.handleStartM = lengthM;
+                    else
+                        p.connector.handleEndM = lengthM;
+                }
+            }),
             onSelectLeg: (id) => this.selectLeg(id, true),
             onSelectPoint: (point) => { this.selected = null; this.map.redraw(this.project, this.plan, null); this.updateCheckpointSelection(); this.openMobilePanel({ kind: 'point', point }); },
             onAddAtEnd: (side) => this.openMobilePanel({ kind: 'add', side })
         });
-        root.addEventListener('click', e => { const btn = e.target.closest('button[data-action]'); if (btn) {
-            e.preventDefault();
-            this.handleAction(btn.dataset.action ?? '', btn.dataset);
-        } });
+        root.addEventListener('click', e => {
+            const btn = e.target.closest('button[data-action]');
+            if (btn) {
+                e.preventDefault();
+                this.handleAction(btn.dataset.action ?? '', btn.dataset);
+            }
+        });
+        root.addEventListener('input', e => {
+            const el = e.target;
+            if (el.matches('.glp-polar-draft'))
+                this.polarDraft = el.value;
+        });
         root.addEventListener('change', e => {
             const el = e.target;
             if (el.matches('[data-path]'))
@@ -67,24 +91,49 @@ class App {
                 void this.doImport(el);
         });
         this.render();
-        this.map.fit(this.project, this.plan);
+        void latestLegacyBackup().then(backup => {
+            if (backup) {
+                this.legacyBackupAvailable = true;
+                this.renderToolbar();
+            }
+        }).catch(() => { });
+        this.map.showNewProject(this.project);
         // Redraw touch hit areas and endpoint + buttons when rotating or resizing a device.
         window.matchMedia?.(COMPACT_LAYOUT_QUERY).addEventListener?.('change', () => { this.map.redraw(this.project, this.plan, this.selected); this.renderMobilePanel(); });
         const revisionAtStartup = this.editRevision;
-        void latestSnapshot().then(p => {
+        void latestSnapshot().then(async (p) => {
             if (!p || this.editRevision !== revisionAtStartup)
                 return; // Don't overwrite edits made while IndexedDB was loading.
+            if (requiresLegacyAApproval(p)) {
+                try {
+                    await saveLegacyBackup(p);
+                }
+                catch (error) {
+                    this.notice = '旧モデルAのバックアップに失敗したため移行を停止しました: ' + String(error);
+                    this.renderResults();
+                    return;
+                }
+                if (this.editRevision !== revisionAtStartup)
+                    return;
+                this.legacyBackupAvailable = true;
+                this.pendingLegacy = structuredClone(p);
+                this.status = '旧モデルAの移行承認待ち（自動保存停止中）';
+                this.renderToolbar();
+                this.renderResults();
+                return;
+            }
             let valid;
             try {
-                valid = validateProject(p);
+                valid = loadProject(p);
             }
             catch (e) {
                 this.notice = '自動保存データが不正なため復元できません: ' + (e instanceof Error ? e.message : String(e));
                 this.renderResults();
                 return;
             }
-            this.project = valid;
             this.plan = buildPlan(valid);
+            rememberResolvedTurnAngles(valid, this.plan);
+            this.project = valid;
             this.history = [];
             this.future = [];
             this.selected = null;
@@ -96,8 +145,12 @@ class App {
             void saveSnapshot(this.project).catch(() => { this.status = '自動保存に失敗（JSON保存を推奨）'; this.renderToolbar(); });
         }).catch(() => { });
     }
-    getField(path) { let a = this.project; for (const k of path.split('.'))
-        a = a[k]; return a; }
+    getField(path) {
+        let a = this.project;
+        for (const k of path.split('.'))
+            a = a[k];
+        return a;
+    }
     control(path, title, unit = '', step = 'any', scale = 1, shownWhenInherited) {
         const raw = this.getField(path);
         const isHeight = path === 'departure.altitudeMSLM' || path === 'landing.elevationMSLM';
@@ -106,7 +159,7 @@ class App {
         const fieldUnit = isHeight ? `${heightUnit}, MSL` : unit;
         const displayed = (raw === null || raw === undefined) && shownWhenInherited !== undefined ? shownWhenInherited : raw;
         const value = isHeight && typeof displayed === 'number' ? heightInputText(displayed, heightUnit) : typeof displayed === 'number' ? n(displayed * scale, scale === 3.6 ? 2 : 5) : displayed ?? '';
-        return `<label class="glp-field"><span>${title}${fieldUnit ? ` <em>${fieldUnit}</em>` : ''}</span><input type="number" step="${step}" value="${escapeHTML(value)}" data-path="${path}" data-scale="${actualScale}"></label>`;
+        return `<label class="glp-field"><span>${title}${fieldUnit ? ` <em>${fieldUnit}</em>` : ''}</span><input type="number" step="${step}" value="${escapeHtml(value)}" data-path="${path}" data-scale="${actualScale}"></label>`;
     }
     checkbox(path, title) { return `<label class="glp-check"><input type="checkbox" data-path="${path}" ${this.getField(path) ? 'checked' : ''}><span>${title}</span></label>`; }
     opacityControl(path, title) { const value = Math.round(Number(this.getField(path)) * 100); return `<label class="glp-opacity-field"><span>${title} <output>${value}%</output></span><input type="range" min="0" max="100" step="5" value="${value}" data-path="${path}" data-scale="100"></label>`; }
@@ -117,16 +170,25 @@ class App {
         // Nullable model values retain their inherited meaning even when the form shows a number.
         const speedInForce = effectiveLegSpeedMps(this.project, leg);
         const directionInForce = effectiveStraightDirectionDeg(this.project, this.plan, side, leg);
+        const turnValues = leg.type === 'turn' ? effectiveTurnValues(this.plan, side, leg) : null;
+        const turnTargetLabel = side === 'departure' ? '旋回後の目標方位' : '旋回前の目標方位';
+        const turnAngleField = leg.type === 'turn' && leg.angleInputMode === 'target'
+            ? `<label class="glp-field"><span>旋回角 <em>°</em>（自動計算）</span><input type="number" readonly value="${n(turnValues.angleDeg, 5)}"></label>`
+            : this.control(base + '.angleDeg', '旋回角', '°');
+        const targetField = leg.type === 'turn' && leg.angleInputMode === 'target'
+            ? this.control(base + '.targetDirectionDeg', turnTargetLabel, '°')
+            : `<label class="glp-field"><span>${turnTargetLabel} <em>°</em>（自動計算）</span><input type="number" readonly value="${turnValues?.boundaryDeg === null || turnValues === null ? '' : n(turnValues.boundaryDeg, 5)}" placeholder="評価不可"></label>`;
         return `<div class="glp-leg-edit"><div class="glp-two">${this.select(base + '.guidance', '飛行方式', modeOpts)}${this.control(base + '.speedOverrideMps', leg.type === 'turn' ? '旋回速度' : '滑空速度', 'km/h', '0.1', 3.6, speedInForce)}</div>
-    ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', '目標方位', '°', 'any', 1, directionInForce)}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.angleDeg', '旋回角', '°')}</div><div class="glp-two">${this.control(base + '.bankDeg', 'バンク角', '°')}</div>`}
-    <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHTML(leg.checkpointLabel ?? '')}" data-path="${base}.checkpointLabel"></label></div>`;
+    ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', '目標方位', '°', 'any', 1, directionInForce)}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.bankDeg', 'バンク角', '°')}</div>${this.select(base + '.angleInputMode', '入力方式', [['angle', '旋回角を指定'], ['target', '目標方位を指定']])}<div class="glp-two">${turnAngleField}${targetField}</div>`}
+    <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHtml(leg.checkpointLabel ?? '')}" data-path="${base}.checkpointLabel"></label></div>`;
     }
     legList(side) {
         const legs = side === 'departure' ? this.project.departureLegs : this.project.arrivalLegs;
         const lines = legs.map((leg, i) => {
             const active = this.selected === leg.id;
-            const title = leg.type === 'straight' ? `直線 ${Math.round(leg.lengthM)} m` : `${leg.direction === 'right' ? '右' : '左'}旋回 ${leg.angleDeg}° / バンク${leg.bankDeg}°`;
-            return `<div class="glp-leg ${active ? 'glp-leg-active' : ''}"><div class="glp-leg-line"><button class="glp-leg-title" data-action="select-leg" data-id="${leg.id}" title="編集"><span class="glp-leg-symbol">${leg.type === 'straight' ? '━' : '⤷'}</span><span>${i + 1}. ${label(title)}</span></button><span class="glp-leg-buttons"><button title="上に移動" data-action="move-up" data-side="${side}" data-id="${leg.id}">↑</button><button title="下に移動" data-action="move-down" data-side="${side}" data-id="${leg.id}">↓</button><button title="削除" data-action="delete-leg" data-side="${side}" data-id="${leg.id}">×</button></span></div>
+            const effectiveAngle = leg.type === 'turn' ? effectiveTurnValues(this.plan, side, leg).angleDeg : 0;
+            const title = leg.type === 'straight' ? `直線 ${Math.round(leg.lengthM)} m` : `${leg.direction === 'right' ? '右' : '左'}旋回 ${n(effectiveAngle, 2)}° / バンク${leg.bankDeg}°`;
+            return `<div class="glp-leg ${active ? 'glp-leg-active' : ''}"><div class="glp-leg-line"><button class="glp-leg-title" data-action="select-leg" data-id="${leg.id}" title="編集"><span class="glp-leg-symbol">${leg.type === 'straight' ? '━' : '⤷'}</span><span>${i + 1}. ${escapeHtml(title)}</span></button><span class="glp-leg-buttons"><button title="上に移動" data-action="move-up" data-side="${side}" data-id="${leg.id}">↑</button><button title="下に移動" data-action="move-down" data-side="${side}" data-id="${leg.id}">↓</button><button title="削除" data-action="delete-leg" data-side="${side}" data-id="${leg.id}">×</button></span></div>
        ${active ? this.legEditor(side, leg, i) : ''}</div>`;
         }).join('');
         const adds = `<div class="glp-adds"><button class="glp-btn glp-btn-sub" data-action="add-straight" data-side="${side}">＋ 直線</button><button class="glp-btn glp-btn-sub" data-action="add-turn" data-side="${side}">＋ 旋回</button></div>`;
@@ -193,20 +255,26 @@ class App {
             contents = `<p class="glp-tip">${target.side === 'departure' ? '離脱側の最後' : '着陸側の最上流'}に追加します。</p><div class="glp-adds"><button class="glp-btn glp-btn-sub" data-action="add-straight" data-side="${target.side}">＋ 直線</button><button class="glp-btn glp-btn-sub" data-action="add-turn" data-side="${target.side}">＋ 旋回</button></div>`;
         }
         panel.hidden = false;
-        panel.querySelector('.glp-mobile-editor-head').innerHTML = `<strong>${label(title)}</strong><button type="button" class="glp-btn glp-btn-quiet" data-action="close-mobile-panel" aria-label="編集画面を閉じる">閉じる ×</button>`;
+        panel.querySelector('.glp-mobile-editor-head').innerHTML = `<strong>${escapeHtml(title)}</strong><button type="button" class="glp-btn glp-btn-quiet" data-action="close-mobile-panel" aria-label="編集画面を閉じる">閉じる ×</button>`;
         const body = panel.querySelector('.glp-mobile-editor-content');
         const lastScroll = body.scrollTop;
         body.innerHTML = contents;
         body.scrollTop = lastScroll;
     }
     renderSidebar() {
+        const perf = this.project.performance;
+        const modelEditor = this.polarEditorOpen
+            ? `<div class="glp-polar-table-editor"><p class="glp-tip">速度（km/h）, 沈下率（m/s）を1行に1組。4〜64点。適用するまで計算条件は変わりません。</p><textarea class="glp-polar-draft" rows="8" spellcheck="false" placeholder="70, 0.8">${escapeHtml(this.polarDraft)}</textarea><div class="glp-adds"><button class="glp-btn glp-btn-primary" data-action="polar-apply">ポーラーを適用</button><button class="glp-btn glp-btn-quiet" data-action="polar-cancel">キャンセル</button></div></div>`
+            : perf.model === 'quadratic-drag'
+                ? `<div class="glp-two">${this.control('performance.quadratic.bestLD', '最大滑空比')}${this.control('performance.quadratic.bestLDAtMps', '最良滑空速度', 'km/h', '0.1', 3.6)}</div>`
+                : `<p class="glp-tip">速度別ポーラー：${perf.polarTable?.points.length ?? 0}点 / ${perf.polarTable ? (perf.polarTable.points[0].speedMps * 3.6).toFixed(1) + '〜' + (perf.polarTable.points.at(-1).speedMps * 3.6).toFixed(1) : '未設定'} km/h。範囲外は評価不可。</p><button class="glp-btn glp-btn-sub" data-action="polar-edit">ポーラーデータを編集</button>`;
         const sidebarScroll = this.root.querySelector('.glp-sidebar-scroll');
         const preservedScroll = sidebarScroll.scrollTop;
         sidebarScroll.innerHTML = `
    <div class="glp-panel-heading"><div class="glp-eyebrow">FLIGHT PARAMETERS</div><h2>飛行条件・経路設計</h2></div>
    <div class="glp-panel"><h3>基本条件</h3><div class="glp-two">${this.control('defaultSpeedMps', '基準対気速度', 'km/h', '0.1', 3.6)}${this.control('maxBankDeg', '最大バンク', '°')}</div>
-   ${this.select('performance.model', '沈下計算モデル', [['fixed-ld', 'A：固定L/D'], ['quadratic-drag', 'B：簡易抗力モデル']])}
-   <div class="glp-two">${this.control('performance.fixedLD', 'モデルA：L/D')}${this.control('performance.bestLD', 'モデルB：最大L/D')}</div>${this.control('performance.bestLDAtMps', 'モデルB：最大L/D速度', 'km/h', '0.1', 3.6)}
+   ${this.select('performance.model', '沈下計算モデル', [['quadratic-drag', 'B：簡易抗力モデル'], ['polar-table', 'C：速度別ポーラーモデル']])}
+   ${modelEditor}
    <div class="glp-two">${this.control('wind.fromDeg', '風向', '°')}${this.control('wind.speedMps', '風速', 'm/s')}</div>
    ${this.select('display.altitudeUnit', '高度入力・表示単位（MSL）', [['ft', 'ft'], ['m', 'm']])}</div>
    <div class="glp-panel"><h3><span class="glp-dot blue"></span>離脱地点・条件</h3><div class="glp-two">${this.control('departure.latDeg', '緯度', '°')}${this.control('departure.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('departure.altitudeMSLM', '離脱高度')}${this.control('departure.headingDeg', '開始機首方位', '°')}</div><p class="glp-tip">地図の「離脱地点を指定」または青いマーカーのドラッグで変更できます。</p></div>
@@ -223,18 +291,18 @@ class App {
         sidebarScroll.scrollTop = preservedScroll;
     }
     renderToolbar() {
-        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.9</span></div></div><div class="glp-tool-group">
-  <input type="text" class="glp-project-name" data-path="name" value="${escapeHTML(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
-  <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export">JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print">PDF印刷</button></div><div class="glp-save-state">● ${escapeHTML(this.status)}</div>`;
+        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.13</span></div></div><div class="glp-tool-group">
+  <input type="text" class="glp-project-name" data-path="name" value="${escapeHtml(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
+  <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" ${this.pendingLegacy ? 'disabled' : ''}>JSON保存</button>${this.legacyBackupAvailable ? '<button class="glp-btn glp-btn-quiet" data-action="legacy-backup">旧Aバックアップ</button>' : ''}<button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" ${this.pendingLegacy ? 'disabled' : ''}>PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
     }
     renderResults() {
         const p = this.plan, unit = this.project.display.altitudeUnit;
         const downwind = p.checkpoints.find(c => c.checkpointKind === 'downwind-start');
         const connected = p.connector?.feasible && downwind?.marginM !== undefined;
         const totalKm = (p.forwardAll.at(-1)?.sM ?? 0) / 1000;
-        const gapM = p.connector ? p.departure.end.h - p.connector.lossM - p.arrival.start.h : null;
+        const gapM = p.connector && p.altitudeValid !== false ? p.departure.end.h - p.connector.lossM - p.arrival.start.h : null;
         const flightTime = altitudeTimeSeries(p);
-        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${Number.isFinite(totalKm) ? totalKm.toFixed(2) : '—'} km</strong></div><div class="glp-stat"><small>推定飛行時間${flightTime.timingProvisional ? '（暫定）' : ''}</small><strong>${fmtElapsed(flightTime.durationS)}</strong></div><div class="glp-stat"><small>高度余裕</small><strong>${p.connector?.feasible && gapM !== null ? fmtAlt(gapM, unit) : '評価不可'}</strong></div>`;
+        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${Number.isFinite(totalKm) ? totalKm.toFixed(2) : '—'} km</strong></div><div class="glp-stat"><small>推定飛行時間${flightTime.timingProvisional ? '（暫定）' : ''}</small><strong>${fmtElapsed(flightTime.durationS)}</strong></div><div class="glp-stat"><small>高度余裕</small><strong>${p.connector?.feasible && p.valid && gapM !== null ? fmtAlt(gapM, unit) : '評価不可'}</strong></div>`;
         this.root.querySelector('.glp-chart').innerHTML = chartSvg(p, this.project);
         this.root.querySelector('.glp-metrics').innerHTML = m;
         this.root.querySelector('.glp-checkpoints').innerHTML = `<div class="glp-overview-top"><strong>チェックポイント高度</strong><small>滑空場基準高度（着陸標高を0とする相対高度）／MSL高度</small></div><div class="glp-tablewrap">${checkpointTable(p, this.project)}</div><p class="glp-tip">高度余裕は接続点での予想・必要高度の差です。着陸地点基準の高さではありません。</p>${downwind && !connected ? '<p class="glp-tip">ダウンウィンド開始の高度余裕は、接続条件が成立していないため評価不可です。</p>' : ''}`;
@@ -243,8 +311,9 @@ class App {
             distinct.set(notice.code + notice.message, notice.message);
         const top = p.notices.filter(i => i.level === 'error');
         const warnings = p.notices.filter(i => i.level === 'warning');
-        this.root.querySelector('.glp-diagnostics').innerHTML = `<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length ? 'glp-status-bad' : warnings.length ? 'glp-status-warn' : 'glp-status-note'}">${top.length ? '不成立の条件あり' : warnings.length ? '警告あり' : '近似モデル'}</span></div>
- <div class="glp-diagnostic-bank">Bezier接続最大必要バンク：<strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong>（設定上限 ${this.project.maxBankDeg.toFixed(1)}°）</div>${this.notice ? `<div class="glp-inline-message">${label(this.notice)}</div>` : ''}<div class="glp-alerts">${[...distinct.values()].slice(0, 12).map(t => `<div class="glp-alert">${label(t)}</div>`).join('') || '<p>計算エラーは報告されていません。</p>'}</div>`;
+        const migrationBanner = this.pendingLegacy ? `<div class="glp-inline-message"><strong>旧モデルAの保存計画があります。</strong>モデルBへ変換すると旋回・異なる速度での高度損失が変わります。元データは保護済みです。<div class="glp-adds"><button class="glp-btn glp-btn-sub" data-action="legacy-backup">元のJSONを保存</button><button class="glp-btn glp-btn-primary" data-action="legacy-approve">モデルBへ変換して開く</button></div></div>` : '';
+        this.root.querySelector('.glp-diagnostics').innerHTML = migrationBanner + `<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length ? 'glp-status-bad' : warnings.length ? 'glp-status-warn' : 'glp-status-note'}">${top.length ? '不成立の条件あり' : warnings.length ? '警告あり' : '近似モデル'}</span></div>
+ <div class="glp-diagnostic-bank">Bezier接続最大必要バンク：<strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong>（設定上限 ${this.project.maxBankDeg.toFixed(1)}°）</div>${this.notice ? `<div class="glp-inline-message">${escapeHtml(this.notice)}</div>` : ''}<div class="glp-alerts">${[...distinct.values()].slice(0, 12).map(t => `<div class="glp-alert">${escapeHtml(t)}</div>`).join('') || '<p>計算エラーは報告されていません。</p>'}</div>`;
         this.updateCheckpointSelection();
     }
     updateCheckpointSelection() {
@@ -256,10 +325,18 @@ class App {
         const mapEl = this.root.querySelector('.glp-map');
         if (!mapEl)
             throw new Error('地図が見つかりません');
-        openPrintReport({ project: this.project, plan: this.plan, mapEl,
+        const diagnostics = this.root.querySelector('.glp-diagnostics');
+        const diagnosticsHtml = ['.glp-diagnostic-bank', '.glp-inline-message', '.glp-alerts']
+            .map(selector => diagnostics.querySelector(selector)?.outerHTML ?? '').join('');
+        openPrintReport({
+            project: this.project,
+            plan: this.plan,
+            mapEl,
             metricsHtml: this.root.querySelector('.glp-metrics').innerHTML,
-            diagnosticsHtml: (() => { const diag = this.root.querySelector('.glp-diagnostics'); return ['.glp-diagnostic-bank', '.glp-inline-message', '.glp-alerts'].map(sel => diag.querySelector(sel)?.outerHTML ?? '').join(''); })(),
-            title: 'Glider Landing Planner', engineVersion: ENGINE_VERSION });
+            diagnosticsHtml,
+            title: 'Glider Landing Planner',
+            engineVersion: ENGINE_VERSION
+        });
     }
     render() {
         this.renderToolbar();
@@ -267,12 +344,23 @@ class App {
         this.renderResults();
         this.map.redraw(this.project, this.plan, this.selected);
         this.renderMobilePanel();
-        const bb = this.root.querySelectorAll('.glp-map-actions button');
-        bb.forEach(b => b.classList.toggle('glp-active', b.dataset.action === 'pick-' + this.pick));
+        for (const button of this.root.querySelectorAll('.glp-map-actions button')) {
+            button.classList.toggle('glp-active', button.dataset.action === 'pick-' + this.pick);
+        }
     }
+    /** Only flight inputs can change the geometric connection. Labels and display settings cannot. */
     optimizationSignature(p) {
-        return JSON.stringify({ speed: p.defaultSpeedMps, bank: p.maxBankDeg, performance: p.performance, wind: p.wind,
-            departure: p.departure, landing: p.landing, departureLegs: p.departureLegs, arrivalLegs: p.arrivalLegs });
+        const legMotion = (legs) => legs.map(leg => {
+            const base = { guidance: leg.guidance, speedOverrideMps: leg.speedOverrideMps };
+            if (leg.type === 'straight')
+                return { ...base, type: leg.type, lengthM: leg.lengthM, directionDeg: leg.directionDeg };
+            return { ...base, type: leg.type, direction: leg.direction, angleDeg: leg.angleDeg, bankDeg: leg.bankDeg, angleInputMode: leg.angleInputMode, targetDirectionDeg: leg.targetDirectionDeg };
+        });
+        return JSON.stringify({
+            speed: p.defaultSpeedMps, bank: p.maxBankDeg, performance: p.performance, wind: p.wind,
+            departure: p.departure, landing: p.landing,
+            departureLegs: legMotion(p.departureLegs), arrivalLegs: legMotion(p.arrivalLegs)
+        });
     }
     recalculate(p, previous) {
         const preliminary = buildPlan(p);
@@ -287,42 +375,85 @@ class App {
         p.connector.handleEndM = optimized.handleEndM;
         return buildPlan(p);
     }
+    /** Common completion path for edit, import, undo, and redo. History is handled by callers. */
+    applyProject(project, plan, status) {
+        rememberResolvedTurnAngles(project, plan);
+        this.project = project;
+        this.plan = plan;
+        this.notice = '';
+        this.status = status;
+        this.render();
+        this.scheduleSave();
+    }
     edit(mutate) {
+        // Reject a late startup autosave when any user edit was attempted.
         this.editRevision++;
-        const p = structuredClone(this.project), original = structuredClone(this.project);
+        if (this.pendingLegacy) {
+            this.notice = '旧モデルAの移行承認、または「新規」を選択してください。元データは自動保存されず保護されています。';
+            this.renderResults();
+            return false;
+        }
+        const original = this.project;
+        const project = structuredClone(original);
         try {
-            mutate(p);
-            validateProject(p);
-            const next = this.recalculate(p, original);
-            this.history.push(original);
+            mutate(project);
+            validateProject(project);
+            if (JSON.stringify(project) === JSON.stringify(original))
+                return false;
+            // Name and display changes don't affect the flight result. Checkpoint labels do.
+            const flightInputsChanged = JSON.stringify({ ...project, name: undefined, display: undefined }) !==
+                JSON.stringify({ ...original, name: undefined, display: undefined });
+            const plan = flightInputsChanged ? this.recalculate(project, original) : this.plan;
+            this.history.push(structuredClone(original));
             if (this.history.length > 50)
                 this.history.shift();
             this.future = [];
-            this.project = p;
-            this.plan = next;
-            this.notice = '';
-            this.status = '未保存';
-            this.render();
-            this.scheduleSave();
+            this.applyProject(project, plan, '未保存');
+            return true;
         }
-        catch (e) {
-            this.notice = '変更を適用できません: ' + (e instanceof Error ? e.message : String(e));
+        catch (error) {
+            this.notice = '変更を適用できません: ' + (error instanceof Error ? error.message : String(error));
             this.renderResults();
+            return false;
         }
     }
-    scheduleSave() { if (this.saveTimer)
-        window.clearTimeout(this.saveTimer); this.saveTimer = window.setTimeout(() => { this.status = '保存中…'; this.renderToolbar(); void saveSnapshot(this.project).then(() => { this.status = '自動保存済'; this.renderToolbar(); }).catch(() => { this.status = '自動保存失敗（JSONを保存してください）'; this.renderToolbar(); }); }, 1000); }
+    scheduleSave() {
+        if (this.pendingLegacy)
+            return;
+        if (this.saveTimer !== undefined)
+            window.clearTimeout(this.saveTimer);
+        const revision = this.editRevision;
+        this.saveTimer = window.setTimeout(() => {
+            this.saveTimer = undefined;
+            this.status = '保存中…';
+            this.renderToolbar();
+            // A later edit must not be marked saved by an older asynchronous request.
+            void saveSnapshot(structuredClone(this.project)).then(() => {
+                if (this.editRevision !== revision)
+                    return;
+                this.status = '自動保存済';
+                this.renderToolbar();
+            }).catch(() => {
+                if (this.editRevision !== revision)
+                    return;
+                this.status = '自動保存失敗（JSONを保存してください）';
+                this.renderToolbar();
+            });
+        }, 1000);
+    }
     handleChange(input) {
         const path = input.dataset.path;
         if (!path)
             return;
         let value;
-        if (input instanceof HTMLInputElement && input.type === 'checkbox')
+        if (input instanceof HTMLInputElement && input.type === 'checkbox') {
             value = input.checked;
+        }
         else if (input instanceof HTMLInputElement && (input.type === 'number' || input.type === 'range')) {
             if (input.value.trim() === '') {
-                if (path.endsWith('speedOverrideMps') || path.endsWith('directionDeg'))
+                if (path.endsWith('speedOverrideMps') || path.endsWith('directionDeg')) {
                     value = null;
+                }
                 else {
                     this.notice = '数値項目を空欄にはできません。';
                     this.render();
@@ -338,17 +469,124 @@ class App {
                 }
             }
         }
-        else if (input instanceof HTMLSelectElement && path === 'display.bearingLineIntervalDeg')
+        else if (input instanceof HTMLSelectElement && path === 'display.bearingLineIntervalDeg') {
             value = Number(input.value);
-        else
+        }
+        else {
             value = input.value;
-        this.edit(p => { const keys = path.split('.'); let target = p; for (let i = 0; i < keys.length - 1; i++)
-            target = target[keys[i]]; if (path.endsWith('checkpointLabel') && !value)
-            delete target[keys.at(-1)];
-        else
-            target[keys.at(-1)] = value; });
+        }
+        if (path.endsWith('.angleInputMode')) {
+            const keys = path.split('.');
+            const side = keys[0] === 'departureLegs' ? 'departure' : 'arrival';
+            const oldLeg = (side === 'departure' ? this.project.departureLegs : this.project.arrivalLegs)[Number(keys[1])];
+            if (oldLeg?.type !== 'turn' || (value !== 'angle' && value !== 'target'))
+                return;
+            const turn = effectiveTurnValues(this.plan, side, oldLeg);
+            if (value === 'target' && turn.boundaryDeg === null) {
+                this.notice = '旋回境界の方位を評価できないため、目標方位指定に切り替えられません。';
+                this.renderResults();
+                return;
+            }
+            this.edit(project => {
+                const selected = (side === 'departure' ? project.departureLegs : project.arrivalLegs)[Number(keys[1])];
+                if (selected.type !== 'turn')
+                    return;
+                selected.angleDeg = turn.angleDeg;
+                selected.angleInputMode = value;
+                selected.targetDirectionDeg = value === 'target' ? turn.boundaryDeg : null;
+            });
+            return;
+        }
+        if (path === 'performance.model' && value === 'polar-table' && !this.project.performance.polarTable) {
+            this.polarDraft = '';
+            this.polarEditorOpen = true;
+            this.renderSidebar();
+            return;
+        }
+        this.edit(project => {
+            const keys = path.split('.');
+            let target = project;
+            for (let i = 0; i < keys.length - 1; i++)
+                target = target[keys[i]];
+            const field = keys[keys.length - 1];
+            if (path.endsWith('checkpointLabel') && !value)
+                delete target[field];
+            else
+                target[field] = value;
+        });
     }
     handleAction(action, data) {
+        if (action === 'polar-edit') {
+            this.polarDraft = this.project.performance.polarTable?.points.map(p => `${Number((p.speedMps * 3.6).toFixed(5))}, ${p.sinkMps}`).join('\n') ?? '';
+            this.polarEditorOpen = true;
+            this.renderSidebar();
+            return;
+        }
+        if (action === 'polar-cancel') {
+            this.polarEditorOpen = false;
+            this.renderSidebar();
+            return;
+        }
+        if (action === 'polar-apply') {
+            try {
+                const rows = this.polarDraft.trim().split(/\r?\n/).map(line => {
+                    const values = line.trim().split(/[,;\s]+/);
+                    if (values.length !== 2 || values.some(v => !v || !Number.isFinite(Number(v))))
+                        throw Error('各行は「速度（km/h）, 沈下率（m/s）」の数値2つで指定してください。');
+                    return { speedMps: Number(values[0]) / 3.6, sinkMps: Number(values[1]) };
+                });
+                rows.sort((a, b) => a.speedMps - b.speedMps);
+                const applied = this.edit(project => {
+                    project.performance.polarTable = { points: rows };
+                    project.performance.model = 'polar-table';
+                });
+                if (applied) {
+                    this.polarEditorOpen = false;
+                    this.renderSidebar();
+                }
+            }
+            catch (error) {
+                this.notice = 'ポーラーテーブルの入力エラー: ' + (error instanceof Error ? error.message : String(error));
+                this.renderResults();
+            }
+            return;
+        }
+        if (action === 'legacy-backup') {
+            void (async () => {
+                const original = this.pendingLegacy ?? await latestLegacyBackup();
+                if (!original)
+                    throw Error('バックアップが見つかりません。');
+                const blob = new Blob([JSON.stringify(original, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = url;
+                anchor.download = 'glider-plan-legacy-model-A-backup.json';
+                anchor.click();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+            })().catch(error => { this.notice = '旧JSONの保存に失敗しました: ' + String(error); this.renderResults(); });
+            return;
+        }
+        if (action === 'legacy-approve' && this.pendingLegacy) {
+            if (!window.confirm('旧モデルAをモデルBへ変換します。元JSONの保存を推奨します。速度変更・旋回時の高度損失が変わることを了承しますか？'))
+                return;
+            try {
+                const project = loadProject(this.pendingLegacy, true);
+                const plan = buildPlan(project);
+                this.pendingLegacy = null;
+                this.editRevision++;
+                this.history = [];
+                this.future = [];
+                this.selected = null;
+                this.applyProject(project, plan, '旧モデルAを変換しました');
+                this.map.fit(this.project, this.plan);
+            }
+            catch (error) {
+                this.notice = String(error);
+                this.renderResults();
+            }
+            return;
+        }
+        // Actions that do not change the flight project.
         if (action === 'fit') {
             this.map.fit(this.project, this.plan);
             return;
@@ -369,8 +607,8 @@ class App {
                 this.status = 'JSONを書き出しました';
                 this.renderToolbar();
             }
-            catch (e) {
-                this.notice = String(e);
+            catch (error) {
+                this.notice = String(error);
                 this.renderResults();
             }
             return;
@@ -379,39 +617,47 @@ class App {
             try {
                 this.printReport();
             }
-            catch (e) {
-                this.notice = 'PDF印刷を開始できません: ' + (e instanceof Error ? e.message : String(e));
+            catch (error) {
+                this.notice = 'PDF印刷を開始できません: ' + (error instanceof Error ? error.message : String(error));
                 this.renderResults();
             }
             return;
         }
-        if (action === 'undo') {
-            if (this.history.length) {
-                this.editRevision++;
-                this.future.push(structuredClone(this.project));
-                this.project = this.history.pop();
-                this.plan = buildPlan(this.project);
-                this.render();
-                this.scheduleSave();
-            }
+        // Undo and redo select an already validated project; do not optimize its saved handles.
+        if (action === 'undo' && this.history.length) {
+            this.editRevision++;
+            this.future.push(structuredClone(this.project));
+            const project = this.history.pop();
+            this.applyProject(project, buildPlan(project), '未保存');
             return;
         }
-        if (action === 'redo') {
-            if (this.future.length) {
-                this.editRevision++;
-                this.history.push(structuredClone(this.project));
-                this.project = this.future.pop();
-                this.plan = buildPlan(this.project);
-                this.render();
-                this.scheduleSave();
-            }
+        if (action === 'redo' && this.future.length) {
+            this.editRevision++;
+            this.pendingLegacy = null;
+            this.polarEditorOpen = false;
+            this.history.push(structuredClone(this.project));
+            const project = this.future.pop();
+            this.applyProject(project, buildPlan(project), '未保存');
             return;
         }
         if (action === 'new') {
             if (window.confirm('現在の計画を破棄して新規計画を作成しますか？（先にJSON保存を推奨）')) {
+                this.pendingLegacy = null;
+                this.polarEditorOpen = false;
+                // A new plan starts with the same unoptimized control handles as first launch.
+                // Import/restore/undo continue to preserve their saved connector geometry.
+                this.editRevision++;
+                this.history.push(structuredClone(this.project));
+                if (this.history.length > 50)
+                    this.history.shift();
+                this.future = [];
+                this.selected = null;
+                this.pick = null;
+                this.map.setPick(null);
                 this.mobilePanel = null;
-                this.edit(p => Object.assign(p, createDemo()));
-                this.map.fit(this.project, this.plan);
+                const project = createDemo();
+                this.applyProject(project, buildPlan(project), '未保存');
+                this.map.showNewProject(project);
             }
             return;
         }
@@ -430,68 +676,95 @@ class App {
                 this.openMobilePanel({ kind: 'add', side: data.side });
             return;
         }
+        // Leg operations. Arrival legs are stored in flight order, so new legs go first.
         if (action === 'add-straight' || action === 'add-turn') {
-            const leg = action === 'add-straight' ? makeStraight() : makeTurn();
+            if (data.side !== 'departure' && data.side !== 'arrival')
+                return;
             const side = data.side;
-            this.edit(p => { if (side === 'departure')
-                p.departureLegs.push(leg);
-            else
-                p.arrivalLegs.unshift(leg); });
-            this.selected = leg.id;
-            this.renderSidebar();
-            this.map.redraw(this.project, this.plan, this.selected);
-            this.updateCheckpointSelection();
-            this.openMobilePanel({ kind: 'leg', id: leg.id });
+            const leg = action === 'add-straight' ? makeStraight() : makeTurn();
+            const added = this.edit(project => {
+                if (side === 'departure')
+                    project.departureLegs.push(leg);
+                else
+                    project.arrivalLegs.unshift(leg);
+            });
+            if (!added)
+                return;
+            this.selectLeg(leg.id, true);
             return;
         }
         if (action === 'delete-leg' || action === 'move-up' || action === 'move-down') {
-            const side = data.side, id = data.id;
-            this.edit(p => {
-                const list = side === 'departure' ? p.departureLegs : p.arrivalLegs;
-                const i = list.findIndex(l => l.id === id);
-                if (i < 0)
+            if (data.side !== 'departure' && data.side !== 'arrival')
+                return;
+            const side = data.side;
+            const id = data.id;
+            if (!id)
+                return;
+            const changed = this.edit(project => {
+                const legs = side === 'departure' ? project.departureLegs : project.arrivalLegs;
+                const index = legs.findIndex(leg => leg.id === id);
+                if (index < 0)
                     return;
-                if (action === 'delete-leg')
-                    list.splice(i, 1);
+                if (action === 'delete-leg') {
+                    legs.splice(index, 1);
+                }
                 else {
-                    const dest = i + (action === 'move-up' ? -1 : 1);
-                    if (dest < 0 || dest >= list.length)
+                    const destination = index + (action === 'move-up' ? -1 : 1);
+                    if (destination < 0 || destination >= legs.length)
                         return;
-                    [list[i], list[dest]] = [list[dest], list[i]];
+                    [legs[index], legs[destination]] = [legs[destination], legs[index]];
                 }
             });
+            if (!changed)
+                return;
+            // edit() already rendered the moved/remaining legs. Only a deleted
+            // selection needs a second redraw to clear its highlight.
             if (action === 'delete-leg' && this.selected === id) {
                 this.selected = null;
                 if (this.mobilePanel?.kind === 'leg' && this.mobilePanel.id === id)
                     this.mobilePanel = null;
+                this.renderSidebar();
+                this.map.redraw(this.project, this.plan, null);
+                this.updateCheckpointSelection();
+                this.renderMobilePanel();
             }
-            this.renderSidebar();
-            this.map.redraw(this.project, this.plan, this.selected);
-            this.updateCheckpointSelection();
-            this.renderMobilePanel();
             return;
         }
         if (action === 'preset-left' || action === 'preset-right') {
             if (this.project.arrivalLegs.length && !window.confirm('着陸側レグをプリセットで置き換えますか？'))
                 return;
-            this.edit(p => { p.arrivalLegs = trafficPreset(action === 'preset-left' ? 'left' : 'right'); });
-            if (isCompactLayout() && this.project.arrivalLegs.length) {
-                this.selected = this.project.arrivalLegs[0].id;
-                this.renderSidebar();
-                this.map.redraw(this.project, this.plan, this.selected);
-                this.updateCheckpointSelection();
-                this.openMobilePanel({ kind: 'leg', id: this.selected });
+            const changed = this.edit(project => {
+                project.arrivalLegs = trafficPreset(action === 'preset-left' ? 'left' : 'right');
+            });
+            if (changed && isCompactLayout() && this.project.arrivalLegs.length) {
+                this.selectLeg(this.project.arrivalLegs[0].id, true);
             }
             return;
         }
+        // Connector edits retain nonzero endpoint curvature and the existing optimizer.
         if (action === 'toggle-connector') {
-            this.edit(p => { p.connector = p.connector ? null : { type: 'bezier_connector', handleStartM: Math.max(20, Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n) * .35), handleEndM: Math.max(20, Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n) * .35), curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto' }; });
+            this.edit(project => {
+                if (project.connector) {
+                    project.connector = null;
+                    return;
+                }
+                const span = Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n);
+                const handle = Math.max(20, span * 0.35);
+                project.connector = {
+                    type: 'bezier_connector', handleStartM: handle, handleEndM: handle,
+                    curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto'
+                };
+            });
             return;
         }
         if (action === 'optimize') {
             const result = chooseConnector(this.plan.departure.end, this.plan.arrivalStart, this.project);
-            this.edit(p => { p.connector = { type: 'bezier_connector', handleStartM: result.handleStartM, handleEndM: result.handleEndM, curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto' }; });
-            return;
+            this.edit(project => {
+                project.connector = {
+                    type: 'bezier_connector', handleStartM: result.handleStartM, handleEndM: result.handleEndM,
+                    curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto'
+                };
+            });
         }
     }
     async doImport(input) {
@@ -499,25 +772,30 @@ class App {
         if (!file)
             return;
         try {
-            if (file.size > 2_000_000)
+            if (file.size > 2000000)
                 throw Error('ファイルサイズ上限は2MBです。');
-            const p = parseProject(await file.text());
+            const rawText = await file.text();
+            const legacyA = requiresLegacyAApproval(JSON.parse(rawText));
+            if (legacyA && !window.confirm('旧モデルAからBへ変換すると高度損失が変わります。元JSONを保管したうえで変換しますか？'))
+                return;
+            const project = parseProject(rawText, legacyA);
+            const plan = buildPlan(project);
             if (!window.confirm('JSONの内容で現在のプロジェクトを置き換えますか？'))
                 return;
             this.editRevision++;
+            this.pendingLegacy = null;
+            this.polarEditorOpen = false;
             this.history.push(structuredClone(this.project));
-            this.project = p;
-            this.plan = buildPlan(p);
+            if (this.history.length > 50)
+                this.history.shift();
             this.future = [];
             this.selected = null;
             this.mobilePanel = null;
-            this.status = 'JSON読込完了';
-            this.render();
+            this.applyProject(project, plan, 'JSON読込完了');
             this.map.fit(this.project, this.plan);
-            this.scheduleSave();
         }
-        catch (e) {
-            this.notice = 'JSON読込エラー: ' + (e instanceof Error ? e.message : String(e));
+        catch (error) {
+            this.notice = 'JSON読込エラー: ' + (error instanceof Error ? error.message : String(error));
             this.renderResults();
         }
         finally {
