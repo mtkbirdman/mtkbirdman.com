@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDemo,trafficPreset} from '../../assets/js/model/defaults.js';
@@ -47,7 +48,7 @@ test('v0.1.3 selected leg is highlighted and a path click selects its leg',async
   svg(){return {svgRenderer:true};},tileLayer(){return {addTo(){}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},
   polyline(_pts,opts){return layer('path',opts);},circle(_pt,opts){return layer('circle',opts);},circleMarker(_pt,opts){return layer('circle',opts);},marker(_pt,opts){return layer('marker',opts);},divIcon(x){return x;}
  };
- const {PlannerMap}=await import('../../assets/js/ui/map.js');const project=createDemo();project.arrivalLegs=trafficPreset('left');
+ const {PlannerMap}=await import('../../assets/js/ui/map.js');const project=previouslyPlannedProject();project.arrivalLegs=trafficPreset('left');
  project.display.referenceLineOpacity=.2;
  project.display.showCheckpointAltitudes=true;project.display.showDownwindMargin=true;
  const plan=buildPlan(project);

@@ -26,6 +26,8 @@ export function buildPlan(project: ProjectV1): PlanResult {
     const connection = project.connector ? evaluateConnector(departure.end, arrival.start, project, project.connector.handleStartM, project.connector.handleEndM, false, sinkModel) : null;
     if (connection)
         notices.push(...connection.notices);
+    else if (project.arrivalLegs.length === 0)
+        notices.push({ code: 'PLAN_NOT_STARTED', level: 'info', message: '経路は未設計です。着陸側レグまたは場周プリセットを追加すると接続曲線を生成します。' });
     else
         notices.push({ code: 'CONNECTOR_MISSING', level: 'error', message: '離脱側と着陸側が接続されていません。必要高度・到達高度の比較は行いません。' });
     const forwardAll: Sample[] = departure.samples.map(v => ({ ...v }));
@@ -134,7 +136,7 @@ export function buildPlan(project: ProjectV1): PlanResult {
         notices.push({ code: 'BOUNDARY_DISCONTINUITY', level: 'warning', message: 'Bezierと着陸側経路の機首方位が不連続になる場合があります。' });
     }
     const valid = !notices.some(n => n.level === 'error');
-    return { departure, arrival, connector: connection, forwardAll, requiredAll, finalTarget, checkpoints, notices, arrivalStart: arrival.start, finalStart, landing: lp, valid, altitudeValid: departure.end.altitudeValid !== false && arrival.start.altitudeValid !== false && connection?.altitudeValid !== false && predictedFinalValid };
+    return { departure, arrival, connector: connection, forwardAll, requiredAll, finalTarget, checkpoints, notices, arrivalStart: arrival.start, finalStart, landing: lp, valid, altitudeValid: !!connection && departure.end.altitudeValid !== false && arrival.start.altitudeValid !== false && connection.altitudeValid !== false && predictedFinalValid };
 }
 
 /** Save the latest resolved angle as the reference for choosing revolutions on the next edit.

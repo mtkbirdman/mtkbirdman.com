@@ -1,4 +1,4 @@
-/* Glider Landing Planner 0.1.9 — CSS scoped to shortcode container. */
+/* Glider Landing Planner — CSS scoped to shortcode container. */
 .glp-app-root,.glp-app-root *{box-sizing:border-box}
 .glp-app-root{--glp-ink:#16263a;--glp-muted:#62738b;--glp-blue:#2563eb;--glp-border:#dce4ee;--glp-panel:#fff;position:relative;left:50%;transform:translateX(-50%);width:min(1510px,calc(100vw - 22px));max-width:none!important;margin:12px 0 25px!important;font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;font-size:13px;color:var(--glp-ink);line-height:1.45}
 .glp-app-root button,.glp-app-root input,.glp-app-root select{font:inherit;line-height:1.35}
@@ -96,7 +96,7 @@
 /* v0.1.7 — compact map-first editing; the same data-path editor drives desktop and mobile. */
 .glp-mobile-editor[hidden]{display:none!important}
 .glp-mobile-editor{display:none}
-.glp-map-add-badge{width:42px;height:42px;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 3px 12px #0f172a55;border-radius:50%;font-weight:900;font-size:26px;line-height:1;color:white;cursor:pointer;touch-action:manipulation}
+.glp-map-add-badge{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 3px 12px #0f172a55;border-radius:50%;font-weight:900;font-size:21px;line-height:1;color:white;cursor:pointer;touch-action:manipulation}
 .glp-map-add-blue{background:#2563eb}.glp-map-add-green{background:#059669}
 @media (max-width:760px), (max-width:1050px) and (orientation:portrait){
   /* A transformed ancestor becomes the containing block for position:fixed.
@@ -130,3 +130,17 @@
 
 /* The computed side of a turn input is visible but not editable. */
 .glp-field input[readonly] { opacity: .75; background: #f1f4f7; cursor: default; }
+
+/* v0.1.15: compact desktop add popups and explicit deletion in the selected leg editor. */
+.glp-desktop-leg-actions{padding:0 10px 11px;background:#f7faff;display:flex;justify-content:flex-end}
+.glp-desktop-remove{color:#a63124!important;border-color:#e5bdb6!important}
+.glp-app-root .glp-map-add-menu{display:flex;flex-direction:column;gap:7px;min-width:135px;font:12px/1.45 system-ui,sans-serif}
+.glp-app-root .glp-map-add-menu strong{color:#28415e;font-weight:750;margin-bottom:2px}
+.glp-app-root .glp-map-add-menu button{padding:7px 12px!important;border-radius:6px!important;border:1px solid #bfd0e7!important;background:#f6f9fe!important;color:#214b84!important;font-size:12px!important;text-align:left;min-height:34px}
+.glp-app-root .glp-map-add-menu button:hover{background:#e3efff!important}
+@media (max-width:760px), (max-width:1050px) and (orientation:portrait){
+  .glp-desktop-leg-actions{display:none}
+}
+@media (max-width:760px), (max-width:1050px) and (orientation:portrait){
+ .glp-map-add-badge{width:42px;height:42px;font-size:26px}
+}

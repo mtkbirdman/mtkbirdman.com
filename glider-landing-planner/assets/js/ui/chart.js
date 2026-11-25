@@ -1,4 +1,4 @@
-import { heightForDisplay } from './height-units.js?v=0.1.14';
+import { heightForDisplay } from './height-units.js?v=0.1.16';
 export const fmtAlt = (m, u) => `${Math.round(heightForDisplay(m, u)).toLocaleString('ja-JP')} ${u}`;
 export const fmtElapsed = (seconds) => {
     const s = Math.max(0, Math.round(seconds));
@@ -32,6 +32,9 @@ export function altitudeTimeSeries(plan) {
     return { departure, arrival, durationS, timingProvisional: !plan.connector || !plan.connector.feasible };
 }
 export function chartSvg(plan, project, width = 780, height = 200) {
+    // An unplanned new project has no continuous route or meaningful flight-time axis.
+    if (!plan.connector && project.arrivalLegs.length === 0)
+        return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="経路は未設計です"><text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="#64748b" font-size="15">着陸側レグまたは場周プリセットの追加後に高度プロファイルを表示します</text></svg>`;
     // Blue: forecast including quintic Bezier connector. Green: independent arrival requirement.
     const { departure, arrival, durationS, timingProvisional } = altitudeTimeSeries(plan);
     const all = [...departure, ...arrival];

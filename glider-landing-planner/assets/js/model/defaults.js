@@ -1,7 +1,7 @@
-import { LocalFrame, headingVector, mul } from '../geometry/geo.js?v=0.1.14';
-export const ENGINE_VERSION = '0.1.14-test';
+import { LocalFrame, headingVector, mul } from '../geometry/geo.js?v=0.1.16';
+export const ENGINE_VERSION = '0.1.16-test';
 // New-plan location: Menuma reference point (not a surveyed runway threshold or touchdown point).
-// See README.md for the published location and elevation reference.
+// See docs/THEORY.md for the initial-condition references and limitations.
 export const INITIAL_LANDING_POINT = { latDeg: 36.211388889, lonDeg: 139.418888889 };
 export const INITIAL_MAP_ZOOM = 14;
 const INITIAL_LANDING_ELEVATION_MSL_M = 89 * 0.3048;
@@ -28,8 +28,8 @@ export function createDemo() {
         wind: { fromDeg: 270, speedMps: 0 },
         departure: { ...departurePoint, altitudeMSLM: INITIAL_LANDING_ELEVATION_MSL_M + INITIAL_DEPARTURE_HEIGHT_ABOVE_LANDING_M, headingDeg: 140 },
         landing: { point: landingPoint, elevationMSLM: INITIAL_LANDING_ELEVATION_MSL_M, runwayTrackDeg: INITIAL_RUNWAY_TRACK_DEG, final: { pathAngleDeg: 6, groundLengthM: 450 } },
-        departureLegs: [makeStraight(250)], arrivalLegs: [],
-        connector: { type: 'bezier_connector', handleStartM: 70, handleEndM: 70, curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto' },
+        departureLegs: [], arrivalLegs: [],
+        connector: null,
         display: { altitudeUnit: 'ft', showDistanceRings: true, showBearingLines: true, showWindArrow: true,
             showHandles: false, showDownwindMargin: true, showCheckpointAltitudes: false,
             referenceLineOpacity: 0.5, distanceRingIntervalM: 250, bearingLineIntervalDeg: 45, magneticDeclinationDeg: 0 }

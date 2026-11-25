@@ -1,6 +1,6 @@
-import { chartSvg, fmtAlt } from './chart.js?v=0.1.14';
-import { checkpointTable } from './checkpoints.js?v=0.1.14';
-import { escapeHtml } from './escape-html.js?v=0.1.14';
+import { chartSvg, fmtAlt } from './chart.js?v=0.1.16';
+import { checkpointTable } from './checkpoints.js?v=0.1.16';
+import { escapeHtml } from './escape-html.js?v=0.1.16';
 const num = (value, digits = 1) => Number(value.toFixed(digits)).toLocaleString('ja-JP');
 const speed = (value) => `${num(value * 3.6)} km/h`;
 const legLabel = (leg) => leg.type === 'straight' ? `直線 ${num(leg.lengthM, 0)} m` : `${leg.direction === 'right' ? '右' : '左'}旋回 ${num(leg.angleDeg, 0)}°、バンク ${num(leg.bankDeg, 0)}°`;
@@ -60,7 +60,7 @@ export function reportHtml(req) {
     ];
     const conditions = attrs.map(([key, value]) => `<div class="glp-report-data-item"><small>${escapeHtml(key)}</small><strong>${escapeHtml(value)}</strong></div>`).join('');
     const leafletCss = (document.querySelector('link[href*="leaflet.css"]')?.href ?? 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.14';
+    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.16';
     const time = new Date().toLocaleString('ja-JP');
     return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(p.name)} - ${escapeHtml(title)} PDF印刷</title><link rel="stylesheet" href="${escapeHtml(leafletCss)}"><link rel="stylesheet" href="${escapeHtml(printCss)}"></head>
  <body class="glp-report"><div class="glp-report-screen-toolbar"><span>印刷専用プレビュー｜地図のタイルが読み込まれたら「印刷 / PDF保存」を選択してください。</span><button type="button" onclick="window.print()">印刷 / PDF保存</button></div>

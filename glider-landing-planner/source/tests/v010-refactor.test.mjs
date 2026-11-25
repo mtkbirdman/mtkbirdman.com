@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDemo,trafficPreset} from '../../assets/js/model/defaults.js';
@@ -15,7 +16,7 @@ const {App}=await import('../../assets/js/main.js');
 
 function bareEditor(){
  const app=Object.create(App.prototype);
- app.project=createDemo();
+ app.project=previouslyPlannedProject();
  app.plan=buildPlan(app.project);
  app.history=[];
  app.future=[];
@@ -101,7 +102,7 @@ test('v0.1.10 legacy loading creates a migrated copy, preserving the source obje
  const original=structuredClone(legacy);
  const result=loadProject(legacy);
  assert.deepEqual(legacy,original,'migration must not mutate the input');
- assert.equal(result.engineVersion,'0.1.14-test');
+ assert.equal(result.engineVersion,'0.1.16-test');
  assert.equal(result.arrivalLegs[1].bankDeg,30);
  assert.equal(result.arrivalLegs[0].checkpointKind,'downwind-start');
  assert.equal(result.display.bearingLineIntervalDeg,45);
@@ -137,6 +138,7 @@ test('v0.1.10 adding a leg selects it using existing selection handling',()=>{
  const app=bareEditor();
  app.selected=null;
  app.map={redraw:()=>{},fit:()=>{}};
+ app.root={querySelectorAll:()=>[],querySelector:()=>null};
  app.renderSidebar=()=>{};
  app.updateCheckpointSelection=()=>{};
  app.openMobilePanel=()=>{};
@@ -153,6 +155,7 @@ test('v0.1.10 deleting a selected leg clears the selection and preserves undo',(
  app.selected=selected;
  app.mobilePanel=null;
  app.map={redraw:()=>{},fit:()=>{}};
+ app.root={querySelectorAll:()=>[],querySelector:()=>null};
  app.renderSidebar=()=>{};
  app.updateCheckpointSelection=()=>{};
  app.renderMobilePanel=()=>{};

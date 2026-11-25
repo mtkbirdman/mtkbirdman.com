@@ -1,7 +1,7 @@
-import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal } from '../geometry/geo.js?v=0.1.14';
-import { point, derivative, curvature, controlPoints, selfIntersects } from '../geometry/bezier.js?v=0.1.14';
-import { windVector, GRAVITY } from '../flight/core.js?v=0.1.14';
-import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.14';
+import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal } from '../geometry/geo.js?v=0.1.16';
+import { point, derivative, curvature, controlPoints, selfIntersects } from '../geometry/bezier.js?v=0.1.16';
+import { windVector, GRAVITY } from '../flight/core.js?v=0.1.16';
+import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.16';
 const EPS = 1e-8;
 export function endpointCurvature(state, bankDeg, project) {
     if (Math.abs(bankDeg) < 0.01)

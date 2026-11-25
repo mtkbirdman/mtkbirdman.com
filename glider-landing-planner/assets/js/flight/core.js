@@ -1,5 +1,5 @@
-import { createSinkModel, PolarEvaluationError } from './polar.js?v=0.1.14';
-import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add } from '../geometry/geo.js?v=0.1.14';
+import { createSinkModel, PolarEvaluationError } from './polar.js?v=0.1.16';
+import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add } from '../geometry/geo.js?v=0.1.16';
 export const GRAVITY = 9.80665;
 /** No fixed angle limit in the project format; bound computation instead. */
 export const TURN_STEP_BUDGET = 50000;

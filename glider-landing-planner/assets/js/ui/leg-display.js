@@ -1,4 +1,4 @@
-import { norm } from '../geometry/geo.js?v=0.1.14';
+import { norm } from '../geometry/geo.js?v=0.1.16';
 /** The input field shows the value currently in force without freezing inheritance. */
 export function effectiveLegSpeedMps(project, leg) {
     return leg.speedOverrideMps ?? project.defaultSpeedMps;

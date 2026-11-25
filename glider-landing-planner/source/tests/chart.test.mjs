@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {chartSvg,altitudeTimeSeries,fmtElapsed} from '../../assets/js/ui/chart.js';
@@ -18,7 +19,7 @@ test('v0.1.3 altitude chart has independent blue/green paths and time ticks',()=
  assert.match(svg,/>0:00</);
 });
 test('v0.1.3 connector time and altitude are included in departure blue line, no cumulative double offset',()=>{
- const p=createDemo();p.arrivalLegs=trafficPreset('left');p.wind.speedMps=5;
+ const p=previouslyPlannedProject();p.arrivalLegs=trafficPreset('left');p.wind.speedMps=5;
  const plan=buildPlan(p), series=altitudeTimeSeries(plan);
  assert.ok(plan.connector);
  assert.equal(series.departure.length,plan.departure.samples.length+plan.connector.samples.length-1);

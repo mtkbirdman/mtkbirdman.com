@@ -9,12 +9,10 @@ declare const L: any;
 type PickMode = 'departure' | 'landing' | null;
 interface Callbacks {
     onPick: (mode: 'departure' | 'landing', lat: number, lon: number) => void;
-    onLegLength: (side: Side, id: string, lengthM: number) => void;
-    onFinalLength: (lengthM: number) => void;
     onHandle: (end: 'start' | 'end', lengthM: number) => void;
     onSelectLeg?: (id: string) => void;
     onSelectPoint?: (point: 'departure' | 'landing') => void;
-    onAddAtEnd?: (side: Side) => void;
+    onAddAtEnd?: (side: Side, type?: 'straight' | 'turn') => void;
 }
 const marginText = (m: number, unit: 'm' | 'ft') => `${m > 0 ? '+' : ''}${fmtAlt(m, unit)}`;
 export class PlannerMap {
@@ -61,7 +59,7 @@ export class PlannerMap {
         const draw = (points: Point2[], color: string, weight = 3, dashArray?: string, legId?: string) => {
             if (points.length < 2)
                 return;
-            const line = L.polyline(points.map(loc), { color, weight, opacity: .95, dashArray, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, bubblingMouseEvents: false });
+            const line = L.polyline(points.map(loc), { color, weight, opacity: .95, dashArray, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, interactive: !!legId, bubblingMouseEvents: false });
             if (legId && this.cb.onSelectLeg) {
                 // A wider, nearly transparent hit target makes narrow curved legs tappable on phones.
                 const click = (ev: any) => { if (this.picking) {
@@ -76,6 +74,16 @@ export class PlannerMap {
             }
             line.addTo(this.graphics);
         };
+        // With no actual departure legs, show a non-interactive 250 m heading guide.
+        // This line is not a simulated leg and never contributes to distance or height loss.
+        if (!project.departureLegs.length) {
+            const origin = frame.toLocal(project.departure);
+            const course = project.departure.headingDeg;
+            const tip = add(origin, mul(headingVector(course), 250));
+            draw([origin, tip], '#2563eb', 2.5, '7,6');
+            draw([add(tip, mul(headingVector(course + 150), 22)), tip,
+                  add(tip, mul(headingVector(course - 150), 22))], '#2563eb', 2);
+        }
         for (const seg of plan.departure.segments)
             draw(seg.samples, '#2563eb', 3.5, undefined, seg.leg.id);
         if (plan.connector)
@@ -83,8 +91,16 @@ export class PlannerMap {
         for (const seg of plan.arrival.segments)
             draw(seg.samples, '#059669', 3.5, undefined, seg.leg.id);
         const end = plan.finalTarget[plan.finalTarget.length - 1];
-        if (end)
+        if (end) {
             draw([plan.finalStart, end], '#059669', 4, '9,4');
+            if (!project.arrivalLegs.length) {
+                // Direction arrow is inset from the landing marker so it stays visible.
+                const course = project.landing.runwayTrackDeg;
+                const arrowTip = add(plan.finalStart, mul(headingVector(course), project.landing.final.groundLengthM * .75));
+                draw([add(arrowTip, mul(headingVector(course + 150), 22)), arrowTip,
+                      add(arrowTip, mul(headingVector(course - 150), 22))], '#059669', 2);
+            }
+        }
         const selected = [...plan.departure.segments, ...plan.arrival.segments].find(seg => seg.leg.id === selectedLegId);
         if (selected && selected.samples.length > 1) {
             // White halo + orange overlay remains visible on every basemap without changing the underlying leg colors.
@@ -94,36 +110,70 @@ export class PlannerMap {
         }
         const depIcon = L.divIcon({ className: 'glp-map-point', html: '<span class="glp-point glp-point-blue">離</span>', iconSize: [25, 25], iconAnchor: [12, 12] });
         const landIcon = L.divIcon({ className: 'glp-map-point', html: '<span class="glp-point glp-point-green">着</span>', iconSize: [25, 25], iconAnchor: [12, 12] });
-        L.marker([project.departure.latDeg, project.departure.lonDeg], { draggable: true, icon: depIcon, title: '離脱地点：ドラッグで変更' }).on('dragend', (e: any) => { const x = e.target.getLatLng(); this.cb.onPick('departure', x.lat, x.lng); }).on('click', () => { if (!this.picking)
-            this.cb.onSelectPoint?.('departure'); }).addTo(this.controls);
-        L.marker([project.landing.point.latDeg, project.landing.point.lonDeg], { draggable: true, icon: landIcon, title: '接地点：ドラッグで変更' }).on('dragend', (e: any) => { const x = e.target.getLatLng(); this.cb.onPick('landing', x.lat, x.lng); }).on('click', () => { if (!this.picking)
-            this.cb.onSelectPoint?.('landing'); }).addTo(this.controls);
-        // Add buttons remain tied to their physically meaningful extension ends.
-        if (isCompactLayout() && this.cb.onAddAtEnd) {
+        const compact = isCompactLayout();
+        // One choice menu serves the initial departure marker and desktop extension buttons.
+        const showAddMenu = (side: Side, point: Point2, offerPointEdit = false) => {
+            const label = side === 'departure' ? '離脱側' : '着陸側';
+            const menu = document.createElement('div');
+            menu.className = 'glp-map-add-menu';
+            menu.innerHTML = `<strong>${label}へレグを追加</strong>`;
+            for (const [type, caption] of [['straight', '＋ 直線'], ['turn', '＋ 旋回']] as const) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = caption;
+                button.addEventListener('click', () => {
+                    this.map.closePopup();
+                    this.cb.onAddAtEnd?.(side, type);
+                });
+                menu.appendChild(button);
+            }
+            if (offerPointEdit) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.textContent = '離脱地点・条件を編集';
+                button.addEventListener('click', () => {
+                    this.map.closePopup();
+                    this.cb.onSelectPoint?.('departure');
+                });
+                menu.appendChild(button);
+            }
+            L.popup({ className: 'glp-map-add-popup', closeButton: true })
+                .setLatLng(loc(point)).setContent(menu).openOn(this.map);
+        };
+        L.marker([project.departure.latDeg, project.departure.lonDeg], { icon: depIcon, title: project.departureLegs.length ? '離脱地点：クリックして編集' : '離脱地点：クリックしてレグを追加' })
+            .on('click', () => {
+                if (this.picking) return;
+                if (project.departureLegs.length || !this.cb.onAddAtEnd) {
+                    this.cb.onSelectPoint?.('departure');
+                } else if (compact) {
+                    this.cb.onAddAtEnd('departure');
+                } else {
+                    showAddMenu('departure', frame.toLocal(project.departure), true);
+                }
+            }).addTo(this.controls);
+        L.marker([project.landing.point.latDeg, project.landing.point.lonDeg], { icon: landIcon, title: '着陸地点・場周設定を開く' })
+            .on('click', () => { if (!this.picking) this.cb.onSelectPoint?.('landing'); }).addTo(this.controls);
+        // Extension buttons appear only after actual legs exist; initially the
+        // two point markers and their dashed directional guides remain uncluttered.
+        if (this.cb.onAddAtEnd) {
+            const size = compact ? 44 : 36;
             for (const [side, point, color] of [['departure', plan.departure.end, 'blue'], ['arrival', plan.arrival.start, 'green']] as const) {
-                const icon = L.divIcon({ className: 'glp-map-add-point', html: `<span class="glp-map-add-badge glp-map-add-${color}" aria-label="${side === 'departure' ? '離脱' : '着陸'}側レグを追加">＋</span>`, iconSize: [44, 44], iconAnchor: [22, 22] });
-                L.marker(loc(point), { icon, keyboard: true, zIndexOffset: 1000, title: side === 'departure' ? '離脱側へ経路を追加' : '着陸側へ経路を追加' }).on('click', () => { if (!this.picking)
-                    this.cb.onAddAtEnd?.(side); }).addTo(this.controls);
+                if (!(side === 'departure' ? project.departureLegs.length : project.arrivalLegs.length)) continue;
+                const label = side === 'departure' ? '離脱側' : '着陸側';
+                const icon = L.divIcon({
+                    className: 'glp-map-add-point',
+                    html: `<span class="glp-map-add-badge glp-map-add-${color}" aria-label="${label}にレグを追加">＋</span>`,
+                    iconSize: [size, size], iconAnchor: [size / 2, size / 2]
+                });
+                L.marker(loc(point), { icon, keyboard: true, zIndexOffset: 1000, title: `${label}へ経路を追加` })
+                    .on('click', () => {
+                        if (this.picking) return;
+                        if (compact) this.cb.onAddAtEnd?.(side);
+                        else showAddMenu(side, point);
+                    }).addTo(this.controls);
             }
         }
         const smallIcon = (name: string) => L.divIcon({ className: 'glp-map-point', html: '<span class="glp-handle">' + escapeHtml(name) + '</span>', iconSize: [19, 19], iconAnchor: [9, 9] });
-        for (const side of ['departure', 'arrival'] as Side[]) {
-            const path = side === 'departure' ? plan.departure : plan.arrival;
-            for (const segment of path.segments) {
-                if (segment.leg.type !== 'straight')
-                    continue;
-                const pt = side === 'departure' ? segment.end : segment.start;
-                L.marker(loc(pt), { draggable: true, icon: smallIcon('↔'), title: 'ドラッグで直線レグ長を変更（進行方向へ投影）' }).on('dragend', (ev: any) => {
-                    const ll = ev.target.getLatLng(), grab = frame.toLocal({ latDeg: ll.lat, lonDeg: ll.lng });
-                    const origin = side === 'departure' ? segment.start : segment.end;
-                    const unit = headingVector(segment.start.trackDeg);
-                    const vector = side === 'departure' ? sub(grab, origin) : sub(origin, grab);
-                    const newLength = Math.max(1, Math.abs(dot(vector, unit)));
-                    this.cb.onLegLength(side, segment.leg.id, newLength);
-                }).addTo(this.controls);
-            }
-        }
-        L.marker(loc(plan.finalStart), { draggable: true, icon: smallIcon('F'), title: 'ドラッグでファイナル長を変更' }).on('dragend', (ev: any) => { const ll = ev.target.getLatLng(), p = frame.toLocal({ latDeg: ll.lat, lonDeg: ll.lng }); const direct = headingVector(project.landing.runwayTrackDeg); const v = sub(plan.landing, p); this.cb.onFinalLength(Math.max(20, dot(v, direct))); }).addTo(this.controls);
         if (plan.connector && project.display.showHandles) {
             const A = plan.departure.end, B = plan.arrival.start, da = headingVector(A.trackDeg), db = headingVector(B.trackDeg);
             const p1 = add(A, mul(da, project.connector!.handleStartM)), p4 = sub(B, mul(db, project.connector!.handleEndM));
@@ -135,6 +185,8 @@ export class PlannerMap {
         // Merge checkpoints sharing one map coordinate, so downwind start is not covered by a redundant connector marker.
         const buckets = new Map<string, Checkpoint[]>();
         for (const cp of plan.checkpoints) {
+            // Until the arrival side is planned, only the two anchors and guides are shown.
+            if (!project.arrivalLegs.length && !project.connector) continue;
             const key = `${Math.round(cp.e / 2)}:${Math.round(cp.n / 2)}`;
             const existing = buckets.get(key) ?? [];
             existing.push(cp);

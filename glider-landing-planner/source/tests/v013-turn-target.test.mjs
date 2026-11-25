@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDemo, makeTurn} from '../../assets/js/model/defaults.js';
@@ -95,7 +96,7 @@ test('ground-track target does not bypass unreachable-turn solver diagnostics',(
 });
 
 test('reverse-resolved arrival angle is identical to forward predicted arrival angle',()=>{
-  const p=createDemo();p.arrivalLegs=[makeTarget('right',450,50)];
+  const p=previouslyPlannedProject();p.arrivalLegs=[makeTarget('right',450,50)];
   const plan=buildPlan(p);
   close(plan.arrival.segments[0].leg.angleDeg,450);
   close(plan.arrival.start.headingDeg,50);
@@ -159,7 +160,7 @@ test('PDF prints the resolved turn angle, without altering the report layout',()
   const plan=buildPlan(p);
   const mapCopy={querySelectorAll:()=>[],removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div class="leaflet"></div>'};
   const mapEl={clientWidth:900,clientHeight:420,cloneNode(){return mapCopy}};
-  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.14-test'});
+  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.16-test'});
   assert.match(html,/右旋回 80°、バンク 30°/);
   assert.doesNotMatch(html,/右旋回 90°、バンク 30°/);
   assert.match(html,/飛行経路図/);assert.match(html,/高度プロファイル/);
@@ -233,7 +234,7 @@ test('optimization signature includes mode and target, and editing recomputes th
 test('no change to the grounded B/C sink model formulas, WordPress shortcode or magnetic convention',()=>{
   const root=new URL('../',import.meta.url);
   const php=readFileSync(new URL('../glider-landing-planner.php',root),'utf8');
-  assert.match(php,/Version:\s*0\.1\.14/);assert.match(php,/glider_landing_planner/);
+  assert.match(php,/Version:\s*0\.1\.16/);assert.match(php,/glider_landing_planner/);
   const p=createDemo();assert.equal(p.display.magneticDeclinationDeg,0);
   assert.equal(p.performance.model,'quadratic-drag');
 });

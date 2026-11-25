@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {LocalFrame,headingVector,rad,magnitude,courseOf,cross,sub} from '../../assets/js/geometry/geo.js';
@@ -27,7 +28,7 @@ test('T11 Bezier length numerical convergence',()=>{const cp=controlPoints({e:0,
 test('T12 model B best L/D reference',()=>{const p={model:'quadratic-drag',quadratic:{bestLD:32,bestLDAtMps:24},polarTable:null};near(24/sinkRate(24,0,p),32,1e-10);assert.ok(sinkRate(24,30,p)>sinkRate(24,0,p));});
 test('T13 leg speed overrides and idealization notice',()=>{const l=straight();l.speedOverrideMps=30;const r=simulateLeg(start(),l,ctx(),1,'departure');near(r.end.speedMps,30);assert.ok(r.notices.some(i=>i.code==='SPEED_STEP_IDEALIZED'));});
 test('T14 downwind-only margin equals predicted minus required, for a feasible connector',()=>{
- const p=createDemo();p.arrivalLegs=trafficPreset('left');p.departureLegs=[];
+ const p=previouslyPlannedProject();p.arrivalLegs=trafficPreset('left');p.departureLegs=[];
  const initial=buildPlan(p),b=initial.arrival.start,t=headingVector(b.trackDeg),f=new LocalFrame(p.landing.point);
  const geo=f.toGeo({e:b.e-350*t.e,n:b.n-350*t.n});
  p.departure={...geo,altitudeMSLM:500,headingDeg:b.headingDeg};
@@ -67,7 +68,7 @@ test('T22 opacity bounds and invalid checkpoint ID are rejected',()=>{
  assert.throws(()=>parseProject(JSON.stringify(p)),/チェックポイント種別/);
 });
 test('T23 checkpoint heights are meaningfully typed and no duplicate connector endpoint',()=>{
- const p=createDemo();p.arrivalLegs=trafficPreset('left');const r=buildPlan(p);
+ const p=previouslyPlannedProject();p.arrivalLegs=trafficPreset('left');const r=buildPlan(p);
  assert.equal(r.checkpoints[0].kind,'departure-start');assert.equal(r.checkpoints[0].altitudeType,'predicted');
  assert.ok(r.checkpoints.some(c=>c.kind==='departure-end'));
  assert.equal(r.checkpoints.find(c=>c.checkpointKind==='downwind-start').altitudeType,'required');

@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -119,7 +120,7 @@ test('C input rejects missing, repeated, unordered and non-positive points',()=>
 });
 
 function oldModelB(){
-  const p=createDemo();p.schemaVersion='1.0';p.engineVersion='0.1.11-test';
+  const p=previouslyPlannedProject();p.schemaVersion='1.0';p.engineVersion='0.1.11-test';
   p.performance={model:'quadratic-drag',fixedLD:28,bestLD:31,bestLDAtMps:22};
   p.defaultSpeedMps=24.5;
   return p;

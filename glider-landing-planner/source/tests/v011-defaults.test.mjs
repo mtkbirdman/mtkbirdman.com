@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
@@ -62,7 +63,7 @@ test('v0.1.12 model B reference performance uses 25 m/s and L/D 34',()=>{
 
 test('v0.1.11 newly added straight and turn inherit 90 km/h while turn retains bank 30',()=>{
     const p=createDemo();
-    for (const leg of [p.departureLegs[0],makeStraight(),makeTurn()]){
+    for (const leg of [makeStraight(250),makeStraight(),makeTurn()]){
         assert.equal(leg.speedOverrideMps,null);
         near(effectiveLegSpeedMps(p,leg),25);
     }
@@ -84,6 +85,7 @@ test('v0.1.11 inherited speeds follow baseline but explicit overrides do not',()
 
 test('v0.1.11 changes to L/D and departure point change the plan, without any special-case aircraft',()=>{
     const p=createDemo();
+    p.departureLegs=[makeStraight(250)];
     const initial=buildPlan(p);
     p.performance.quadratic.bestLD=20;
     const changedLd=buildPlan(p);
@@ -110,6 +112,7 @@ test('v0.1.11 import of a v0.1.10 record preserves all saved fields',()=>{
     existing.performance={model:'quadratic-drag',fixedLD:30,bestLD:30,bestLDAtMps:80/3.6};
     existing.departure={latDeg:35.409,lonDeg:136.7,altitudeMSLM:150,headingDeg:180};
     existing.landing={point:{latDeg:35.4,lonDeg:136.7},elevationMSLM:40,runwayTrackDeg:180,final:{pathAngleDeg:6,groundLengthM:450}};
+    existing.departureLegs=[makeStraight(250)];
     existing.departureLegs[0].speedOverrideMps=23;
     const before=structuredClone(existing);
     const loaded=parseProject(JSON.stringify(existing));
@@ -148,7 +151,7 @@ test('v0.1.11 auto-save ingress keeps a v0.1.10 snapshot unchanged',async()=>{
 
 test('v0.1.11 reset via New uses exact initial handles, new map view and retains undo',()=>{
     const app=Object.create(App.prototype);
-    app.project=createDemo();
+    app.project=previouslyPlannedProject();
     app.project.departure.altitudeMSLM=180;
     app.project.connector.handleStartM=27;
     app.plan=buildPlan(app.project);
@@ -165,13 +168,13 @@ test('v0.1.11 reset via New uses exact initial handles, new map view and retains
     assert.equal(app.history.length,1);
     assert.deepEqual(app.history[0],previous);
     near(app.project.departure.altitudeMSLM,392.8872,1e-10);
-    assert.equal(app.project.connector.handleStartM,70);
-    assert.equal(app.project.connector.handleEndM,70);
+    assert.deepEqual(app.project.departureLegs,[]);
+    assert.equal(app.project.connector,null);
     assert.equal(app.selected,null);
     assert.equal(app.pick,null);
     assert.equal(app.mobilePanel,null);
     assert.deepEqual(mapEvents,[['pick',null],['new',INITIAL_LANDING_POINT.latDeg,14]]);
-    assert.deepEqual(app.plan.connector.handleStartM,buildPlan(createDemo()).connector.handleStartM);
+    assert.equal(app.plan.connector,null);
     assert.equal(app.editRevision,1);
     assert.equal(app.future.length,0);
 });
@@ -204,12 +207,12 @@ test('v0.1.11 map constructor centers on the reference with zoom14, not fitBound
 
 test('v0.1.11 release and all relative compiled ES modules use the same cache version',()=>{
     const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8');
-    assert.equal(ENGINE_VERSION,'0.1.14-test');
-    assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.14/);
-    assert.match(read('../src/main.ts'),/テスト版 v0\.1\.14/);
-    assert.match(read('../src/ui/print.ts'),/ver=0\.1\.14/);
-    assert.match(read('../../README.md'),/v0\.1\.14/);
-    assert.equal(JSON.parse(read('../package.json')).version,'0.1.14');
+    assert.equal(ENGINE_VERSION,'0.1.16-test');
+    assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.16/);
+    assert.match(read('../src/main.ts'),/テスト版 v0\.1\.16/);
+    assert.match(read('../src/ui/print.ts'),/ver=0\.1\.16/);
+    assert.match(read('../../README.md'),/v0\.1\.16/);
+    assert.equal(JSON.parse(read('../package.json')).version,'0.1.16');
     const root=fileURLToPath(new URL('../../assets/js/',import.meta.url));
     function collect(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?collect(join(dir,entry.name)):[join(dir,entry.name)]);}
     let modules=0;
@@ -217,7 +220,7 @@ test('v0.1.11 release and all relative compiled ES modules use the same cache ve
         const content=readFileSync(f,'utf8');
         const imports=[...content.matchAll(/\bfrom\s*['"](\.{1,2}\/[^'"]+\.js)(\?v=[^'"]+)?['"]/g)];
         for(const [,mod,version] of imports){
-            assert.equal(version,'?v=0.1.14',`${f}: ${mod}`);
+            assert.equal(version,'?v=0.1.16',`${f}: ${mod}`);
             modules++;
         }
     }

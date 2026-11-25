@@ -37,6 +37,9 @@ export function altitudeTimeSeries(plan: PlanResult): {
     return { departure, arrival, durationS, timingProvisional: !plan.connector || !plan.connector.feasible };
 }
 export function chartSvg(plan: PlanResult, project: ProjectV1, width = 780, height = 200): string {
+    // An unplanned new project has no continuous route or meaningful flight-time axis.
+    if (!plan.connector && project.arrivalLegs.length === 0)
+        return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="経路は未設計です"><text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="#64748b" font-size="15">着陸側レグまたは場周プリセットの追加後に高度プロファイルを表示します</text></svg>`;
     // Blue: forecast including quintic Bezier connector. Green: independent arrival requirement.
     const { departure, arrival, durationS, timingProvisional } = altitudeTimeSeries(plan);
     const all = [...departure, ...arrival];

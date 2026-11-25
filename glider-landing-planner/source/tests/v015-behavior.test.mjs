@@ -7,7 +7,7 @@ import {checkpointTable} from '../../assets/js/ui/checkpoints.js';
 const read=(p)=>readFileSync(new URL(p,import.meta.url),'utf8');
 
 test('v0.1.5 default limit is 60 degrees; existing record remains user-editable',()=>{
- const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.14-test');assert.equal(p.maxBankDeg,60);
+ const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.16-test');assert.equal(p.maxBankDeg,60);
  p.maxBankDeg=45;assert.equal(buildPlan(p).notices.find(n=>n.code==='invalid-maximum-bank')?.level,undefined);
 });
 
@@ -23,8 +23,10 @@ test('v0.1.5 checkpoint rows carry stable leg ids for cross-highlighting',()=>{
 test('v0.1.7 arrival add controls precede arrival list, final length is at bottom',()=>{
  const main=read('../src/main.ts');
  assert.match(main,/side\s*===\s*'arrival'\s*\?\s*adds\s*\+\s*list\s*:\s*list\s*\+\s*adds/);
- assert.match(main,/右場周プリセット<\/button><\/div>\$\{this\.legList\('arrival'\)/);
- assert.match(main,/新しいレグは最上流へ追加され、一覧は実際の飛行順です。<\/p>\$\{this\.control\('landing\.final\.groundLengthM'/);
+ assert.match(main,/着陸地点・ファイナル・場周設定/);
+ assert.match(main,/右場周プリセット/);
+ assert.match(main,/新しいレグは最上流へ追加され、一覧は実際の飛行順です。/);
+ assert.match(main,/this\.control\('landing\.final\.groundLengthM'/);
  assert.doesNotMatch(main,/風向（吹いてくる）/);
  assert.match(main,/const preservedScroll\s*=\s*sidebarScroll\.scrollTop/);
  assert.match(main,/sidebarScroll\.scrollTop\s*=\s*preservedScroll/);

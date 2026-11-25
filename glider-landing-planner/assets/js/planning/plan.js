@@ -1,7 +1,7 @@
-import { LocalFrame, headingVector, rad } from '../geometry/geo.js?v=0.1.14';
-import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.14';
-import { evaluateConnector } from './connector.js?v=0.1.14';
-import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.14';
+import { LocalFrame, headingVector, rad } from '../geometry/geo.js?v=0.1.16';
+import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.16';
+import { evaluateConnector } from './connector.js?v=0.1.16';
+import { createSinkModel, PolarEvaluationError } from '../flight/polar.js?v=0.1.16';
 export function buildPlan(project) {
     const frame = new LocalFrame(project.landing.point), lp = frame.toLocal(project.landing.point);
     const dep = frame.toLocal(project.departure);
@@ -25,6 +25,8 @@ export function buildPlan(project) {
     const connection = project.connector ? evaluateConnector(departure.end, arrival.start, project, project.connector.handleStartM, project.connector.handleEndM, false, sinkModel) : null;
     if (connection)
         notices.push(...connection.notices);
+    else if (project.arrivalLegs.length === 0)
+        notices.push({ code: 'PLAN_NOT_STARTED', level: 'info', message: '経路は未設計です。着陸側レグまたは場周プリセットを追加すると接続曲線を生成します。' });
     else
         notices.push({ code: 'CONNECTOR_MISSING', level: 'error', message: '離脱側と着陸側が接続されていません。必要高度・到達高度の比較は行いません。' });
     const forwardAll = departure.samples.map(v => ({ ...v }));
@@ -136,7 +138,7 @@ export function buildPlan(project) {
         notices.push({ code: 'BOUNDARY_DISCONTINUITY', level: 'warning', message: 'Bezierと着陸側経路の機首方位が不連続になる場合があります。' });
     }
     const valid = !notices.some(n => n.level === 'error');
-    return { departure, arrival, connector: connection, forwardAll, requiredAll, finalTarget, checkpoints, notices, arrivalStart: arrival.start, finalStart, landing: lp, valid, altitudeValid: departure.end.altitudeValid !== false && arrival.start.altitudeValid !== false && connection?.altitudeValid !== false && predictedFinalValid };
+    return { departure, arrival, connector: connection, forwardAll, requiredAll, finalTarget, checkpoints, notices, arrivalStart: arrival.start, finalStart, landing: lp, valid, altitudeValid: !!connection && departure.end.altitudeValid !== false && arrival.start.altitudeValid !== false && connection.altitudeValid !== false && predictedFinalValid };
 }
 /** Save the latest resolved angle as the reference for choosing revolutions on the next edit.
  * Never alter angle-driven turns or the target bearing. */

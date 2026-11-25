@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -14,7 +15,7 @@ const start=(w={fromDeg:0,speedMps:0})=>{const a=airGround(0,20,w);return {e:0,n
 const ctx=(w={fromDeg:0,speedMps:0})=>({speedMps:20,wind:w,performance:{model:'quadratic-drag',quadratic:{bestLD:30,bestLDAtMps:20},polarTable:null}});
 const near=(v,x,tol)=>assert.ok(Math.abs(v-x)<tol,`${v} differs from ${x}`);
 test('v0.1.6 positive unbounded turn angles survive JSON with multi-turn records',()=>{
- const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.14-test');
+ const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.16-test');
  p.departureLegs=[makeTurn('right',1080),makeTurn('left',1800),makeTurn('right',1000000)];
  const q=parseProject(serializeProject(p));assert.deepEqual(q.departureLegs.map(x=>x.angleDeg),[1080,1800,1000000]);
  p.departureLegs[0].angleDeg=0;assert.throws(()=>parseProject(JSON.stringify(p)),/旋回角/);
@@ -46,7 +47,7 @@ test('v0.1.6 magnetic declination changes only overlay true orientation',()=>{
  const after=buildPlan(p);near(before.departure.end.e,after.departure.end.e,1e-9);near(before.departure.end.n,after.departure.end.n,1e-9);
 });
 test('v0.1.6 old JSON migrates shared opacity + intervals + connector mode',()=>{
- const p=createDemo();delete p.display.referenceLineOpacity;
+ const p=previouslyPlannedProject();delete p.display.referenceLineOpacity;
  delete p.display.distanceRingIntervalM;delete p.display.bearingLineIntervalDeg;delete p.display.magneticDeclinationDeg;
  p.display.distanceRingOpacity=0.3;p.display.bearingLineOpacity=0.8;
  delete p.connector.adjustmentMode;
@@ -62,7 +63,7 @@ test('v0.1.6 range checks reject invalid ring spacing/compass interval/declinati
  p.display.magneticDeclinationDeg=0;p.display.referenceLineOpacity=-.1;assert.throws(()=>parseProject(JSON.stringify(p)),/不透明度/);
 });
 test('v0.1.6 editable auto/manual Bezier mode is saved and valid',()=>{
- const p=createDemo();assert.equal(p.connector.adjustmentMode,'auto');
+ const p=previouslyPlannedProject();assert.equal(p.connector.adjustmentMode,'auto');
  p.connector.adjustmentMode='manual';assert.equal(parseProject(serializeProject(p)).connector.adjustmentMode,'manual');
  p.connector.adjustmentMode='invalid';assert.throws(()=>parseProject(JSON.stringify(p)),/Bezier調整モード/);
 });
@@ -77,7 +78,7 @@ test('v0.1.6 auto-adjust is triggered only on flight geometry/conditions, manual
  assert.match(code,/接続曲線の調整/);
 });
 test('v0.1.6 Bezier search reoptimizes after a route geometry edit',()=>{
- const p=createDemo(),r=buildPlan(p),a=chooseConnector(r.departure.end,r.arrivalStart,p);
+ const p=previouslyPlannedProject(),r=buildPlan(p),a=chooseConnector(r.departure.end,r.arrivalStart,p);
  p.departureLegs[0].lengthM+=300;
  const r2=buildPlan(p),b=chooseConnector(r2.departure.end,r2.arrivalStart,p);
  assert.ok(Number.isFinite(a.handleStartM)&&Number.isFinite(b.handleEndM));
