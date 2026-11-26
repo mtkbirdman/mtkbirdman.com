@@ -7,8 +7,8 @@ export const fmtElapsed = (seconds: number): string => {
 };
 /**
  * Use genuine elapsed seconds, not ENU distance or a distance-based display offset.
- * Reverse-integrated arrival samples carry negative tS; shift them to the actual
- * end of the connector, without modifying the canonical flight/plan data.
+ * Arrival samples already carry the canonical time offset assigned by buildPlan.
+ * Do not recompute a second time axis here.
  * The two curves intentionally remain separate even when their x coordinates meet.
  */
 export function altitudeTimeSeries(plan: PlanResult): {
@@ -17,26 +17,18 @@ export function altitudeTimeSeries(plan: PlanResult): {
     durationS: number;
     timingProvisional: boolean;
 } {
-    const finite = (s: Sample) => s.altitudeValid !== false && Number.isFinite(s.tS) && Number.isFinite(s.h);
-    const departure = [...plan.departure.samples, ...(plan.connector?.samples.slice(1) ?? [])].filter(finite);
-    const joinedTime = departure.at(-1)?.tS ?? 0;
-    const arrivalStartRaw = plan.arrival.samples[0]?.tS ?? plan.arrival.start.tS;
-    const arrivalShift = joinedTime - arrivalStartRaw;
-    const arrival = plan.arrival.samples.filter(finite).map(s => ({ ...s, tS: s.tS + arrivalShift }));
-    const arrivalEnd = arrival.at(-1)?.tS ?? joinedTime;
-    const finalStartRaw = plan.finalTarget[0]?.tS ?? 0;
-    arrival.push(...plan.finalTarget.slice(1).filter(finite).map(s => ({ ...s, tS: arrivalEnd + s.tS - finalStartRaw })));
-    let durationS = 0;
-    for (const s of departure)
-        durationS = Math.max(durationS, s.tS);
-    for (const s of arrival)
-        durationS = Math.max(durationS, s.tS);
-    // Time and geometry can remain evaluable even when the polar gives no altitude.
-    for (const s of plan.forwardAll)
-        if (Number.isFinite(s.tS)) durationS = Math.max(durationS, s.tS);
-    return { departure, arrival, durationS, timingProvisional: !plan.connector || !plan.connector.feasible };
+    const prefix=(samples:Sample[])=>{const i=samples.findIndex(s=>s.altitudeValid===false||!Number.isFinite(s.tS)||!Number.isFinite(s.h));return i<0?samples:samples.slice(0,i);};
+    const departure=prefix([...plan.departure.samples,...(plan.connector?.feasible?plan.connector.samples.slice(1):[])]);
+    // Reverse integration propagates invalid altitude towards the beginning of the arrival.
+    const raw=plan.requiredAll;let first=0;while(first<raw.length&&(raw[first].altitudeValid===false||!Number.isFinite(raw[first].tS)))first++;
+    const arrival=prefix(raw.slice(first));
+    const durationS=plan.metrics.totalTimeS??Math.max(0,departure.at(-1)?.tS??0,arrival.at(-1)?.tS??0);
+    return {departure,arrival,durationS,timingProvisional:plan.status!=='valid'};
 }
 export function chartSvg(plan: PlanResult, project: ProjectV1, width = 780, height = 200): string {
+    // An unplanned new project has no continuous route or meaningful flight-time axis.
+    if (plan.status === 'unplanned')
+        return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="経路は未設計です"><text x="${width / 2}" y="${height / 2}" text-anchor="middle" fill="#64748b" font-size="15">着陸側レグまたは場周プリセットの追加後に高度プロファイルを表示します</text></svg>`;
     // Blue: forecast including quintic Bezier connector. Green: independent arrival requirement.
     const { departure, arrival, durationS, timingProvisional } = altitudeTimeSeries(plan);
     const all = [...departure, ...arrival];
@@ -79,6 +71,6 @@ export function chartSvg(plan: PlanResult, project: ProjectV1, width = 780, heig
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="離脱側予想高度（Bezier接続を含む）と着陸側逆算必要高度。横軸は飛行時間。">
  <rect x="0" y="0" width="${width}" height="${height}" fill="#fff"/><text x="9" y="12" font-size="11" fill="#64748b">高度(${u}, MSL)</text>${ticks}
  ${trace(departure, '#2563eb', 'glp-departure-altitude')}${trace(arrival, '#059669', 'glp-arrival-altitude')}
- <text x="${left}" y="${height - 2}" font-size="10" fill="#64748b">${label}</text><text x="${width - right}" y="${height - 2}" font-size="10" fill="#64748b" text-anchor="end">計画時間 ${fmtElapsed(durationS)}</text>
+ <text x="${left}" y="${height - 2}" font-size="10" fill="#64748b">${label}</text><text x="${width - right}" y="${height - 2}" font-size="10" fill="#64748b" text-anchor="end">${timingProvisional?'計画時間 評価不可':'計画時間 '+fmtElapsed(durationS)}</text>
  </svg>`;
 }

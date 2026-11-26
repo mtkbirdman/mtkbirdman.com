@@ -18,8 +18,16 @@ export class LocalFrame {
  private originXYZ;private slat;private clat;private slon;private clon;
  constructor(public origin:GeoPoint){this.originXYZ=xyz(origin);this.slat=Math.sin(rad(origin.latDeg));this.clat=Math.cos(rad(origin.latDeg));this.slon=Math.sin(rad(origin.lonDeg));this.clon=Math.cos(rad(origin.lonDeg));}
  toLocal(geo:GeoPoint):Point2 { const p=xyz(geo),dx=p.x-this.originXYZ.x,dy=p.y-this.originXYZ.y,dz=p.z-this.originXYZ.z;return {e:-this.slon*dx+this.clon*dy,n:-this.slat*this.clon*dx-this.slat*this.slon*dy+this.clat*dz}; }
- toGeo(pt:Point2):GeoPoint {const {e,n}=pt;const x=this.originXYZ.x-this.slon*e-this.slat*this.clon*n,y=this.originXYZ.y+this.clon*e-this.slat*this.slon*n,z=this.originXYZ.z+this.clat*n;const lon=Math.atan2(y,x),p=Math.hypot(x,y);let lat=Math.atan2(z,p*(1-e2));for(let k=0;k<8;k++){const n0=a/Math.sqrt(1-e2*Math.sin(lat)**2);const h=p/Math.cos(lat)-n0;lat=Math.atan2(z,p*(1-e2*n0/(n0+h)));}return {latDeg:deg(lat),lonDeg:deg(lon)};}
+ toGeo(pt:Point2):GeoPoint {const {e,n}=pt;const x=this.originXYZ.x-this.slon*e-this.slat*this.clon*n,y=this.originXYZ.y+this.clon*e-this.slat*this.slon*n,z=this.originXYZ.z+this.clat*n;const lon=Math.atan2(y,x),p=Math.hypot(x,y);if(p<1e-9)return {latDeg:z>=0?90:-90,lonDeg:this.origin.lonDeg};let lat=Math.atan2(z,p*(1-e2));for(let k=0;k<8;k++){const n0=a/Math.sqrt(1-e2*Math.sin(lat)**2);const h=p/Math.cos(lat)-n0;lat=Math.atan2(z,p*(1-e2*n0/(n0+h)));}return {latDeg:deg(lat),lonDeg:deg(lon)};}
 }
 
 /** East-positive magnetic declination; flight-state headings are always true. */
 export function magneticToTrue(magneticDeg:number,eastDeclinationDeg:number):number{return norm(magneticDeg+eastDeclinationDeg);}
+
+export const LOCAL_RADIUS_M = 50000;
+export const inLocalRange = (p: Point2): boolean => magnitude(p) <= LOCAL_RADIUS_M;
+export function geographicDistance(a: GeoPoint, b: GeoPoint): number {
+ const unit = (p: GeoPoint) => [Math.cos(rad(p.latDeg))*Math.cos(rad(p.lonDeg)), Math.cos(rad(p.latDeg))*Math.sin(rad(p.lonDeg)), Math.sin(rad(p.latDeg))];
+ const u=unit(a),v=unit(b);
+ return 6371008.8*Math.atan2(Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]),u.reduce((s,x,i)=>s+x*v[i],0));
+}

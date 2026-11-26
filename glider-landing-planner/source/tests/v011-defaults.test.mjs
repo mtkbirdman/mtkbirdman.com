@@ -1,10 +1,10 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync, readdirSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createDemo, INITIAL_MAP_ZOOM, INITIAL_LANDING_POINT, makeStraight, makeTurn, ENGINE_VERSION} from '../../assets/js/model/defaults.js';
-import {LocalFrame, headingVector, courseOf} from '../../assets/js/geometry/geo.js';
 import {effectiveLegSpeedMps} from '../../assets/js/ui/leg-display.js';
 import {heightInputText} from '../../assets/js/ui/height-units.js';
 import {buildPlan} from '../../assets/js/planning/plan.js';
@@ -22,47 +22,44 @@ const {App}=await import('../../assets/js/main.js');
 test('v0.1.11 new location has the required WGS84 reference coordinate and elevation',()=>{
     const p=createDemo();
     assert.deepEqual(p.landing.point, INITIAL_LANDING_POINT);
-    near(p.landing.point.latDeg, 36.211388889, 1e-10);
-    near(p.landing.point.lonDeg, 139.418888889, 1e-10);
+    near(p.landing.point.latDeg, 36.17943, 1e-10);
+    near(p.landing.point.lonDeg, 137.31361, 1e-10);
     assert.equal(INITIAL_MAP_ZOOM,14);
-    near(p.landing.elevationMSLM,27.1272,1e-12);
-    assert.equal(heightInputText(p.landing.elevationMSLM,'ft'),'89');
+    near(p.landing.elevationMSLM,714.1464,1e-12);
+    assert.equal(heightInputText(p.landing.elevationMSLM,'ft'),'2343');
 });
 
 test('v0.1.11 departure altitude is 1200 ft ABOVE reference elevation, not 1200 ft MSL',()=>{
     const p=createDemo();
     near(p.departure.altitudeMSLM - p.landing.elevationMSLM,1200*0.3048,1e-10);
-    near(p.departure.altitudeMSLM,392.8872,1e-10);
-    assert.equal(heightInputText(p.departure.altitudeMSLM,'ft'),'1289');
-    assert.equal(p.departure.headingDeg,140);
-    assert.equal(p.landing.runwayTrackDeg,140);
+    near(p.departure.altitudeMSLM,1079.9064,1e-10);
+    assert.equal(heightInputText(p.departure.altitudeMSLM,'ft'),'3543');
+    assert.equal(p.departure.headingDeg,95);
+    assert.equal(p.landing.runwayTrackDeg,95);
 });
 
-test('v0.1.11 departure location is 850 m / true bearing 320 from landing',()=>{
+test('new plan preserves both explicit departure coordinates',()=>{
     const p=createDemo();
-    const local=new LocalFrame(p.landing.point).toLocal(p.departure);
-    near(Math.hypot(local.e,local.n),850,0.0001);
-    near(courseOf(local.e,local.n),320,0.0001);
-    const expected=headingVector(320);
-    near(local.e/850,expected.e,1e-6);
+    near(p.departure.latDeg,36.17914,1e-12);
+    near(p.departure.lonDeg,137.31855,1e-12);
 });
 
-test('v0.1.12 model B reference performance uses 25 m/s and L/D 34',()=>{
+test('single-model reference performance uses 25 m/s and L/D 34',()=>{
     const p=createDemo();
     assert.equal(p.defaultSpeedMps,25);
-    assert.deepEqual(p.performance,{model:'quadratic-drag',quadratic:{bestLD:34,bestLDAtMps:25},polarTable:null});
-    near(p.defaultSpeedMps/p.performance.quadratic.bestLD,25/34,1e-12);
+    assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});
+    near(p.defaultSpeedMps/p.performance.bestLD,25/34,1e-12);
     assert.equal(p.maxBankDeg,60);
     assert.equal(p.wind.fromDeg,270);
     assert.equal(p.wind.speedMps,0);
     assert.equal(p.landing.final.pathAngleDeg,6);
-    assert.equal(p.landing.final.groundLengthM,450);
+    assert.equal(p.landing.final.groundLengthM,600);
     assert.equal(p.display.magneticDeclinationDeg,0);
 });
 
 test('v0.1.11 newly added straight and turn inherit 90 km/h while turn retains bank 30',()=>{
     const p=createDemo();
-    for (const leg of [p.departureLegs[0],makeStraight(),makeTurn()]){
+    for (const leg of [makeStraight(250),makeStraight(),makeTurn()]){
         assert.equal(leg.speedOverrideMps,null);
         near(effectiveLegSpeedMps(p,leg),25);
     }
@@ -84,8 +81,9 @@ test('v0.1.11 inherited speeds follow baseline but explicit overrides do not',()
 
 test('v0.1.11 changes to L/D and departure point change the plan, without any special-case aircraft',()=>{
     const p=createDemo();
+    p.departureLegs=[makeStraight(250)];
     const initial=buildPlan(p);
-    p.performance.quadratic.bestLD=20;
+    p.performance.bestLD=20;
     const changedLd=buildPlan(p);
     assert.notEqual(changedLd.departure.end.h,initial.departure.end.h);
     p.departure.latDeg+=0.002;
@@ -97,36 +95,17 @@ test('v0.1.11 JSON round trip keeps exact current new-plan values',()=>{
     const p=createDemo();
     const restored=parseProject(serializeProject(p));
     assert.deepEqual(restored,p);
-    assert.equal(restored.schemaVersion,'1.2');
+    assert.equal(restored.schemaVersion,'1.3');
     assert.equal(restored.engineVersion,ENGINE_VERSION);
 });
 
-test('v0.1.11 import of a v0.1.10 record preserves all saved fields',()=>{
-    // Simulated existing record using the exact v0.1.10 schema and defaults.
-    const existing=createDemo();
-    existing.engineVersion='0.1.10-test';
-    existing.defaultSpeedMps=80/3.6;
-    existing.schemaVersion='1.0';
-    existing.performance={model:'quadratic-drag',fixedLD:30,bestLD:30,bestLDAtMps:80/3.6};
-    existing.departure={latDeg:35.409,lonDeg:136.7,altitudeMSLM:150,headingDeg:180};
-    existing.landing={point:{latDeg:35.4,lonDeg:136.7},elevationMSLM:40,runwayTrackDeg:180,final:{pathAngleDeg:6,groundLengthM:450}};
-    existing.departureLegs[0].speedOverrideMps=23;
-    const before=structuredClone(existing);
-    const loaded=parseProject(JSON.stringify(existing));
-    assert.equal(loaded.schemaVersion,'1.2');
-    assert.deepEqual(loaded.performance,{model:'quadratic-drag',quadratic:{bestLD:30,bestLDAtMps:80/3.6},polarTable:null});
-    assert.deepEqual(loaded.departure,before.departure);
-    assert.deepEqual(loaded.landing,before.landing);
-    assert.deepEqual(existing,before);
-    assert.deepEqual(loadProject(existing),loaded);
-});
 
-test('v0.1.11 auto-save ingress keeps a v0.1.10 snapshot unchanged',async()=>{
-    const project=createDemo();project.engineVersion='0.1.10-test';
+test('auto-save ingress preserves a current snapshot',async()=>{
+    const project=createDemo();
     project.departure.altitudeMSLM=212.3;
     project.landing.elevationMSLM=33.3;
     project.defaultSpeedMps=24.25;
-    project.performance.quadratic.bestLD=29;
+    project.performance.bestLD=29;
     project.departure.latDeg=34.44;
     const before=structuredClone(project);
     const oldWindow=globalThis.window;
@@ -148,7 +127,7 @@ test('v0.1.11 auto-save ingress keeps a v0.1.10 snapshot unchanged',async()=>{
 
 test('v0.1.11 reset via New uses exact initial handles, new map view and retains undo',()=>{
     const app=Object.create(App.prototype);
-    app.project=createDemo();
+    app.project=previouslyPlannedProject();
     app.project.departure.altitudeMSLM=180;
     app.project.connector.handleStartM=27;
     app.plan=buildPlan(app.project);
@@ -164,14 +143,14 @@ test('v0.1.11 reset via New uses exact initial handles, new map view and retains
     try {app.handleAction('new',{});} finally {globalThis.window=originalWindow;}
     assert.equal(app.history.length,1);
     assert.deepEqual(app.history[0],previous);
-    near(app.project.departure.altitudeMSLM,392.8872,1e-10);
-    assert.equal(app.project.connector.handleStartM,70);
-    assert.equal(app.project.connector.handleEndM,70);
+    near(app.project.departure.altitudeMSLM,1079.9064,1e-10);
+    assert.deepEqual(app.project.departureLegs,[]);
+    assert.equal(app.project.connector,null);
     assert.equal(app.selected,null);
     assert.equal(app.pick,null);
     assert.equal(app.mobilePanel,null);
     assert.deepEqual(mapEvents,[['pick',null],['new',INITIAL_LANDING_POINT.latDeg,14]]);
-    assert.deepEqual(app.plan.connector.handleStartM,buildPlan(createDemo()).connector.handleStartM);
+    assert.equal(app.plan.connector,null);
     assert.equal(app.editRevision,1);
     assert.equal(app.future.length,0);
 });
@@ -204,12 +183,16 @@ test('v0.1.11 map constructor centers on the reference with zoom14, not fitBound
 
 test('v0.1.11 release and all relative compiled ES modules use the same cache version',()=>{
     const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8');
-    assert.equal(ENGINE_VERSION,'0.1.14-test');
-    assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.14/);
-    assert.match(read('../src/main.ts'),/テスト版 v0\.1\.14/);
-    assert.match(read('../src/ui/print.ts'),/ver=0\.1\.14/);
-    assert.match(read('../../README.md'),/v0\.1\.14/);
-    assert.equal(JSON.parse(read('../package.json')).version,'0.1.14');
+    assert.equal(ENGINE_VERSION,'1.0.0');
+    assert.match(read('../../glider-landing-planner.php'),/Version:\s*1\.0\.0/);
+    assert.match(read('../src/main.ts'),/v1\.0\.0/);
+    assert.match(read('../src/ui/print.ts'),/ver=1\.0\.0/);
+    assert.match(read('../../README.md'),/v1\.0\.0/);
+    assert.match(read('../../README.md'),/https:\/\/mtkbirdman\.com\/glider-landing-planner/);
+    assert.match(read('../../preview-local.html'),/assets\/js\/main\.js\?v=1\.0\.0/);
+    assert.match(read('../../preview-local.html'),/assets\/css\/app\.css\?v=1\.0\.0/);
+    assert.match(read('../../LICENSE'),/GNU GENERAL PUBLIC LICENSE/);
+    assert.equal(JSON.parse(read('../package.json')).version,'1.0.0');
     const root=fileURLToPath(new URL('../../assets/js/',import.meta.url));
     function collect(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?collect(join(dir,entry.name)):[join(dir,entry.name)]);}
     let modules=0;
@@ -217,7 +200,7 @@ test('v0.1.11 release and all relative compiled ES modules use the same cache ve
         const content=readFileSync(f,'utf8');
         const imports=[...content.matchAll(/\bfrom\s*['"](\.{1,2}\/[^'"]+\.js)(\?v=[^'"]+)?['"]/g)];
         for(const [,mod,version] of imports){
-            assert.equal(version,'?v=0.1.14',`${f}: ${mod}`);
+            assert.equal(version,'?v=1.0.0',`${f}: ${mod}`);
             modules++;
         }
     }

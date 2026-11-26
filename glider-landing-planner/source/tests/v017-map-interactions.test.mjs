@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDemo} from '../../assets/js/model/defaults.js';
@@ -18,13 +19,13 @@ test('compact map exposes two endpoint plus controls and opens matching editors'
  const objects=fakeMap();const selected=[],points=[],added=[];
  try{
   const {PlannerMap}=await import('../../assets/js/ui/map.js');
-  const p=createDemo(),planner=new PlannerMap({innerHTML:''},{onPick(){},onLegLength(){},onFinalLength(){},onHandle(){},onSelectLeg:(id)=>selected.push(id),onSelectPoint:(kind)=>points.push(kind),onAddAtEnd:(side)=>added.push(side)});
+  const p=previouslyPlannedProject();p.arrivalLegs=[{...p.departureLegs[0],id:'arrival-leg'}];const planner=new PlannerMap({innerHTML:''},{onPick(){},onLegLength(){},onFinalLength(){},onHandle(){},onSelectLeg:(id)=>selected.push(id),onSelectPoint:(kind)=>points.push(kind),onAddAtEnd:(side)=>added.push(side)});
   planner.redraw(p,buildPlan(p));
   const plus=objects.filter(x=>x.type==='marker'&&x.options.icon.className==='glp-map-add-point');
   assert.equal(plus.length,2);
   plus[0].handlers.click();plus[1].handlers.click();assert.deepEqual(added,['departure','arrival']);
   const departureMarker=objects.find(x=>x.type==='marker'&&x.options.title.startsWith('離脱地点'));
-  const landingMarker=objects.find(x=>x.type==='marker'&&x.options.title.startsWith('接地点'));
+  const landingMarker=objects.find(x=>x.type==='marker'&&x.options.title.startsWith('着陸地点'));
   departureMarker.handlers.click();landingMarker.handlers.click();assert.deepEqual(points,['departure','landing']);
   const hitLine=objects.find(x=>x.type==='polyline'&&x.options.weight===22);
   assert.ok(hitLine,'wide hit target must exist in compact mode');
@@ -32,14 +33,14 @@ test('compact map exposes two endpoint plus controls and opens matching editors'
   assert.equal(selected.at(-1),p.departureLegs[0].id);
  }finally{globalThis.window=oldWindow;delete globalThis.L;}
 });
-test('desktop map does not overlay mobile add controls and hit areas',async()=>{
+test('desktop map also exposes endpoint plus controls but not mobile hit areas',async()=>{
  const oldWindow=globalThis.window;globalThis.window={matchMedia(){return {matches:false}}};
  const objects=fakeMap();
  try{
   const {PlannerMap}=await import('../../assets/js/ui/map.js');
-  const p=createDemo(),planner=new PlannerMap({innerHTML:''},{onPick(){},onLegLength(){},onFinalLength(){},onHandle(){},onAddAtEnd(){},onSelectLeg(){}});
+  const p=previouslyPlannedProject();p.arrivalLegs=[{...p.departureLegs[0],id:'arrival-leg'}];const planner=new PlannerMap({innerHTML:''},{onPick(){},onLegLength(){},onFinalLength(){},onHandle(){},onAddAtEnd(){},onSelectLeg(){}});
   planner.redraw(p,buildPlan(p));
-  assert.equal(objects.filter(x=>x.type==='marker'&&x.options.icon.className==='glp-map-add-point').length,0);
+  assert.equal(objects.filter(x=>x.type==='marker'&&x.options.icon.className==='glp-map-add-point').length,2);
   assert.equal(objects.filter(x=>x.type==='polyline'&&x.options.weight===22).length,0);
  }finally{globalThis.window=oldWindow;delete globalThis.L;}
 });

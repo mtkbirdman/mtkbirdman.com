@@ -61,3 +61,6 @@ body.glp-report{background:#e8edf3;color:#14253a;font:12px/1.45 system-ui,"Yu Go
 
 /* v0.1.7: map editing controls never appear in printed route reports. */
 .glp-report .glp-map-add-point,.glp-report .glp-mobile-editor{display:none!important}
+
+/* Editor popup is not part of the printed flight path. */
+.glp-report-live-map .leaflet-popup-pane{display:none!important}

@@ -9,11 +9,11 @@ const read=file=>readFileSync(new URL(file,import.meta.url),'utf8');
 const close=(a,b,tol=1e-7)=>assert.ok(Math.abs(a-b)<tol,`${a} differs from ${b}`);
 
 test('v0.1.10 versions agree across source, WordPress, print, and documentation',()=>{
- assert.equal(ENGINE_VERSION,'0.1.14-test');
- assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.14/);
- assert.match(read('../src/main.ts'),/テスト版 v0\.1\.14/);
- assert.match(read('../src/ui/print.ts'),/ver=0\.1\.14/);
- assert.match(read('../../README.md'),/v0\.1\.14/);
+ assert.equal(ENGINE_VERSION,'1.0.0');
+ assert.match(read('../../glider-landing-planner.php'),/Version:\s*1\.0\.0/);
+ assert.match(read('../src/main.ts'),/v1\.0\.0/);
+ assert.match(read('../src/ui/print.ts'),/ver=1\.0\.0/);
+ assert.match(read('../../README.md'),/v1\.0\.0/);
 });
 
 test('v0.1.9 displays inherited baseline speed without converting it to an override',()=>{
@@ -30,7 +30,7 @@ test('v0.1.9 displays inherited baseline speed without converting it to an overr
 
 test('v0.1.9 forward inherited target shows actual heading after preceding turn',()=>{
  const p=createDemo();p.departure.headingDeg=272;p.wind={fromDeg:0,speedMps:5};
- p.departureLegs=[makeStraight(150),makeTurn('right',90),makeStraight(150)];
+ p.departureLegs=[makeStraight(150),makeTurn('right',90),makeStraight(150)].map(l=>({...l,guidance:'heading'}));
  const plan=buildPlan(p);
  const first=effectiveStraightDirectionDeg(p,plan,'departure',p.departureLegs[0]);
  const later=effectiveStraightDirectionDeg(p,plan,'departure',p.departureLegs[2]);
@@ -49,7 +49,7 @@ test('v0.1.9 ground-track target shows track, not heading, with crosswind',()=>{
 
 test('v0.1.9 arrival leg inherits from actual reverse-time computed state',()=>{
  const p=createDemo();p.wind={fromDeg:0,speedMps:4};
- p.arrivalLegs=[makeStraight(250),makeTurn('right',90),makeStraight(200)];
+ p.arrivalLegs=[makeStraight(250),makeTurn('right',90),makeStraight(200)].map(l=>({...l,guidance:'heading'}));
  const plan=buildPlan(p);
  for(const leg of p.arrivalLegs.filter(l=>l.type==='straight')){
    const seg=plan.arrival.segments.find(s=>s.leg.id===leg.id);
@@ -60,15 +60,15 @@ test('v0.1.9 arrival leg inherits from actual reverse-time computed state',()=>{
  close(effectiveStraightDirectionDeg(p,buildPlan(p),'arrival',last),23);
 });
 
-test('v0.1.9 preset is ground-track on all four legs, manual additions remain heading-mode',()=>{
+test('presets and manual additions default to ground-track',()=>{
  for(const side of ['left','right']){
    const legs=trafficPreset(side);
    assert.equal(legs.length,4);
    assert.ok(legs.every(l=>l.guidance==='ground-track'));
    assert.deepEqual(legs.map(l=>l.checkpointLabel),['ダウンウィンド開始','ベースターン開始','ベースレグ開始','ファイナルターン開始']);
  }
- assert.equal(makeStraight().guidance,'heading');
- assert.equal(makeTurn().guidance,'heading');
+ assert.equal(makeStraight().guidance,'ground-track');
+ assert.equal(makeTurn().guidance,'ground-track');
 });
 
 test('v0.1.9 import of legacy heading-mode preset does not silently rewrite it',()=>{
@@ -81,7 +81,7 @@ test('v0.1.9 import of legacy heading-mode preset does not silently rewrite it',
 
 test('v0.1.9 form and report labels use updated wording without changing data keys',()=>{
  const main=read('../src/main.ts');const print=read('../src/ui/print.ts');
- for(const word of ['基準対気速度','飛行方式','目標方位','滑空速度','旋回速度'])assert.ok(main.includes(word),word);
+ for(const word of ['基準対気速度','飛行方式','航跡方位','滑空速度','旋回速度'])assert.ok(main.includes(word),word);
  for(const word of ['共通対気速度','風補正方式','指定方位（空欄＝継承）','多周旋回可','速度を空欄にした場合'])assert.ok(!main.includes(word),word);
  assert.match(main,/effectiveLegSpeedMps\(this\.project,\s*leg\)/);
  assert.match(main,/effectiveStraightDirectionDeg\(this\.project,\s*this\.plan,\s*side,\s*leg\)/);

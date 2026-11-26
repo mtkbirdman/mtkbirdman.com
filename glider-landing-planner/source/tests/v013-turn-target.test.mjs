@@ -1,3 +1,4 @@
+import {previouslyPlannedProject} from './previously-planned-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createDemo, makeTurn} from '../../assets/js/model/defaults.js';
@@ -13,11 +14,11 @@ const wind={fromDeg:270,speedMps:5};
 const state=(heading=90,speedMps=25,weather={fromDeg:270,speedMps:0})=>{const g=airGround(heading,speedMps,weather);return {e:0,n:0,h:500,headingDeg:heading,trackDeg:g.track,bankDeg:0,speedMps,groundMps:g.speed,tS:0,sM:0};};
 const context=(weather={fromDeg:270,speedMps:0})=>({speedMps:25,wind:weather,performance:createDemo().performance});
 
-test('v0.1.13 starts with angle input and schema 1.2 without changing Menuma reference values',()=>{
+test('v0.1.13 starts with angle input and schema 1.3 with the new reference altitude',()=>{
   const p=createDemo(),turn=makeTurn();
-  assert.equal(p.schemaVersion,'1.2');assert.equal(turn.angleInputMode,'angle');assert.equal(turn.targetDirectionDeg,null);
+  assert.equal(p.schemaVersion,'1.3');assert.equal(turn.angleInputMode,'angle');assert.equal(turn.targetDirectionDeg,null);
   close(p.departure.altitudeMSLM-p.landing.elevationMSLM,1200*.3048,1e-10);
-  assert.equal(p.performance.model,'quadratic-drag');
+  assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});
 });
 
 test('right and left target conversion is correct for both planning directions',()=>{
@@ -91,14 +92,17 @@ test('arrival ground-track target is resolved from final-side boundary after spe
 test('ground-track target does not bypass unreachable-turn solver diagnostics',()=>{
   const strongWind={fromDeg:270,speedMps:30};
   const r=simulateLeg(state(0,25,strongWind),makeTarget('right',90,0,'ground-track'),context(strongWind),1,'departure');
-  assert.ok(r.notices.some(n=>n.code==='TURN_TARGET_NOT_REACHED'));
+  assert.ok(r.notices.some(n=>n.code==='WIND_TRACK_INFEASIBLE'));
 });
 
 test('reverse-resolved arrival angle is identical to forward predicted arrival angle',()=>{
-  const p=createDemo();p.arrivalLegs=[makeTarget('right',450,50)];
+  const p=previouslyPlannedProject();p.arrivalLegs=[makeTarget('right',450,50)];
+  // The old 70/70 m connector violates bank and sink-model limits.
+  p.connector.handleStartM=129;p.connector.handleEndM=129;
   const plan=buildPlan(p);
   close(plan.arrival.segments[0].leg.angleDeg,450);
   close(plan.arrival.start.headingDeg,50);
+  assert.equal(plan.status,'valid',JSON.stringify(plan.notices));
   const forwardSamples=plan.forwardAll.filter(s=>s.segmentId===p.arrivalLegs[0].id);
   assert.ok(forwardSamples.length>100);
   const last=forwardSamples.at(-1);
@@ -118,40 +122,18 @@ test('target-mode stored anchor is updated from solved segments without touching
   close(next.departure.segments[0].leg.angleDeg,90);
 });
 
-test('schema 1.1 legacy turns migrate to angle mode preserving geometry, flight, and input',()=>{
-  const original=createDemo(); original.departureLegs=[makeTurn('left',1080)];original.arrivalLegs=[makeTurn('right',450)];
-  const baseline=buildPlan(original);
-  const old=structuredClone(original);old.schemaVersion='1.1';
-  for(const leg of [...old.departureLegs,...old.arrivalLegs]) { delete leg.angleInputMode;delete leg.targetDirectionDeg; }
-  const before=structuredClone(old);
-  const migrated=loadProject(old);
-  assert.deepEqual(old,before);
-  assert.equal(migrated.schemaVersion,'1.2');
-  for(const leg of [...migrated.departureLegs,...migrated.arrivalLegs]) {
-    assert.equal(leg.angleInputMode,'angle');assert.equal(leg.targetDirectionDeg,null);
-  }
-  close(buildPlan(migrated).departure.end.e,baseline.departure.end.e);
-  close(buildPlan(migrated).arrival.start.n,baseline.arrival.start.n);
-});
 
-test('schema 1.2 target mode roundtrips; malformed target is rejected, not normalized',()=>{
+test('schema 1.3 target mode roundtrips; malformed target is rejected, not normalized',()=>{
   const p=createDemo();p.departureLegs=[makeTarget('right',810,180)];
   const parsed=parseProject(serializeProject(p));
   assert.deepEqual(parsed,p);
-  for(const bad of [null,-1,361,'90',NaN]){
-    const broken=structuredClone(p);broken.departureLegs[0].targetDirectionDeg=bad;
-    assert.throws(()=>validateProject(broken),/目標方位/);
+  for(const side of ['departure','arrival']) for(const guidance of ['heading','ground-track']) for(const bad of [null,-1,361,'90',NaN]){
+    const broken=createDemo();broken[`${side}Legs`]=[{...makeTarget('right',810,180),guidance,targetDirectionDeg:bad}];
+    const boundary=`旋回${side==='departure'?'後':'前'}の${guidance==='heading'?'機首方位':'航跡方位'}`;
+    assert.throws(()=>validateProject(broken),new RegExp(boundary));
   }
 });
 
-test('plan and saved project retain original angle mode when reading older 1.1 JSON',()=>{
-  const p=createDemo();p.departureLegs=[makeTurn('right',720)];
-  const old=structuredClone(p);old.schemaVersion='1.1';
-  delete old.departureLegs[0].angleInputMode;delete old.departureLegs[0].targetDirectionDeg;
-  const restored=parseProject(JSON.stringify(old));
-  assert.equal(restored.departureLegs[0].angleDeg,720);
-  assert.equal(buildPlan(restored).departure.segments[0].leg.angleDeg,720);
-});
 
 test('PDF prints the resolved turn angle, without altering the report layout',()=>{
   globalThis.document={querySelector:()=>null,querySelectorAll:()=>[]};
@@ -159,7 +141,7 @@ test('PDF prints the resolved turn angle, without altering the report layout',()
   const plan=buildPlan(p);
   const mapCopy={querySelectorAll:()=>[],removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div class="leaflet"></div>'};
   const mapEl={clientWidth:900,clientHeight:420,cloneNode(){return mapCopy}};
-  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.14-test'});
+  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'1.0.0'});
   assert.match(html,/右旋回 80°、バンク 30°/);
   assert.doesNotMatch(html,/右旋回 90°、バンク 30°/);
   assert.match(html,/飛行経路図/);assert.match(html,/高度プロファイル/);
@@ -171,8 +153,8 @@ globalThis.HTMLInputElement=class {};
 globalThis.HTMLSelectElement=class {constructor(path,value){this.dataset={path};this.value=value}};
 function mockedApp(){
   const app=Object.create(App.prototype);app.project=createDemo();app.plan=buildPlan(app.project);
-  app.history=[];app.future=[];app.editRevision=0;app.polarEditorOpen=false;
-  app.polarDraft='';app.selected=null;app.notice='';app.status='';app.render=()=>{};app.renderResults=()=>{};
+  app.history=[];app.future=[];app.editRevision=0;
+  app.selected=null;app.notice='';app.status='';app.render=()=>{};app.renderResults=()=>{};
   app.renderSidebar=()=>{};app.scheduleSave=()=>{};
   return app;
 }
@@ -181,13 +163,13 @@ test('PC and mobile shared editor displays both fields with only selected one wr
   const app=mockedApp();app.project.departure.headingDeg=90;
   const leg=makeTarget('right',450,180);app.project.departureLegs=[leg];app.plan=buildPlan(app.project);
   const html=app.legEditor('departure',leg,0);
-  assert.match(html,/目標方位を指定/);assert.match(html,/旋回後の目標方位/);
+  assert.match(html,/旋回後の機首方位を指定/);assert.match(html,/旋回後の機首方位/);
   assert.doesNotMatch(html,/（自動計算）/);
   assert.match(html,/readonly value="450"/);
   assert.match(html,/data-path="departureLegs\.0\.targetDirectionDeg"/);
   const angleLeg=makeTurn('left',270);app.project.arrivalLegs=[angleLeg];app.plan=buildPlan(app.project);
   const arrivalHtml=app.legEditor('arrival',angleLeg,0);
-  assert.match(arrivalHtml,/旋回前の目標方位/);
+  assert.match(arrivalHtml,/旋回前の航跡方位/);
   assert.match(arrivalHtml,/data-path="arrivalLegs\.0\.angleDeg"/);
   assert.doesNotMatch(arrivalHtml,/（自動計算）/);
 });
@@ -230,10 +212,40 @@ test('optimization signature includes mode and target, and editing recomputes th
   assert.notEqual(app.plan.departure.segments[0].leg.angleDeg,old);
 });
 
-test('no change to the grounded B/C sink model formulas, WordPress shortcode or magnetic convention',()=>{
+test('single sink model retains the WordPress shortcode and magnetic convention',()=>{
   const root=new URL('../',import.meta.url);
   const php=readFileSync(new URL('../glider-landing-planner.php',root),'utf8');
-  assert.match(php,/Version:\s*0\.1\.14/);assert.match(php,/glider_landing_planner/);
+  assert.match(php,/Version:\s*1\.0\.0/);assert.match(php,/glider_landing_planner/);
   const p=createDemo();assert.equal(p.display.magneticDeclinationDeg,0);
-  assert.equal(p.performance.model,'quadratic-drag');
+  assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});
+});
+
+test('direction labels follow guidance and planning side for both input modes',()=>{
+  for(const side of ['departure','arrival']) for(const guidance of ['heading','ground-track']) for(const angleInputMode of ['angle','target']){
+    const app=mockedApp(), name=guidance==='heading'?'機首方位':'航跡方位';
+    const leg={...makeTurn(),guidance,angleInputMode,targetDirectionDeg:angleInputMode==='target'?180:null};
+    app.project[`${side}Legs`]=[leg];app.plan=buildPlan(app.project);
+    const html=app.legEditor(side,leg,0);
+    const boundary=`旋回${side==='departure'?'後':'前'}の${name}`;
+    assert.match(html,/<option value="angle" (?:selected)?>旋回角を指定<\/option>/);
+    assert.match(html,new RegExp(`<option value="target" (?:selected)?>${boundary}を指定</option>`));
+    assert.ok(html.includes(`<span>旋回角 <em>°</em></span>`));
+    assert.ok(html.includes(`<span>${boundary} <em>°</em></span>`));
+    assert.doesNotMatch(html,/進行方向|機首方位変化量|航跡方位変化量/);
+    assert.match(html,new RegExp(`<option value="${guidance}" selected`));
+    assert.doesNotMatch(html,/風で偏流|風を補正|風で補正|対地航跡指定|旋回[前後]の目標方位/);
+    assert.ok(html.includes(`data-path="${side}Legs.0.${angleInputMode==='angle'?'angleDeg':'targetDirectionDeg'}"`));
+    assert.ok(!html.includes(`data-path="${side}Legs.0.${angleInputMode==='target'?'angleDeg':'targetDirectionDeg'}"`));
+  }
+});
+
+test('switching guidance through the edit handler refreshes direction labels',()=>{
+  const app=mockedApp();app.project.wind={fromDeg:270,speedMps:5};
+  app.project.departureLegs=[makeTurn()];app.plan=buildPlan(app.project);
+  assert.match(app.legEditor('departure',app.project.departureLegs[0],0),/旋回後の航跡方位/);
+  app.handleChange(new HTMLSelectElement('departureLegs.0.guidance','heading'));
+  assert.equal(app.project.departureLegs[0].guidance,'heading');
+  assert.match(app.legEditor('departure',app.project.departureLegs[0],0),/旋回後の機首方位/);
+  app.handleChange(new HTMLSelectElement('departureLegs.0.guidance','ground-track'));
+  assert.match(app.legEditor('departure',app.project.departureLegs[0],0),/旋回後の航跡方位/);
 });

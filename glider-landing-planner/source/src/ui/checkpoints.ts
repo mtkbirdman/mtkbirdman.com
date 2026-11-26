@@ -1,6 +1,6 @@
 import type { Checkpoint, PlanResult, ProjectV1 } from '../model/types.js';
 import { fmtAlt } from './chart.js';
-import { escapeHtml } from './escape-html.js';
+import { escapeHtml, htmlLegId } from './escape-html.js';
 export interface HeightRow {
     kind: 'height' | 'margin';
     label: string;
@@ -27,7 +27,7 @@ export function checkpointTable(plan: PlanResult, project: ProjectV1, print = fa
         const relative = r.relativeM === undefined ? '評価不可' : r.kind === 'margin' && r.relativeM > 0 ? `+${fmtAlt(r.relativeM, unit)}` : fmtAlt(r.relativeM, unit);
         const msl = r.mslM === undefined ? '—' : fmtAlt(r.mslM, unit);
         const classes = [r.kind === 'margin' ? 'glp-cp-margin-row' : ''].filter(Boolean).join(' ');
-        const style = `${classes ? ` class="${classes}"` : ''}${r.legId ? ` data-leg-id="${escapeHtml(r.legId)}"` : ''}`;
+        const style = `${classes ? ` class="${classes}"` : ''}${r.legId ? ` data-leg-id="${htmlLegId(r.legId)}"` : ''}`;
         return `<tr${style}><td>${escapeHtml(r.label)}</td><td>${relative}</td><td>${msl}</td></tr>`;
     }).join('');
     return `<table class="${tableClass}"><thead><tr><th>地点</th><th>滑空場基準高度（${unit}）</th><th>MSL高度（${unit}）</th></tr></thead><tbody>${body}</tbody></table>`;
