@@ -1,6 +1,6 @@
-# 開発者ガイド — Glider Landing Planner v0.1.21
+# 開発者ガイド — Glider Landing Planner v1.0.0
 
-**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v0.1.21ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
+**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v1.0.0ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
 
 ## 1. 全体像と動作環境
 
@@ -17,9 +17,11 @@
 glider-landing-planner/
 ├── README.md                  # 初めて利用する人の操作手順
 ├── CHANGELOG.md               # バージョン別変更履歴
+├── LICENSE                    # GPL-2.0-or-later（PHP宣言に対応するGPL v2本文）
 ├── docs/
 │   ├── DEVELOPMENT.md         # この文書
 │   ├── THEORY.md              # 数値モデル
+│   ├── theory-figures/        # 理論文書のSVG図
 │   └── archive/implementation-spec-v1.0.md  # 歴史的設計資料
 ├── glider-landing-planner.php # ショートコード・JS/CSS登録
 ├── preview-local.html         # 簡易ローカル起動
@@ -92,7 +94,7 @@ glider-landing-planner/
 
 - `simulateLeg()`は**1レグ**の速度指定・風補正・位置／時間／高度積分・診断・目標方位からの実効旋回角解決を担当。
 - `simulatePath()`は**複数レグ**を指定順（着陸側は逆順）に繰り返し、サンプル・セグメント・診断を統合。
-- `evaluateConnector()`は**指定済みの制御ハンドル長**で曲線を生成し、曲率・必要バンク・風・沈下・自己交差を評価。
+- `evaluateConnector()`は**指定済みの制御ハンドル長**で曲線を生成し、正則性と`connectorGroundRange()`による対地速度下限の全区間十分条件、曲率・必要バンク・風・沈下・自己交差を評価。
 - `chooseConnector()`はハンドル長の有限候補探索によって接続の候補を選ぶ。探索が成功しても実際の成立を保証しない。
 - `buildPlan()`は離脱側を順方向、着陸側をファイナル開始点から逆方向に計算し、着陸側の逆算済み経路を正本として予想高度を構築。ファイナル速度・風補正は共通化し、全制約確認後に`status`と`metrics`を確定。予想高度系列と必要高度系列、ファイナル目標線、チェックポイント・診断をまとめる。
 
@@ -102,7 +104,7 @@ glider-landing-planner/
 
 ## 5. UIと出力の責務
 
-- **`ui/map.ts`：** Leafletの淡色タイル、レグ線、距離リング、方位線、風向矢印、地点・「＋」・Bezierハンドルを描画。地図背景はパン可能。地点・距離・ファイナル長のドラッグ編集は**廃止済み**。新規計画の青い250 m方向ガイドは描画専用で、飛行計算に投入しない。
+- **`ui/map.ts`：** Leafletの淡色タイル、レグ線、距離リング、方位線、風向矢印、地点・「＋」・Bezierハンドルを描画。地図背景はパン可能。地点・距離・ファイナル長のドラッグ編集は**廃止済み**。新規計画の青い250 m方向ガイドは描画専用で、飛行計算に投入しない。表示経度は着陸地点に最も近い経度表現（再描画時は地図中心に近い世界コピー）に揃え、`fit()`も同じ基準を使用する。地図・レグクリックとハンドル操作の経度は−180〜180°へ正規化する。保存経度・ENU計算は変更しない。パンだけで全世界コピーに経路を複製する機能はない。
 - **`ui/responsive.ts`：** `matchMedia`でコンパクトレイアウトを判定。PCでは左サイドバーの該当編集欄へスクロール、コンパクト画面では下部パネルを表示。分岐はCSS幅だけでなくJavaScriptで制御。
 - **`ui/chart.ts`：** `altitudeTimeSeries()`は計算済みの正本時刻を使用し、無効高度をまたいで線を結ばない。`chartSvg()`は青・緑を別系列で描画。未設計時は案内メッセージを描く。
 - **`ui/checkpoints.ts`：** MSL高度と「着陸標高との差」である滑空場基準高度を区別し、ダウンウィンド開始の高度余裕行を生成する。AGLではない。
@@ -125,18 +127,20 @@ glider-landing-planner/
 
 ### 7.1 必要条件
 
-Node.js 22.16以降（24系も対象）とnpmを用意します。`source/package.json`は開発依存に`typescript: 5.8.3`、`vite: 8.3.8`を指定しています。**配布ZIPに`node_modules`と`package-lock.json`は同梱されていません。** 開発環境では次のように依存関係を準備します（レジストリへの接続が必要です）。
+検証済みZIPを反映・転送するだけならNode.js/npmは不要です。**既存の配布用JavaScriptをそのまま使用し、ローカルの公開用リポジトリで `npm install` を実行しません。**
+
+ソースを変更する開発者は、Node.js 22.16以降（24系も対象）とnpmを用意します。TypeScript 5.8.3を使用する非バンドルビルドが正本です。公開用リポジトリとは別の作業コピーで、以下を実行します。
 
 ```powershell
-Set-Location .\glider-landing-planner\source
+# 一時作業コピー内の glider-landing-planner を起点とする
+Set-Location .\source
 npm install --include=dev --no-package-lock
-npm run build:offline
 npm test
 ```
 
-`npm run build:offline`は`tsc -p tsconfig.json && node version-assets.mjs`を実行し、`../assets/js`にJSを生成して相対importへ`?v=0.1.21`を付加します。`npm test`は`pretest`で同じビルドを行った後、`node --test tests/*.test.mjs`を実行します。`npm run build:vite`は任意・将来用であり、**現行配布方式との互換性を確認せず本番アセットへ置き換えない**でください。
+`npm test` は `pretest` から `build:offline`（`tsc -p tsconfig.json && node version-assets.mjs`）を実行し、`../assets/js` を生成して相対importへ`?v=1.0.0`を付与した後、`node --test tests/*.test.mjs` を実行します。`build:vite` は任意・将来用であり、現行配布方式との互換性を確認せずに本番アセットへ置き換えないでください。
 
-配布前に `npm test` を実行し、すべてのテストの成功を確認してください。v0.1.21ではNode.js 22.16.0、TypeScript 5.8.3で175件のテストに成功しました。用語・版数の期待値を更新し、既存の計算アサーションは維持しています。v0.1.20では166件に9件を追加しました。`plan-consistency.test.mjs`、`schema.test.mjs`、`map-render.test.mjs` に正則性・未完了レグ・保存範囲・ID出力・編集の確定順序に関する回帰試験を統合しました。既存のID照合を検査する静的アサーション1件は可逆トークンの照合に合わせて更新し、数値精度基準は変更していません。Node.js 24実機、実DOM・IndexedDB（Chromiumでローカル検証ページへのアクセスが管理ポリシーにより拒否）、WordPress実サイト、FFFTP転送、PDF実印刷は別途確認が必要です。`source/.gitignore`で`node_modules/`を除外します。
+開発・検証後は必要なソース・生成JS・テスト・文書だけを反映し、一時作業コピーの依存パッケージやキャッシュを公開用リポジトリにコピーしません。`node_modules/` はGit除外対象ですが、FFFTPの転送対象から自動的に除外されるとは限りません。配布ZIPに`node_modules`、新規生成`package-lock.json`、`.git`、検証ログ、一時ファイルを含めないことを確認します。既存ファイルを無断で削除しません。
 
 ### 7.2 テストの探し方
 
@@ -147,10 +151,10 @@ npm test
 ## 8. WordPressへの導入・更新
 
 1. 既存プラグインフォルダーをバックアップする。旧形式の計画は1.3では読み込めないため、必要なら旧版でJSONを保存し、旧版と併せて保管する。
-2. `npm test`を実行してビルドと回帰テストを確認する。`glider-landing-planner.php`でプラグイン版数、`source/package.json`でパッケージ版数、`model/defaults.ts`の`ENGINE_VERSION`、`main.ts`の画面版数、`ui/print.ts`のアセットクエリを必要なリリース時に整合させる。
+2. ソースを変更した場合は別の作業コピーでビルド・回帰テストを実施する。検証済みZIPの反映のみなら再ビルドは不要。`glider-landing-planner.php`でプラグイン版数、`source/package.json`でパッケージ版数、`model/defaults.ts`の`ENGINE_VERSION`、`main.ts`の画面版数、`ui/print.ts`のアセットクエリを必要なリリース時に整合させる。
 3. 配布する`glider-landing-planner/`フォルダー内に`glider-landing-planner.php`と`assets/css/`、`assets/js/`があることを確認する。配布用ZIPの内側を二重の`glider-landing-planner/`にしない。
 4. FFFTPではZIPを**ローカルで展開**し、WordPressの`wp-content/plugins/glider-landing-planner/`にフォルダー内容をバイナリ転送する。WordPressサーバー上でTypeScriptをビルドする必要はない。v0.1.16からの更新では旧 `assets/js/flight/polar.js` を削除する（上書き転送では消えない）。`source/`や`docs/`を公開サーバーへ転送することは実行上必須ではない。
-5. WordPressでプラグインを有効化し、固定ページに**`[glider_landing_planner]`**を1個配置。既存ページを使う場合はショートコードを維持する。
+5. WordPressでプラグインを有効化し、固定ページに**`[glider_landing_planner]`**を1個配置。既存ページ [Glider Landing Planner](https://mtkbirdman.com/glider-landing-planner) のショートコードを維持する。
 6. アプリ画面を再読込し、JS/CSSキャッシュを確認。ブラウザキャッシュ、WordPress／Cocoon／CDNのキャッシュが残れば必要に応じて消去する。
 7. 新規計画、左右場周、離脱側レグ追加、直線・旋回編集、JSON保存と読込、旧JSONの拒否、印刷プレビューをPC／スマートフォンの対象環境でスモークテストする。
 
@@ -158,20 +162,23 @@ npm test
 
 ## 9. Gitでのリリース運用
 
-この配布ZIP自体には`.git`ディレクトリがないため、**実際のリポジトリのブランチ名や最新コミットは確認できません**。以下はリポジトリのルートを`glider-landing-planner`とした例です。作業前に`git status`で未コミット変更を確認してください。
+配布ZIPには`.git`がないため、実際のブランチ名や最新コミットは確認できません。検証済みZIPをリポジトリへ上書き展開した後、変更範囲を確認し、対象プラグインの変更だけを登録します。以下は親リポジトリから実行する例です。新規ブランチや依存パッケージは作成しません。
 
 ```powershell
 git status --short
-# 変更ファイルを配置してから
-npm --prefix source test
-git add -u -- .
-# 除外設定を確認し、必要な新規ファイルだけを登録
-git check-ignore -v --no-index -- source/node_modules/typescript/package.json
-git add -- source/tests/plan-consistency.test.mjs
+git add -u -- glider-landing-planner/
+git add -- glider-landing-planner/LICENSE
 git diff --cached --check
 git diff --cached --stat
-git commit -m "refactor: clarify Japanese flight guidance and turn input labels for v0.1.21"
+# 対象外のステージ済みファイルがないことを確認してから
+git commit -m "chore: release v1.0.0"
+git push
+# 対象コミットの実環境受入試験後に実施
+# git tag -a v1.0.0 -m "Glider Landing Planner v1.0.0 - Initial release"
+# git push origin v1.0.0
 ```
+
+Semantic Versioningの考え方に従い、互換性のある不具合修正はPATCH、互換性のある機能追加はMINOR、非互換変更はMAJORを検討します。保存スキーマの版数はアプリ版数と別に管理します。ライセンスは従来のPHPヘッダー宣言`GPL-2.0-or-later`を維持し、[GPL v2本文](../LICENSE)を同梱します。
 
 UIでは `heading` を「機首方位指定」、`ground-track` を「航跡方位指定」と表示します。`angle` は「旋回角を指定」、`target` は離脱側の「旋回後の…を指定」または着陸側の「旋回前の…を指定」です。内部識別子と計算定義は変更しません。
 
@@ -185,7 +192,8 @@ UIでは `heading` を「機首方位指定」、`ground-track` を「航跡方�
 - [ ] 簡易抗力式の沈下率、必要高度と予想高度、診断・評価不可が維持される。
 - [ ] スキーマ1.3のJSON／IndexedDB復元、旧形式の拒否、Undo/Redoを確認する。
 - [ ] TypeScriptソース変更時は`assets/js`を再生成し、相対importの版数が揃っている。
-- [ ] `npm test`が成功し、`git diff --check`に問題がない。
+- [ ] 開発用作業コピーでビルド・テストが成功し、`git diff --check`に問題がない。配布ZIPに不要な生成物が含まれない。
+- [ ] GLP-019の対地速度下限・GLP-020の地図表示回帰試験が成功し、実環境で地図・JSON保存・復元を確認する。
 - [ ] WordPress実機の地図／パネル／PDF・キャッシュを確認する（**自動テストで代替しない**）。
 
 ### 現行のデータ契約と出力境界

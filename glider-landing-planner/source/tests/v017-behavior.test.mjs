@@ -8,9 +8,9 @@ import {parseProject,serializeProject} from '../../assets/js/io/project.js';
 const read=(file)=>readFileSync(new URL(file,import.meta.url),'utf8');
 
 test('v0.1.8 WordPress version and engine version match',()=>{
- assert.equal(ENGINE_VERSION,'0.1.21-test');
- assert.match(read('../../glider-landing-planner.php'),/Version: 0\.1\.21/);
- assert.match(read('../src/main.ts'),/テスト版 v0\.1\.21/);
+ assert.equal(ENGINE_VERSION,'1.0.0');
+ assert.match(read('../../glider-landing-planner.php'),/Version: 1\.0\.0/);
+ assert.match(read('../src/main.ts'),/v1\.0\.0/);
 });
 test('v0.1.7 departure checkpoints count turns and straights independently',()=>{
  const p=createDemo();p.departureLegs=[makeStraight(200),makeTurn('left',90),makeStraight(150),makeTurn('right',270)];

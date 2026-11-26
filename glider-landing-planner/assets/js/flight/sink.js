@@ -1,4 +1,4 @@
-import { rad } from '../geometry/geo.js?v=0.1.21';
+import { rad } from '../geometry/geo.js?v=1.0.0';
 /** Reuse the simple drag-model coefficients throughout one plan. */
 export function createSinkModel(p) {
     const Vbest = p.bestLDAtMps, E = p.bestLD;

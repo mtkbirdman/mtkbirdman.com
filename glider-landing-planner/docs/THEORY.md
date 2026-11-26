@@ -1,6 +1,6 @@
 # Glider Landing Planner — 計算理論と数値モデル
 
-対象実装：**v0.1.21-test**
+対象実装：**v1.0.0**
 
 本書は、Glider Landing Planner が入力条件から飛行経路、飛行時間、高度損失および高度余裕を算出する数理モデルを説明する。航空工学・飛行力学・数値解析の基礎知識を持ち、計算原理を理解または検証したい読者を対象とする。
 
@@ -595,6 +595,31 @@ $$
 
 有限予算内で全区間を確認できない場合も不成立とし、実際の下限違反と判定不能を区別する。粗評価・詳細評価の両方に適用する。これは浮動小数点数値演算における保守的な十分条件であって厳密な区間証明ではなく、数学的に正則な曲線を拒否する場合がある。非正則・判定不能の曲線は、有限かつ領域内なら編集用プレビューとして保持するが、飛行計算サンプルとしては使用しない。
 
+#### 対地速度下限の連続区間評価
+
+正則性確認後、接続速度 $V_c$ と風速 $W$ が $W<V_c$ を満たす条件で、対地速度の下限も曲線全区間について評価する。比較に用いる有効下限は $G_0=0.05-10^{-12}\ \mathrm{m/s}$ である（第9章）。逆三角不等式から $G\ge V_c-W$ であるため、$V_c-W\ge G_0$ なら追加分割を必要としない。
+
+そうでない場合、風下向きの単位ベクトル $\widehat{\boldsymbol v}_w=\boldsymbol v_w/W$ と単位接線 $\boldsymbol\tau$ を用いる。第3章の風三角形の正の一意解について、二次方程式の他方の根は負であるから、正の $G_0$ における二次式の値が非正であることと $G\ge G_0$ は等価である。したがって
+
+$$
+G\ge G_0\quad\Longleftrightarrow\quad
+\widehat{\boldsymbol v}_w\cdot\boldsymbol\tau\ge c,
+\qquad c=\frac{G_0^2-(V_c-W)(V_c+W)}{2G_0 W}.
+$$
+
+$W=0$ の場合は解析的下界で直接判定する。正則性により $\boldsymbol\tau=\boldsymbol C'/\lVert\boldsymbol C'\rVert$ である。導関数制御点の風下方向への射影の最小値を $p_{\min}$、導関数ノルムの下界・上界を $r_{\min},r_{\max}$ とする。下界は制御点の和を正規化した方向への射影の最小値（負なら0）、上界は制御点のノルムの最大値である。凸包性により、以下は区間全体で対地速度下限を満たすための十分条件となる。
+
+$$
+p_{\min}>\begin{cases}
+c\,r_{\min} & c<0,\\
+c\,r_{\max} & c\ge0.
+\end{cases}
+$$
+
+下限違反を端点で観測すれば `GROUND_SPEED_TOO_LOW`、十分条件を確認できなければ導関数の制御点をde Casteljau法で二分する。最大深さ16・20,000ノード／候補の有限予算で確認できなければ `CONNECTOR_GROUND_RANGE_UNCERTAIN` とする。いずれも不成立とし、有限で領域内の幾何形状を編集用に残すが、飛行サンプルは生成しない。粗評価・詳細評価の両方で行い、従来の各サンプル点での制約確認も維持する。
+
+これは浮動小数点演算による保守的な十分条件であり、厳密な区間演算による証明ではない。境界付近の成立可能な曲線を拒否することがある。一律に強風を拒否するものではなく、曲線全域で条件を満たす追い風側等の接続は評価できる。
+
 ### 7.6 曲線長、時間および高度損失
 
 連続曲線に対する理論上の距離、時間、高度損失は
@@ -788,6 +813,7 @@ Bézierは制御点全体が円盤内にあれば凸包性により領域内と�
 | 経路の生サンプル | 片側120,000点以下（レグ間の重複点も含む） |
 | Bézier基準分割 | 粗評価56、通常160〜2,000 |
 | 正則性検査 | 深さ16、20,000ノード／候補 |
+| 対地速度の連続区間評価 | 深さ16、20,000ノード／候補（正則性とは別の予算） |
 | Bézier追加評価 | 深さ8、20,000評価／候補、局所最大値探索24反復 |
 | 自動接続 | 最大36候補＋特別処理・必要な詳細再評価 |
 
@@ -799,7 +825,7 @@ Bézierは制御点全体が円盤内にあれば凸包性により領域内と�
 
 | 分類 | 代表例 |
 | --- | --- |
-| 風・対地速度 | `WIND_TRACK_INFEASIBLE`, `GROUND_SPEED_TOO_LOW` |
+| 風・対地速度 | `WIND_TRACK_INFEASIBLE`, `GROUND_SPEED_TOO_LOW`, `CONNECTOR_GROUND_RANGE_UNCERTAIN` |
 | 旋回 | `TURN_INVALID`, `TURN_TARGET_NOT_REACHED`, `BANK_LIMIT_EXCEEDED` |
 | 接続 | `CONNECTOR_NO_SOLUTION`, `CONNECTOR_SELF_INTERSECTION`, `CONNECTOR_HANDLE_OUT_OF_RANGE` |
 | 接線・追加評価 | `CONNECTOR_TANGENT_TOO_SMALL`, `CONNECTOR_REGULARITY_UNCERTAIN`, `CONNECTOR_EVALUATION_UNCERTAIN` |
@@ -829,10 +855,10 @@ Bézierは制御点全体が円盤内にあれば凸包性により領域内と�
 
 通常条件で数値積分が十分に収束していても、次の制約が残る。
 
-- Bézierの最大バンク・最小対地速度・自己交差は有限点と追加評価に依存する。連続曲線全区間の厳密な制約保証はない。特に $V-W$ が対地速度下限に近い場合、評価点間の対地速度下限違反を見逃す可能性がある。
-- 正則性・局所領域の凸包判定は保守的な数値的十分条件であり、判定不能な正則曲線を拒否し得る。
+- Bézierの最大バンク・自己交差は有限点と追加評価に依存する。対地速度下限は解析的下界と凸包による全区間の十分条件を確認するが、浮動小数点の厳密な区間保証はない。
+- 正則性・局所領域・対地速度の凸包判定は保守的な数値的十分条件であり、判定不能な成立可能曲線を拒否し得る。
 - 自動接続は有限候補探索であり、成立可能な解や大域最適解の発見を保証しない。
-- 局所ENUの逆変換は近似で、遠方ほど測地誤差が増える。50 km制限は測地精度の保証値ではない。極域・日付変更線付近の地図投影・描画についても、計算座標の成立とは別に制約がある。v0.1.21では日付変更線をまたぐ地図表示の経度連続性を保証しない。
+- 局所ENUの逆変換は近似で、遠方ほど測地誤差が増える。50 km制限は測地精度の保証値ではない。地図描画では着陸地点を基準に経度を連続化し、日付変更線付近の局所経路を同一の表示座標系に配置する。保存座標と局所ENU計算は変更しない。ただし極域のWeb Mercator投影、地理院タイルの提供範囲、任意の世界コピーにおける常時複製表示は保証しない。
 - 強い向かい風下では $G$ が小さくなり、高度損失 $Lw/G$ は風の微小な変化に大きく依存する。0.05 m/sの下限は数値的な特異性を管理するもので、実用上の対地速度下限や風の不確かさを管理するものではない。
 
 ### 10.3 検証と妥当性確認
@@ -860,6 +886,8 @@ Bézierは制御点全体が円盤内にあれば凸包性により領域内と�
 | ファイナル境界・着陸側正本化 | [`buildPlan`](../source/src/planning/plan.ts) | `plan-consistency.test.mjs` T01–09 |
 | 曲線・導関数・曲率 | [`controlPoints`, `point`, `derivative`, `second`, `curvature`](../source/src/geometry/bezier.ts) | `engine.test.mjs` T10–11 |
 | 正則性・領域・交差 | [`curveRegular`, `curveInRange`, `selfIntersects`](../source/src/geometry/bezier.ts) | `plan-consistency.test.mjs` T24–26, T34–38、正則性回帰テスト |
+| 接続の対地速度下限 | [`connectorGroundRange`](../source/src/planning/connector.ts) | `plan-consistency.test.mjs` GLP-019 |
+| 地図の連続経度 | [`PlannerMap`, `displayLongitude`, `canonicalLongitude`](../source/src/ui/map.ts) | `map-render.test.mjs` GLP-020（モック） |
 | 接続積分・境界制約 | [`endpointCurvature`, `connectorBoundaryValid`, `evaluateConnector`](../source/src/planning/connector.ts) | `plan-consistency.test.mjs` T21–23、正則性回帰テスト |
 | 候補探索 | [`chooseConnector`](../source/src/planning/connector.ts) | `plan-consistency.test.mjs` T39–40、ハンドル範囲回帰テスト |
 | 集計値・チェックポイント | [`buildPlan`](../source/src/planning/plan.ts)、[`checkpointRows`](../source/src/ui/checkpoints.ts) | `engine.test.mjs` T14, T23、`plan-consistency.test.mjs` T10–13, T41–43、未完了レグ回帰テスト |

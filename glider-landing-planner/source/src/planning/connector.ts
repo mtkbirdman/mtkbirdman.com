@@ -2,9 +2,55 @@ import { validHandle, clampHandle } from '../model/limits.js';
 import type { State, Point2, ConnectionResult, Notice, Sample, ProjectV1 } from '../model/types.js';
 import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal, signed, inLocalRange } from '../geometry/geo.js';
 import { point, derivative, curvature, controlPoints, selfIntersects, curveInRange, curveRegular, TANGENT_MIN_M } from '../geometry/bezier.js';
-import { windVector, GRAVITY, groundSpeedValid, headingForTrack, airGround } from '../flight/core.js';
+import { windVector, GRAVITY, MIN_GROUND_MPS, groundSpeedValid, headingForTrack, airGround } from '../flight/core.js';
 import { createSinkModel, checkedSink } from '../flight/sink.js';
 const EPS = 1e-8;
+const GROUND_RANGE_MAX_DEPTH = 16, GROUND_RANGE_NODE_BUDGET = 20000;
+type GroundRange = 'valid' | 'below-limit' | 'uncertain';
+/** Sufficient certificate on the original derivative, not a sampled minimum.
+ * Called only after the curve and its endpoint wind solutions are validated. */
+export function connectorGroundRange(cp: Point2[], V: number, project: ProjectV1,
+    maxDepth = GROUND_RANGE_MAX_DEPTH, budget = GROUND_RANGE_NODE_BUDGET): GroundRange {
+    const W = project.wind.speedMps;
+    if (!(Number.isFinite(V) && Number.isFinite(W) && W >= 0 && W < V) ||
+        cp.length !== 6 || !cp.every(p => Number.isFinite(p.e) && Number.isFinite(p.n))) return 'uncertain';
+    // Reverse triangle inequality: all headings satisfy the existing inclusive threshold.
+    if (groundSpeedValid(V - W)) return 'valid';
+    if (W === 0) return 'below-limit';
+    const g0 = MIN_GROUND_MPS - 1e-12;
+    const unit = mul(windVector(project.wind), 1 / W);
+    const c = (g0 * g0 - (V - W) * (V + W)) / (2 * g0 * W);
+    if (!Number.isFinite(c) || !Number.isFinite(unit.e) || !Number.isFinite(unit.n)) return 'uncertain';
+    let remaining = Math.max(0, Math.min(GROUND_RANGE_NODE_BUDGET, Math.floor(budget)));
+    const depthLimit = Math.max(0, Math.min(GROUND_RANGE_MAX_DEPTH, Math.floor(maxDepth)));
+    const visit = (q: Point2[], depth: number): GroundRange => {
+        if (!(remaining > 0)) return 'uncertain';
+        remaining--;
+        const norms = q.map(magnitude), projections = q.map(v => dot(unit, v));
+        if (![...norms, ...projections].every(Number.isFinite)) return 'uncertain';
+        // Endpoints are actual derivative values; a failed wind solution is observed evidence.
+        for (const i of [0, q.length - 1]) {
+            if (!(norms[i] > TANGENT_MIN_M)) return 'uncertain';
+            if (!headingForTrack(courseOf(q[i].e, q[i].n), V, project.wind)) return 'below-limit';
+        }
+        const axis = q.reduce((a, b) => add(a, b), {e: 0, n: 0}), len = magnitude(axis);
+        const lower = Number.isFinite(len) && len > 0 ? Math.max(0, Math.min(...q.map(v => dot(v, mul(axis, 1 / len))))) : 0;
+        const upper = Math.max(...norms);
+        // Require W_hat·D >= c |D|. The sign of c determines which norm bound is safe.
+        // Strict comparison here is conservative at floating-point boundaries.
+        if (Math.min(...projections) > c * (c < 0 ? lower : upper)) return 'valid';
+        if (!(depth < depthLimit)) return 'uncertain';
+        const left = [q[0]], right = [q.at(-1)!]; let row = q;
+        while (row.length > 1) {
+            row = row.slice(1).map((v, i) => mul(add(v, row[i]), .5));
+            left.push(row[0]); right.unshift(row.at(-1)!);
+        }
+        const a = visit(left, depth + 1); if (a === 'below-limit') return a;
+        const b = visit(right, depth + 1);
+        return b === 'below-limit' ? b : a === 'valid' && b === 'valid' ? 'valid' : 'uncertain';
+    };
+    return visit(cp.slice(1).map((v, i) => mul(sub(v, cp[i]), 5)), 0);
+}
 /** Conditions common to every handle candidate, independent of curve geometry. */
 export function connectorBoundaryValid(start: State, end: State, project: ProjectV1): boolean {
     if (!inLocalRange(start)||!inLocalRange(end)||!groundSpeedValid(start.groundMps)||!groundSpeedValid(end.groundMps)) return false;
@@ -50,6 +96,13 @@ export function evaluateConnector(start: State, endBoundary: State, project: Pro
         const preview=Array.from({length:steps+1},(_,i)=>point(cp,i/steps));
         const code=regularity==='below-limit'?'CONNECTOR_TANGENT_TOO_SMALL':'CONNECTOR_REGULARITY_UNCERTAIN';
         const message=regularity==='below-limit'?'Bezier導関数の大きさが下限以下です。':'評価予算内でBezier曲線の正則性を確認できません。';
+        return {points:preview.every(inLocalRange)?preview:[],samples:[],end:{...start},lengthM:0,lossM:0,maxBankDeg:0,feasible:false,altitudeValid:false,notices:[{code,level:'error',message}],handleStartM:a,handleEndM:b};
+    }
+    const groundRange = connectorGroundRange(cp, V, project);
+    if (groundRange !== 'valid') {
+        const preview = Array.from({length:steps+1}, (_,i) => point(cp,i/steps));
+        const code = groundRange === 'below-limit' ? 'GROUND_SPEED_TOO_LOW' : 'CONNECTOR_GROUND_RANGE_UNCERTAIN';
+        const message = groundRange === 'below-limit' ? '接続曲線の対地速度下限を満たしません。' : '評価予算内で接続曲線全体の対地速度下限を確認できません。';
         return {points:preview.every(inLocalRange)?preview:[],samples:[],end:{...start},lengthM:0,lossM:0,maxBankDeg:0,feasible:false,altitudeValid:false,notices:[{code,level:'error',message}],handleStartM:a,handleEndM:b};
     }
     let horizontalInvalid=false;

@@ -1,5 +1,5 @@
-import { createSinkModel, checkedSink } from './sink.js?v=0.1.21';
-import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add, inLocalRange, LOCAL_RADIUS_M } from '../geometry/geo.js?v=0.1.21';
+import { createSinkModel, checkedSink } from './sink.js?v=1.0.0';
+import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add, inLocalRange, LOCAL_RADIUS_M } from '../geometry/geo.js?v=1.0.0';
 export const MIN_GROUND_MPS = 0.05;
 // Tiny tolerance only for cancellation at the inclusive decimal boundary.
 export const groundSpeedValid = (g) => Number.isFinite(g) && g >= MIN_GROUND_MPS - 1e-12;

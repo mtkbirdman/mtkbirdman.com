@@ -141,7 +141,7 @@ test('PDF prints the resolved turn angle, without altering the report layout',()
   const plan=buildPlan(p);
   const mapCopy={querySelectorAll:()=>[],removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div class="leaflet"></div>'};
   const mapEl={clientWidth:900,clientHeight:420,cloneNode(){return mapCopy}};
-  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'0.1.21-test'});
+  const html=reportHtml({project:p,plan,mapEl,metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:'1.0.0'});
   assert.match(html,/右旋回 80°、バンク 30°/);
   assert.doesNotMatch(html,/右旋回 90°、バンク 30°/);
   assert.match(html,/飛行経路図/);assert.match(html,/高度プロファイル/);
@@ -215,7 +215,7 @@ test('optimization signature includes mode and target, and editing recomputes th
 test('single sink model retains the WordPress shortcode and magnetic convention',()=>{
   const root=new URL('../',import.meta.url);
   const php=readFileSync(new URL('../glider-landing-planner.php',root),'utf8');
-  assert.match(php,/Version:\s*0\.1\.21/);assert.match(php,/glider_landing_planner/);
+  assert.match(php,/Version:\s*1\.0\.0/);assert.match(php,/glider_landing_planner/);
   const p=createDemo();assert.equal(p.display.magneticDeclinationDeg,0);
   assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});
 });

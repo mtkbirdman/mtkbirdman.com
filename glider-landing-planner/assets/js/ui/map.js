@@ -1,10 +1,17 @@
-import { clampHandle } from '../model/limits.js?v=0.1.21';
-import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue, inLocalRange } from '../geometry/geo.js?v=0.1.21';
-import { windVector } from '../flight/core.js?v=0.1.21';
-import { isCompactLayout } from './responsive.js?v=0.1.21';
-import { escapeHtml } from './escape-html.js?v=0.1.21';
-import { fmtAlt } from './chart.js?v=0.1.21';
-import { INITIAL_LANDING_POINT, INITIAL_MAP_ZOOM } from '../model/defaults.js?v=0.1.21';
+import { clampHandle } from '../model/limits.js?v=1.0.0';
+import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue, inLocalRange, signed } from '../geometry/geo.js?v=1.0.0';
+import { windVector } from '../flight/core.js?v=1.0.0';
+import { isCompactLayout } from './responsive.js?v=1.0.0';
+import { escapeHtml } from './escape-html.js?v=1.0.0';
+import { fmtAlt } from './chart.js?v=1.0.0';
+import { INITIAL_LANDING_POINT, INITIAL_MAP_ZOOM } from '../model/defaults.js?v=1.0.0';
+/** Preserve canonical input endpoints; wrap any number of world copies. */
+export const canonicalLongitude = (lon) => lon >= -180 && lon <= 180 ? lon : signed(lon);
+/** Choose the longitude equivalent closest to the display reference. */
+export const displayLongitude = (lon, origin) => {
+    const delta = lon - origin;
+    return delta >= -180 && delta <= 180 ? lon : origin + signed(delta);
+};
 const marginText = (m, unit) => `${m > 0 ? '+' : ''}${fmtAlt(m, unit)}`;
 export class PlannerMap {
     cb;
@@ -15,6 +22,11 @@ export class PlannerMap {
     vectorRenderer;
     picking = null;
     ready = false;
+    displayOrigin = null;
+    reference(project) {
+        const lon = project.landing.point.lonDeg;
+        return this.displayOrigin?.landing === lon ? this.displayOrigin.reference : lon;
+    }
     constructor(element, cb) {
         this.cb = cb;
         if (typeof L === 'undefined') {
@@ -30,7 +42,7 @@ export class PlannerMap {
         this.controls = L.layerGroup().addTo(this.map);
         this.map.on('click', (ev) => {
             if (this.picking) {
-                this.cb.onPick(this.picking, ev.latlng.lat, ev.latlng.lng);
+                this.cb.onPick(this.picking, ev.latlng.lat, canonicalLongitude(ev.latlng.lng));
                 this.setPick(null);
             }
         });
@@ -44,7 +56,7 @@ export class PlannerMap {
     }
     showNewProject(project) {
         if (this.ready)
-            this.map.setView([project.landing.point.latDeg, project.landing.point.lonDeg], INITIAL_MAP_ZOOM);
+            this.map.setView([project.landing.point.latDeg, this.reference(project)], INITIAL_MAP_ZOOM);
     }
     fit(project, plan) {
         if (!this.ready)
@@ -54,7 +66,7 @@ export class PlannerMap {
         const stride = Math.max(1, Math.ceil(groups.reduce((n, g) => n + g.length, 0) / 120));
         const pts = [...(plan.departureInRange ? [project.departure] : []), project.landing.point,
             ...groups.flatMap(g => g.filter((p, i) => (i % stride === 0 || i === g.length - 1) && inLocalRange(p)).map(p => frame.toGeo(p)))];
-        this.map.fitBounds(L.latLngBounds(pts.filter(p => Number.isFinite(p.latDeg) && Number.isFinite(p.lonDeg)).map(p => [p.latDeg, p.lonDeg])), { padding: [45, 45], maxZoom: 16 });
+        this.map.fitBounds(L.latLngBounds(pts.filter(p => Number.isFinite(p.latDeg) && Number.isFinite(p.lonDeg)).map(p => [p.latDeg, displayLongitude(p.lonDeg, this.reference(project))])), { padding: [45, 45], maxZoom: 16 });
     }
     redraw(project, plan, selectedLegId = null) {
         if (!this.ready)
@@ -62,7 +74,12 @@ export class PlannerMap {
         this.graphics.clearLayers();
         this.rings.clearLayers();
         this.controls.clearLayers();
-        const frame = new LocalFrame(project.landing.point), loc = (p) => { const g = frame.toGeo(p); return [g.latDeg, g.lonDeg]; };
+        const landingLon = project.landing.point.lonDeg;
+        const center = this.map.getCenter?.()?.lng;
+        const reference = Number.isFinite(center) ? displayLongitude(landingLon, center) : landingLon;
+        this.displayOrigin = { landing: landingLon, reference };
+        const geoLoc = (g) => [g.latDeg, displayLongitude(g.lonDeg, reference)];
+        const frame = new LocalFrame(project.landing.point), loc = (p) => geoLoc(frame.toGeo(p));
         const draw = (points, color, weight = 3, dashArray, legId) => {
             if (points.length < 2)
                 return;
@@ -74,7 +91,7 @@ export class PlannerMap {
                 // A wider, nearly transparent hit target makes narrow curved legs tappable on phones.
                 const click = (ev) => {
                     if (this.picking) {
-                        this.cb.onPick(this.picking, ev.latlng.lat, ev.latlng.lng);
+                        this.cb.onPick(this.picking, ev.latlng.lat, canonicalLongitude(ev.latlng.lng));
                         this.setPick(null);
                     }
                     else
@@ -154,7 +171,7 @@ export class PlannerMap {
             L.popup({ className: 'glp-map-add-popup', closeButton: true })
                 .setLatLng(loc(point)).setContent(menu).openOn(this.map);
         };
-        L.marker([project.departure.latDeg, project.departure.lonDeg], { icon: depIcon, title: project.departureLegs.length ? '離脱地点：クリックして編集' : '離脱地点：クリックしてレグを追加' })
+        L.marker(geoLoc(project.departure), { icon: depIcon, title: project.departureLegs.length ? '離脱地点：クリックして編集' : '離脱地点：クリックしてレグを追加' })
             .on('click', () => {
             if (this.picking)
                 return;
@@ -168,7 +185,7 @@ export class PlannerMap {
                 showAddMenu('departure', frame.toLocal(project.departure), true);
             }
         }).addTo(this.controls);
-        L.marker([project.landing.point.latDeg, project.landing.point.lonDeg], { icon: landIcon, title: '着陸地点・場周設定を開く' })
+        L.marker(geoLoc(project.landing.point), { icon: landIcon, title: '着陸地点・場周設定を開く' })
             .on('click', () => { if (!this.picking)
             this.cb.onSelectPoint?.('landing'); }).addTo(this.controls);
         // Extension buttons appear only after actual legs exist; initially the
@@ -203,7 +220,7 @@ export class PlannerMap {
                 if (!inLocalRange(p))
                     continue;
                 L.polyline([loc(base), loc(p)], { color: '#9333ea', dashArray: '3,5', weight: 1.5, opacity: .8, smoothFactor: 0, renderer: this.vectorRenderer }).addTo(this.controls);
-                L.marker(loc(p), { draggable: true, icon: smallIcon(name), title: 'Bezier制御ハンドル' }).on('dragend', (ev) => { const ll = ev.target.getLatLng(), q = frame.toLocal({ latDeg: ll.lat, lonDeg: ll.lng }); const length = dot(sub(q, base), unit); this.cb.onHandle(end, Number.isFinite(length) ? clampHandle(length) : length); }).addTo(this.controls);
+                L.marker(loc(p), { draggable: true, icon: smallIcon(name), title: 'Bezier制御ハンドル' }).on('dragend', (ev) => { const ll = ev.target.getLatLng(), q = frame.toLocal({ latDeg: ll.lat, lonDeg: canonicalLongitude(ll.lng) }); const length = dot(sub(q, base), unit); this.cb.onHandle(end, Number.isFinite(length) ? clampHandle(length) : length); }).addTo(this.controls);
             }
         }
         // Merge checkpoints sharing one map coordinate, so downwind start is not covered by a redundant connector marker.
@@ -241,7 +258,7 @@ export class PlannerMap {
         if (project.display.showDistanceRings) {
             const step = project.display.distanceRingIntervalM;
             for (let radius = step; radius <= 2000 + 1e-6; radius += step)
-                L.circle([project.landing.point.latDeg, project.landing.point.lonDeg], { radius, color: '#7a8797', weight: 1, opacity: project.display.referenceLineOpacity, fill: false, dashArray: '4,5', interactive: false, renderer: this.vectorRenderer }).addTo(this.rings);
+                L.circle(geoLoc(project.landing.point), { radius, color: '#7a8797', weight: 1, opacity: project.display.referenceLineOpacity, fill: false, dashArray: '4,5', interactive: false, renderer: this.vectorRenderer }).addTo(this.rings);
         }
         if (project.display.showBearingLines) {
             // Magnetic declination is east-positive: true bearing = magnetic bearing + declination.

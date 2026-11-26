@@ -1,6 +1,6 @@
 import type {ProjectV1, FlightLeg, GeoPoint} from './types.js';
 
-export const ENGINE_VERSION = '0.1.21-test';
+export const ENGINE_VERSION = '1.0.0';
 
 // Educational initial coordinates, not surveyed runway or touchdown points.
 // See docs/THEORY.md for the initial-condition references and limitations.

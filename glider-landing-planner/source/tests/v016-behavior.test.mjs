@@ -15,7 +15,7 @@ const start=(w={fromDeg:0,speedMps:0})=>{const a=airGround(0,20,w);return {e:0,n
 const ctx=(w={fromDeg:0,speedMps:0})=>({speedMps:20,wind:w,performance:{bestLD:30,bestLDAtMps:20}});
 const near=(v,x,tol)=>assert.ok(Math.abs(v-x)<tol,`${v} differs from ${x}`);
 test('v0.1.6 positive unbounded turn angles survive JSON with multi-turn records',()=>{
- const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.21-test');
+ const p=createDemo();assert.equal(ENGINE_VERSION,'1.0.0');
  p.departureLegs=[makeTurn('right',1080),makeTurn('left',1800),makeTurn('right',1000000)];
  const q=parseProject(serializeProject(p));assert.deepEqual(q.departureLegs.map(x=>x.angleDeg),[1080,1800,1000000]);
  p.departureLegs[0].angleDeg=0;assert.throws(()=>parseProject(JSON.stringify(p)),/旋回角/);

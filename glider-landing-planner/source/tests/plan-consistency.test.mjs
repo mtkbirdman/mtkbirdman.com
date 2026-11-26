@@ -222,7 +222,7 @@ test('T41–43: errors sorted before warnings; invalid chart and printed conditi
     const doc=globalThis.document;globalThis.document={querySelectorAll:()=>[],querySelector:()=>null};try{
         const {App}=await import('../../assets/js/main.js');const app=Object.create(App.prototype);app.project=p;app.plan=r;app.notice='';app.updateCheckpointSelection=()=>{};const nodes=new Map();app.root={querySelector(k){if(!nodes.has(k))nodes.set(k,{innerHTML:''});return nodes.get(k);}};app.renderResults();
         const metrics=nodes.get('.glp-metrics').innerHTML,diagnostics=nodes.get('.glp-diagnostics').innerHTML;assert.equal((metrics.match(/評価不可/g)||[]).length,3);assert.match(diagnostics,/エラー \d+ 件/);assert.match(diagnostics,/件省略/);assert.doesNotMatch(metrics,/NaN|Infinity/);
-        const mapEl={clientWidth:100,clientHeight:100,cloneNode(){return {querySelectorAll(){return []},removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div></div>'}}};const html=reportHtml({project:p,plan:r,mapEl,metricsHtml:metrics,diagnosticsHtml:diagnostics,title:'GLP',engineVersion:'0.1.21-test'});assert.ok(html.includes(metrics)&&html.includes(diagnostics));assert.match(html,/ファイナル実効速度/);assert.match(html,/計画時間 評価不可/);
+        const mapEl={clientWidth:100,clientHeight:100,cloneNode(){return {querySelectorAll(){return []},removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div></div>'}}};const html=reportHtml({project:p,plan:r,mapEl,metricsHtml:metrics,diagnosticsHtml:diagnostics,title:'GLP',engineVersion:'1.0.0'});assert.ok(html.includes(metrics)&&html.includes(diagnostics));assert.match(html,/ファイナル実効速度/);assert.match(html,/計画時間 評価不可/);
     }finally{globalThis.document=doc;}
     const r2=buildPlan(createDemo());r2.status='invalid';r2.requiredAll=[{...r2.finalTarget[0],tS:0},{...r2.finalTarget[1],tS:1,altitudeValid:false},{...r2.finalTarget[2],tS:2}];const series=altitudeTimeSeries(r2);assert.equal(series.arrival.length,1);
 });
@@ -315,4 +315,42 @@ test('GLP-017: generated and fallback handles remain within the persistence cont
         const r=evaluateConnector(state(0),state(0,25,wx(),0,1000),p,h,100);
         assert.equal(r.feasible,false);assert.equal(r.samples.length,0);code(r,'CONNECTOR_HANDLE_OUT_OF_RANGE');
     }
+});
+
+test('GLP-019: continuous ground speed certificate rejects the between-node audit counterexample',async()=>{
+    const {connectorGroundRange}=await import('../../assets/js/planning/connector.js');
+    const {controlPoints,derivative}=await import('../../assets/js/geometry/bezier.js');
+    const p=createDemo();p.wind=wx(0,24.950000001);p.performance={bestLD:100,bestLDAtMps:25};p.maxBankDeg=70;
+    const boundary=(track,e,n)=>{const s=headingForTrack(track,25,p.wind);assert.ok(s);return {...state(s.headingDeg,25,p.wind,e,n),trackDeg:track,groundMps:s.groundMps};};
+    const A=boundary(350,0,0),B=boundary(20,0,50);
+    const cp=controlPoints(A,B,headingVector(350),headingVector(20),0,0,20,10);
+    assert.ok(derivative(cp,.497).e*derivative(cp,.498).e<0);
+    assert.equal(connectorGroundRange(cp,25,p),'below-limit');
+    for(const coarse of [false,true]){
+        const r=evaluateConnector(A,B,p,20,10,coarse);assert.equal(r.feasible,false);code(r,'GROUND_SPEED_TOO_LOW');assert.equal(r.samples.length,0);assert.ok(r.points.length>2);assert.equal(r.altitudeValid,false);
+    }
+    assert.equal(connectorGroundRange(cp,25,p,0,20000),'uncertain');
+    assert.equal(connectorGroundRange(cp,25,p,16,0),'uncertain');
+    // Keep strong-wind tailwind and crosswind cases; a blanket V-W rejection is incorrect.
+    for(const track of [90,180,270]){
+        const t=headingVector(track),a=boundary(track,0,0),b=boundary(track,t.e*50,t.n*50);
+        const r=evaluateConnector(a,b,p,10,10);assert.equal(r.feasible,true,JSON.stringify(r.notices));
+    }
+    // Inclusive minimum and fast path: no subdivision budget required.
+    p.wind=wx(0,24.95);assert.equal(connectorGroundRange(cp,25,p,0,0),'valid');
+    p.wind=wx(0,8);assert.equal(connectorGroundRange(cp,25,p,0,0),'valid');
+    // Positive c branch (very low relative airspeed difference): downstream valid, perpendicular invalid.
+    p.wind=wx(0,24.99999999);
+    const south=controlPoints({e:0,n:0},{e:0,n:-50},headingVector(180),headingVector(180),0,0,10,10);
+    const east=controlPoints({e:0,n:0},{e:50,n:0},headingVector(90),headingVector(90),0,0,10,10);
+    assert.equal(connectorGroundRange(south,25,p),'valid');assert.equal(connectorGroundRange(east,25,p),'below-limit');
+});
+
+test('GLP-019: continuous rejection propagates to the full plan without changing JSON inputs',()=>{
+    // Equatorial origin: place the final start at B, and a zero-leg departure at A.
+    const p=createDemo();p.wind=wx(0,24.950000001);p.performance={bestLD:100,bestLDAtMps:25};p.maxBankDeg=70;
+    p.landing.point={latDeg:0,lonDeg:0};p.landing.runwayTrackDeg=20;p.landing.final.groundLengthM=50;
+    const frame=new LocalFrame(p.landing.point),base=buildPlan(p).finalStart;
+    const s=headingForTrack(350,25,p.wind);p.departure={...frame.toGeo({e:base.e,n:base.n-50}),altitudeMSLM:1000,headingDeg:s.headingDeg};p.connector=connector(20,10);
+    const r=buildPlan(p);assert.equal(r.connectorReady,true);assert.equal(r.status,'invalid');assert.equal(r.connector.feasible,false);assert.equal(r.connector.samples.length,0);assert.ok(r.connector.points.length>2);code(r,'GROUND_SPEED_TOO_LOW');assert.deepEqual(r.metrics,{totalDistanceM:null,totalTimeS:null,connectionMarginM:null});assert.deepEqual(parseProject(serializeProject(p)),p);
 });

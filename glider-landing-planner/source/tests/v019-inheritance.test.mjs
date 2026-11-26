@@ -9,11 +9,11 @@ const read=file=>readFileSync(new URL(file,import.meta.url),'utf8');
 const close=(a,b,tol=1e-7)=>assert.ok(Math.abs(a-b)<tol,`${a} differs from ${b}`);
 
 test('v0.1.10 versions agree across source, WordPress, print, and documentation',()=>{
- assert.equal(ENGINE_VERSION,'0.1.21-test');
- assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.21/);
- assert.match(read('../src/main.ts'),/テスト版 v0\.1\.21/);
- assert.match(read('../src/ui/print.ts'),/ver=0\.1\.21/);
- assert.match(read('../../README.md'),/v0\.1\.21/);
+ assert.equal(ENGINE_VERSION,'1.0.0');
+ assert.match(read('../../glider-landing-planner.php'),/Version:\s*1\.0\.0/);
+ assert.match(read('../src/main.ts'),/v1\.0\.0/);
+ assert.match(read('../src/ui/print.ts'),/ver=1\.0\.0/);
+ assert.match(read('../../README.md'),/v1\.0\.0/);
 });
 
 test('v0.1.9 displays inherited baseline speed without converting it to an override',()=>{

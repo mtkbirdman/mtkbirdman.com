@@ -183,12 +183,16 @@ test('v0.1.11 map constructor centers on the reference with zoom14, not fitBound
 
 test('v0.1.11 release and all relative compiled ES modules use the same cache version',()=>{
     const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8');
-    assert.equal(ENGINE_VERSION,'0.1.21-test');
-    assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.21/);
-    assert.match(read('../src/main.ts'),/テスト版 v0\.1\.21/);
-    assert.match(read('../src/ui/print.ts'),/ver=0\.1\.21/);
-    assert.match(read('../../README.md'),/v0\.1\.21/);
-    assert.equal(JSON.parse(read('../package.json')).version,'0.1.21');
+    assert.equal(ENGINE_VERSION,'1.0.0');
+    assert.match(read('../../glider-landing-planner.php'),/Version:\s*1\.0\.0/);
+    assert.match(read('../src/main.ts'),/v1\.0\.0/);
+    assert.match(read('../src/ui/print.ts'),/ver=1\.0\.0/);
+    assert.match(read('../../README.md'),/v1\.0\.0/);
+    assert.match(read('../../README.md'),/https:\/\/mtkbirdman\.com\/glider-landing-planner/);
+    assert.match(read('../../preview-local.html'),/assets\/js\/main\.js\?v=1\.0\.0/);
+    assert.match(read('../../preview-local.html'),/assets\/css\/app\.css\?v=1\.0\.0/);
+    assert.match(read('../../LICENSE'),/GNU GENERAL PUBLIC LICENSE/);
+    assert.equal(JSON.parse(read('../package.json')).version,'1.0.0');
     const root=fileURLToPath(new URL('../../assets/js/',import.meta.url));
     function collect(dir){return readdirSync(dir,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?collect(join(dir,entry.name)):[join(dir,entry.name)]);}
     let modules=0;
@@ -196,7 +200,7 @@ test('v0.1.11 release and all relative compiled ES modules use the same cache ve
         const content=readFileSync(f,'utf8');
         const imports=[...content.matchAll(/\bfrom\s*['"](\.{1,2}\/[^'"]+\.js)(\?v=[^'"]+)?['"]/g)];
         for(const [,mod,version] of imports){
-            assert.equal(version,'?v=0.1.21',`${f}: ${mod}`);
+            assert.equal(version,'?v=1.0.0',`${f}: ${mod}`);
             modules++;
         }
     }

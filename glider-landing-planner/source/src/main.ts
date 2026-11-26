@@ -269,7 +269,7 @@ export class App {
         sidebarScroll.scrollTop = preservedScroll;
     }
     private renderToolbar() {
-        (this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.21</span></div></div><div class="glp-tool-group">
+        (this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>グライダー着陸経路シミュレーター / v1.0.0</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHtml(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" >JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" >PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
     }

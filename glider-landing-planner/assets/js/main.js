@@ -1,17 +1,17 @@
-import { clampHandle, validHandle } from './model/limits.js?v=0.1.21';
-import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js?v=0.1.21';
-import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js?v=0.1.21';
-import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js?v=0.1.21';
-import { chooseConnector } from './planning/connector.js?v=0.1.21';
-import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js?v=0.1.21';
-import { saveSnapshot, latestSnapshot } from './io/autosave.js?v=0.1.21';
-import { PlannerMap } from './ui/map.js?v=0.1.21';
-import { chartSvg, fmtAlt, fmtElapsed } from './ui/chart.js?v=0.1.21';
-import { openPrintReport } from './ui/print.js?v=0.1.21';
-import { checkpointTable } from './ui/checkpoints.js?v=0.1.21';
-import { heightInputText, FEET_PER_METER } from './ui/height-units.js?v=0.1.21';
-import { escapeHtml, htmlLegId, readLegId } from './ui/escape-html.js?v=0.1.21';
-import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js?v=0.1.21';
+import { clampHandle, validHandle } from './model/limits.js?v=1.0.0';
+import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js?v=1.0.0';
+import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js?v=1.0.0';
+import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js?v=1.0.0';
+import { chooseConnector } from './planning/connector.js?v=1.0.0';
+import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js?v=1.0.0';
+import { saveSnapshot, latestSnapshot } from './io/autosave.js?v=1.0.0';
+import { PlannerMap } from './ui/map.js?v=1.0.0';
+import { chartSvg, fmtAlt, fmtElapsed } from './ui/chart.js?v=1.0.0';
+import { openPrintReport } from './ui/print.js?v=1.0.0';
+import { checkpointTable } from './ui/checkpoints.js?v=1.0.0';
+import { heightInputText, FEET_PER_METER } from './ui/height-units.js?v=1.0.0';
+import { escapeHtml, htmlLegId, readLegId } from './ui/escape-html.js?v=1.0.0';
+import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js?v=1.0.0';
 const n = (value, d = 2) => Number.isFinite(value) ? Number(value.toFixed(d)) : 0;
 const options = (items, selected) => items.map(([v, t]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${t}</option>`).join('');
 const engineNote = '教育・机上検討用。実際の飛行可否、地形・障害物、フレア・スポイラー性能は評価しません。';
@@ -280,7 +280,7 @@ export class App {
         sidebarScroll.scrollTop = preservedScroll;
     }
     renderToolbar() {
-        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.21</span></div></div><div class="glp-tool-group">
+        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>グライダー着陸経路シミュレーター / v1.0.0</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHtml(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" >JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" >PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
     }

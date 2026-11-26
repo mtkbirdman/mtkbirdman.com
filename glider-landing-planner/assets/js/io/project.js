@@ -1,4 +1,4 @@
-import { validHandle } from '../model/limits.js?v=0.1.21';
+import { validHandle } from '../model/limits.js?v=1.0.0';
 const between = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 function obj(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
