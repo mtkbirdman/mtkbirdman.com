@@ -1,5 +1,5 @@
-import { createSinkModel, checkedSink } from './sink.js?v=0.1.20';
-import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add, inLocalRange, LOCAL_RADIUS_M } from '../geometry/geo.js?v=0.1.20';
+import { createSinkModel, checkedSink } from './sink.js?v=0.1.21';
+import { rad, deg, norm, signed, headingVector, courseOf, magnitude, dot, mul, add, inLocalRange, LOCAL_RADIUS_M } from '../geometry/geo.js?v=0.1.21';
 export const MIN_GROUND_MPS = 0.05;
 // Tiny tolerance only for cancellation at the inclusive decimal boundary.
 export const groundSpeedValid = (g) => Number.isFinite(g) && g >= MIN_GROUND_MPS - 1e-12;
@@ -98,7 +98,7 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group, budget = PA
     if (!inLocalRange(current))
         return rangeFail();
     if (leg.guidance === 'ground-track' && !(ctx.wind.speedMps < V))
-        return fail('WIND_TRACK_INFEASIBLE', '進行方向指定では風速が対気速度未満である必要があります。');
+        return fail('WIND_TRACK_INFEASIBLE', '航跡方位指定では風速が対気速度未満である必要があります。');
     if (Math.abs(initial.speedMps - V) > 1e-6)
         notices.push({ code: 'SPEED_STEP_IDEALIZED', level: 'warning', message: '速度変更は瞬間的と仮定（加減速・エネルギー変化を未評価）。', legId: leg.id });
     const model = ctx.sinkModel ?? createSinkModel(ctx.performance);
@@ -171,7 +171,7 @@ export function simulateLeg(initial, leg, ctx, timeDirection, group, budget = PA
         samples.push(makeSample(current, leg.id, group));
     }
     if (Math.abs(progress - turn.angleDeg) > .02)
-        return fail('TURN_TARGET_NOT_REACHED', '指定した旋回変化量に到達しませんでした。');
+        return fail('TURN_TARGET_NOT_REACHED', '指定した旋回角に到達しませんでした。');
     return result(true);
 }
 export function simulatePath(start, legs, ctx, group, reverse = false, budget = PATH_SAMPLE_BUDGET) {

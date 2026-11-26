@@ -1,17 +1,17 @@
-import { clampHandle, validHandle } from './model/limits.js?v=0.1.20';
-import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js?v=0.1.20';
-import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js?v=0.1.20';
-import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js?v=0.1.20';
-import { chooseConnector } from './planning/connector.js?v=0.1.20';
-import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js?v=0.1.20';
-import { saveSnapshot, latestSnapshot } from './io/autosave.js?v=0.1.20';
-import { PlannerMap } from './ui/map.js?v=0.1.20';
-import { chartSvg, fmtAlt, fmtElapsed } from './ui/chart.js?v=0.1.20';
-import { openPrintReport } from './ui/print.js?v=0.1.20';
-import { checkpointTable } from './ui/checkpoints.js?v=0.1.20';
-import { heightInputText, FEET_PER_METER } from './ui/height-units.js?v=0.1.20';
-import { escapeHtml, htmlLegId, readLegId } from './ui/escape-html.js?v=0.1.20';
-import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js?v=0.1.20';
+import { clampHandle, validHandle } from './model/limits.js?v=0.1.21';
+import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js?v=0.1.21';
+import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js?v=0.1.21';
+import { buildPlan, rememberResolvedTurnAngles } from './planning/plan.js?v=0.1.21';
+import { chooseConnector } from './planning/connector.js?v=0.1.21';
+import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js?v=0.1.21';
+import { saveSnapshot, latestSnapshot } from './io/autosave.js?v=0.1.21';
+import { PlannerMap } from './ui/map.js?v=0.1.21';
+import { chartSvg, fmtAlt, fmtElapsed } from './ui/chart.js?v=0.1.21';
+import { openPrintReport } from './ui/print.js?v=0.1.21';
+import { checkpointTable } from './ui/checkpoints.js?v=0.1.21';
+import { heightInputText, FEET_PER_METER } from './ui/height-units.js?v=0.1.21';
+import { escapeHtml, htmlLegId, readLegId } from './ui/escape-html.js?v=0.1.21';
+import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js?v=0.1.21';
 const n = (value, d = 2) => Number.isFinite(value) ? Number(value.toFixed(d)) : 0;
 const options = (items, selected) => items.map(([v, t]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${t}</option>`).join('');
 const engineNote = '教育・机上検討用。実際の飛行可否、地形・障害物、フレア・スポイラー性能は評価しません。';
@@ -135,14 +135,14 @@ export class App {
     opacityControl(path, title) { const value = Math.round(Number(this.getField(path)) * 100); return `<label class="glp-opacity-field"><span>${title} <output>${value}%</output></span><input type="range" min="0" max="100" step="5" value="${value}" data-path="${path}" data-scale="100"></label>`; }
     select(path, title, items) { return `<label class="glp-field"><span>${title}</span><select data-path="${path}">${options(items, String(this.getField(path)))}</select></label>`; }
     legEditor(side, leg, i) {
-        const modeOpts = [['heading', '機首方位指定'], ['ground-track', '進行方向指定']];
+        const modeOpts = [['heading', '機首方位指定'], ['ground-track', '航跡方位指定']];
         const base = `${side === 'departure' ? 'departureLegs' : 'arrivalLegs'}.${i}`;
         // Nullable model values retain their inherited meaning even when the form shows a number.
         const speedInForce = effectiveLegSpeedMps(this.project, leg);
         const directionInForce = effectiveStraightDirectionDeg(this.project, this.plan, side, leg);
         const turnValues = leg.type === 'turn' ? effectiveTurnValues(this.plan, side, leg) : null;
-        const directionName = leg.guidance === 'heading' ? '機首方位' : '進行方向';
-        const turnAngleLabel = `${directionName}変化量`;
+        const directionName = leg.guidance === 'heading' ? '機首方位' : '航跡方位';
+        const turnAngleLabel = '旋回角';
         const turnTargetLabel = `旋回${side === 'departure' ? '後' : '前'}の${directionName}`;
         const turnAngleField = leg.type === 'turn' && leg.angleInputMode === 'target'
             ? `<label class="glp-field"><span>${turnAngleLabel} <em>°</em></span><input type="number" readonly value="${turnValues.completed ? n(turnValues.angleDeg, 5) : ''}" placeholder="評価不可"></label>`
@@ -151,7 +151,7 @@ export class App {
             ? this.control(base + '.targetDirectionDeg', turnTargetLabel, '°')
             : `<label class="glp-field"><span>${turnTargetLabel} <em>°</em></span><input type="number" readonly value="${turnValues?.boundaryDeg === null || turnValues === null ? '' : n(turnValues.boundaryDeg, 5)}" placeholder="評価不可"></label>`;
         return `<div class="glp-leg-edit"><div class="glp-two">${this.select(base + '.guidance', '飛行方式', modeOpts)}${this.control(base + '.speedOverrideMps', leg.type === 'turn' ? '旋回速度' : '滑空速度', 'km/h', '0.1', 3.6, speedInForce)}</div>
-    ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', directionName, '°', 'any', 1, directionInForce)}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.bankDeg', 'バンク角', '°')}</div>${this.select(base + '.angleInputMode', '入力方式', [['angle', `${turnAngleLabel}を指定`], ['target', `${directionName}を指定`]])}<div class="glp-two">${turnAngleField}${targetField}</div>`}
+    ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', directionName, '°', 'any', 1, directionInForce)}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.bankDeg', 'バンク角', '°')}</div>${this.select(base + '.angleInputMode', '入力方式', [['angle', `${turnAngleLabel}を指定`], ['target', `${turnTargetLabel}を指定`]])}<div class="glp-two">${turnAngleField}${targetField}</div>`}
     <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHtml(leg.checkpointLabel ?? '')}" data-path="${base}.checkpointLabel"></label></div>`;
     }
     legList(side) {
@@ -239,11 +239,11 @@ export class App {
         else if (target.kind === 'point') {
             if (target.point === 'departure') {
                 title = '離脱地点・条件';
-                contents = `<div class="glp-two">${this.control('departure.latDeg', '緯度', '°')}${this.control('departure.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('departure.altitudeMSLM', '離脱高度')}${this.control('departure.headingDeg', '開始機首方位', '°')}</div><button class="glp-btn glp-btn-sub" data-action="open-add" data-side="departure">＋ 離脱側にレグを追加</button>`;
+                contents = `<div class="glp-two">${this.control('departure.latDeg', '緯度', '°')}${this.control('departure.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('departure.altitudeMSLM', '離脱高度')}${this.control('departure.headingDeg', '離脱時の機首方位', '°')}</div><button class="glp-btn glp-btn-sub" data-action="open-add" data-side="departure">＋ 離脱側にレグを追加</button>`;
             }
             else {
                 title = '着陸地点・ファイナル';
-                contents = `<div class="glp-two">${this.control('landing.point.latDeg', '緯度', '°')}${this.control('landing.point.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('landing.elevationMSLM', '着陸標高')}${this.control('landing.runwayTrackDeg', '真方位（進入）', '°')}</div><div class="glp-two">${this.control('landing.final.pathAngleDeg', '目標パス角', '°')}${this.control('landing.final.groundLengthM', '直線ファイナル長', 'm')}</div><p class="glp-tip">入力後、場周プリセットを追加できます（既存レグは確認のうえ置換）。</p><div class="glp-preset"><button class="glp-btn glp-btn-soft" data-action="preset-left">左場周プリセット</button><button class="glp-btn glp-btn-soft" data-action="preset-right">右場周プリセット</button></div><button class="glp-btn glp-btn-sub" data-action="open-add" data-side="arrival">＋ 着陸側にレグを追加</button>`;
+                contents = `<div class="glp-two">${this.control('landing.point.latDeg', '緯度', '°')}${this.control('landing.point.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('landing.elevationMSLM', '着陸標高')}${this.control('landing.runwayTrackDeg', '進入真方位', '°')}</div><div class="glp-two">${this.control('landing.final.pathAngleDeg', '目標パス角', '°')}${this.control('landing.final.groundLengthM', '直線ファイナル長', 'm')}</div><p class="glp-tip">入力後、場周プリセットを追加できます（既存レグは確認のうえ置換）。</p><div class="glp-preset"><button class="glp-btn glp-btn-soft" data-action="preset-left">左場周プリセット</button><button class="glp-btn glp-btn-soft" data-action="preset-right">右場周プリセット</button></div><button class="glp-btn glp-btn-sub" data-action="open-add" data-side="arrival">＋ 着陸側にレグを追加</button>`;
             }
         }
         else {
@@ -266,8 +266,8 @@ export class App {
    <div class="glp-two">${this.control('performance.bestLD', '最大滑空比')}${this.control('performance.bestLDAtMps', '最良滑空速度', 'km/h', '0.1', 3.6)}</div>
    <div class="glp-two">${this.control('wind.fromDeg', '風向', '°')}${this.control('wind.speedMps', '風速', 'm/s')}</div>
    ${this.select('display.altitudeUnit', '高度入力・表示単位（MSL）', [['ft', 'ft'], ['m', 'm']])}</div>
-   <div class="glp-panel" data-point-editor="departure"><h3><span class="glp-dot blue"></span>離脱地点・条件</h3><div class="glp-two">${this.control('departure.latDeg', '緯度', '°')}${this.control('departure.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('departure.altitudeMSLM', '離脱高度')}${this.control('departure.headingDeg', '開始機首方位', '°')}</div><p class="glp-tip">地図の「離脱地点を指定」で位置を選ぶか、緯度・経度を入力してください。</p></div>
-   <div class="glp-panel" data-point-editor="landing"><h3><span class="glp-dot green"></span>着陸地点・ファイナル・場周設定</h3><div class="glp-two">${this.control('landing.point.latDeg', '緯度', '°')}${this.control('landing.point.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('landing.elevationMSLM', '着陸標高')}${this.control('landing.runwayTrackDeg', '真方位（進入）', '°')}</div><div class="glp-two">${this.control('landing.final.pathAngleDeg', '目標パス角', '°')}${this.control('landing.final.groundLengthM', '直線ファイナル長', 'm')}</div><p class="glp-tip">最終パス角は目標値であり、スポイラー・フレアは未モデル化です。</p><div class="glp-preset"><button class="glp-btn glp-btn-soft" data-action="preset-left">左場周プリセット</button><button class="glp-btn glp-btn-soft" data-action="preset-right">右場周プリセット</button></div></div>
+   <div class="glp-panel" data-point-editor="departure"><h3><span class="glp-dot blue"></span>離脱地点・条件</h3><div class="glp-two">${this.control('departure.latDeg', '緯度', '°')}${this.control('departure.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('departure.altitudeMSLM', '離脱高度')}${this.control('departure.headingDeg', '離脱時の機首方位', '°')}</div><p class="glp-tip">地図の「離脱地点を指定」で位置を選ぶか、緯度・経度を入力してください。</p></div>
+   <div class="glp-panel" data-point-editor="landing"><h3><span class="glp-dot green"></span>着陸地点・ファイナル・場周設定</h3><div class="glp-two">${this.control('landing.point.latDeg', '緯度', '°')}${this.control('landing.point.lonDeg', '経度', '°')}</div><div class="glp-two">${this.control('landing.elevationMSLM', '着陸標高')}${this.control('landing.runwayTrackDeg', '進入真方位', '°')}</div><div class="glp-two">${this.control('landing.final.pathAngleDeg', '目標パス角', '°')}${this.control('landing.final.groundLengthM', '直線ファイナル長', 'm')}</div><p class="glp-tip">最終パス角は目標値であり、スポイラー・フレアは未モデル化です。</p><div class="glp-preset"><button class="glp-btn glp-btn-soft" data-action="preset-left">左場周プリセット</button><button class="glp-btn glp-btn-soft" data-action="preset-right">右場周プリセット</button></div></div>
    <div class="glp-panel"><div class="glp-flex-between"><h3><span class="glp-dot blue"></span>離脱側レグ（順方向）</h3><small>${this.project.departureLegs.length}件</small></div>${this.legList('departure')}</div>
    <div class="glp-panel"><div class="glp-flex-between"><h3><span class="glp-dot green"></span>着陸側レグ（逆方向編集）</h3><small>${this.project.arrivalLegs.length}件</small></div>
    ${this.legList('arrival')}
@@ -280,7 +280,7 @@ export class App {
         sidebarScroll.scrollTop = preservedScroll;
     }
     renderToolbar() {
-        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.20</span></div></div><div class="glp-tool-group">
+        this.root.querySelector('.glp-toolbar').innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.21</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHtml(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" >JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" >PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
     }
@@ -483,7 +483,8 @@ export class App {
                 return;
             const turn = effectiveTurnValues(this.plan, side, oldLeg);
             if (value === 'target' && turn.boundaryDeg === null) {
-                this.notice = '旋回境界の方向を評価できないため、方向指定に切り替えられません。';
+                const boundaryName = `旋回${side === 'departure' ? '後' : '前'}の${oldLeg.guidance === 'heading' ? '機首方位' : '航跡方位'}`;
+                this.notice = `${boundaryName}を評価できないため、方位を指定する入力方式に切り替えられません。`;
                 this.renderResults();
                 return;
             }

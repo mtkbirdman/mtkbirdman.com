@@ -1,4 +1,4 @@
-import { validHandle } from '../model/limits.js?v=0.1.20';
+import { validHandle } from '../model/limits.js?v=0.1.21';
 const between = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 function obj(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -10,7 +10,8 @@ function check(valid, message) {
     if (!valid)
         throw Error(message);
 }
-function validateLegs(legs, ids, label) {
+function validateLegs(legs, ids, side) {
+    const label = side === 'departure' ? '離脱側レグ' : '着陸側レグ';
     check(Array.isArray(legs) && legs.length <= 100, label + ' は100レグ以下で指定してください。');
     for (const input of legs) {
         const leg = obj(input);
@@ -19,7 +20,8 @@ function validateLegs(legs, ids, label) {
         ids.add(id);
         check((leg.guidance === 'heading' || leg.guidance === 'ground-track'), label + ': 飛行方式が不正です。');
         check(leg.speedOverrideMps === null || between(leg.speedOverrideMps, 5, 100), label + ': 速度上書きが不正です。');
-        check(leg.directionDeg === null || between(leg.directionDeg, 0, 360), label + ': 方位指定が不正です。');
+        const directionName = leg.guidance === 'heading' ? '機首方位' : '航跡方位';
+        check(leg.directionDeg === null || between(leg.directionDeg, 0, 360), label + `: ${directionName}が不正です。`);
         if (leg.checkpointLabel !== undefined) {
             check(typeof leg.checkpointLabel === 'string' && leg.checkpointLabel.length <= 70, label + ': チェックポイント名が長すぎます。');
         }
@@ -33,9 +35,10 @@ function validateLegs(legs, ids, label) {
             check((leg.direction === 'left' || leg.direction === 'right'), label + ': 旋回方向が不正です。');
             check(typeof leg.angleDeg === 'number' && Number.isFinite(leg.angleDeg) && leg.angleDeg > 0 && between(leg.bankDeg, 1, 70), label + ': 旋回角・バンク角が不正です。');
             check(leg.angleInputMode === 'angle' || leg.angleInputMode === 'target', label + ': 旋回の入力方式が不正です。');
-            check(leg.targetDirectionDeg === null || between(leg.targetDirectionDeg, 0, 360), label + ': 旋回の目標方位が不正です。');
+            const boundaryName = `旋回${side === 'departure' ? '後' : '前'}の${directionName}`;
+            check(leg.targetDirectionDeg === null || between(leg.targetDirectionDeg, 0, 360), label + `: ${boundaryName}が不正です。`);
             if (leg.angleInputMode === 'target')
-                check(between(leg.targetDirectionDeg, 0, 360), label + ': 目標方位を指定してください。');
+                check(between(leg.targetDirectionDeg, 0, 360), label + `: ${boundaryName}を指定してください。`);
         }
         else {
             throw Error(label + ': 未対応のレグ種別です。');
@@ -65,8 +68,8 @@ export function validateProject(input) {
     check(between(landing.elevationMSLM, -500, 15000) && between(landing.runwayTrackDeg, 0, 360), '着陸標高・進入方位が不正です。');
     check(between(final.pathAngleDeg, 0.1, 25) && between(final.groundLengthM, 20, 10000), 'ファイナル角度・距離が不正です。');
     const ids = new Set();
-    validateLegs(p.departureLegs, ids, '離脱側レグ');
-    validateLegs(p.arrivalLegs, ids, '着陸側レグ');
+    validateLegs(p.departureLegs, ids, 'departure');
+    validateLegs(p.arrivalLegs, ids, 'arrival');
     if (p.connector !== null) {
         const connector = obj(p.connector);
         check(connector.type === 'bezier_connector' && connector.curvaturePolicy === 'match-neighbors', '接続曲線種別が不正です。');

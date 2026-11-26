@@ -1,7 +1,7 @@
-import { LocalFrame, headingVector, rad, geographicDistance, LOCAL_RADIUS_M, signed } from '../geometry/geo.js?v=0.1.20';
-import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.20';
-import { evaluateConnector, connectorBoundaryValid } from './connector.js?v=0.1.20';
-import { createSinkModel, checkedSink } from '../flight/sink.js?v=0.1.20';
+import { LocalFrame, headingVector, rad, geographicDistance, LOCAL_RADIUS_M, signed } from '../geometry/geo.js?v=0.1.21';
+import { airGround, headingForTrack, simulatePath } from '../flight/core.js?v=0.1.21';
+import { evaluateConnector, connectorBoundaryValid } from './connector.js?v=0.1.21';
+import { createSinkModel, checkedSink } from '../flight/sink.js?v=0.1.21';
 export function buildPlan(project) {
     const frame = new LocalFrame(project.landing.point), lp = frame.toLocal(project.landing.point);
     const departureInRange = geographicDistance(project.departure, project.landing.point) <= LOCAL_RADIUS_M;

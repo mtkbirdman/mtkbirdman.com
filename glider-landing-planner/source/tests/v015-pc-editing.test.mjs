@@ -159,7 +159,7 @@ test('v0.1.15 marker/route selection scrolls only the desktop editor',()=>{
 
 test('current schema round-trips and map/print editing restrictions remain',()=>{
   const p=createDemo();
-  assert.equal(ENGINE_VERSION,'0.1.20-test');
+  assert.equal(ENGINE_VERSION,'0.1.21-test');
   assert.equal(p.schemaVersion,'1.3');
   assert.deepEqual(parseProject(serializeProject(p)),p);
   assert.deepEqual(p.performance,{bestLD:34,bestLDAtMps:25});

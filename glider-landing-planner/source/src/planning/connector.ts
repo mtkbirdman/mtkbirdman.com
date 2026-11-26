@@ -113,7 +113,7 @@ export function evaluateConnector(start: State, endBoundary: State, project: Pro
         const diffA=Math.abs(signed(startHeading-start.headingDeg)),diffB=Math.abs(signed(endHeading-endBoundary.headingDeg));
         const same=Math.abs(endBoundary.speedMps-V)<=1e-4;
         const actualEnd=airGround(endBoundary.headingDeg,endBoundary.speedMps,project.wind);
-        if(diffA>.3||Math.abs(signed(samples[0].trackDeg-start.trackDeg))>.3||Math.abs(signed(end.trackDeg-endBoundary.trackDeg))>.3||(same&&diffB>.3)||(!same&&(!groundSpeedValid(actualEnd.speed)||Math.abs(signed(actualEnd.track-endBoundary.trackDeg))>.3||diffB>=179.7))){invalid=true;notices.push({code:'BOUNDARY_STATE_INVALID',level:'error',message:'Bezier境界の機首方位または進行方向が不連続です。'});}
+        if(diffA>.3||Math.abs(signed(samples[0].trackDeg-start.trackDeg))>.3||Math.abs(signed(end.trackDeg-endBoundary.trackDeg))>.3||(same&&diffB>.3)||(!same&&(!groundSpeedValid(actualEnd.speed)||Math.abs(signed(actualEnd.track-endBoundary.trackDeg))>.3||diffB>=179.7))){invalid=true;notices.push({code:'BOUNDARY_STATE_INVALID',level:'error',message:'Bezier境界の機首方位または航跡方位が不連続です。'});}
         else if(!same)notices.push({code:'SPEED_STEP_IDEALIZED',level:'warning',message:'Bezier終点で速度・機首方位の瞬間変更を仮定します。'});
     }
     return { points, samples, end, lengthM: length, lossM: loss, maxBankDeg: maxBank, feasible: !invalid, altitudeValid, notices, handleStartM: a, handleEndM: b };

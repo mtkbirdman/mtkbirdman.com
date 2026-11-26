@@ -1,6 +1,6 @@
-# 開発者ガイド — Glider Landing Planner v0.1.20
+# 開発者ガイド — Glider Landing Planner v0.1.21
 
-**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v0.1.20ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
+**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v0.1.21ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
 
 ## 1. 全体像と動作環境
 
@@ -134,9 +134,9 @@ npm run build:offline
 npm test
 ```
 
-`npm run build:offline`は`tsc -p tsconfig.json && node version-assets.mjs`を実行し、`../assets/js`にJSを生成して相対importへ`?v=0.1.20`を付加します。`npm test`は`pretest`で同じビルドを行った後、`node --test tests/*.test.mjs`を実行します。`npm run build:vite`は任意・将来用であり、**現行配布方式との互換性を確認せず本番アセットへ置き換えない**でください。
+`npm run build:offline`は`tsc -p tsconfig.json && node version-assets.mjs`を実行し、`../assets/js`にJSを生成して相対importへ`?v=0.1.21`を付加します。`npm test`は`pretest`で同じビルドを行った後、`node --test tests/*.test.mjs`を実行します。`npm run build:vite`は任意・将来用であり、**現行配布方式との互換性を確認せず本番アセットへ置き換えない**でください。
 
-配布前に `npm test` を実行し、すべてのテストの成功を確認してください。v0.1.20ではNode.js 22.16.0、TypeScript 5.8.3で175件のテストに成功しました（基準166件、追加9件）。`plan-consistency.test.mjs`、`schema.test.mjs`、`map-render.test.mjs` に正則性・未完了レグ・保存範囲・ID出力・編集の確定順序に関する回帰試験を統合しました。既存のID照合を検査する静的アサーション1件は可逆トークンの照合に合わせて更新し、数値精度基準は変更していません。Node.js 24実機、実DOM・IndexedDB（Chromiumでローカル検証ページへのアクセスが管理ポリシーにより拒否）、WordPress実サイト、FFFTP転送、PDF実印刷は別途確認が必要です。`source/.gitignore`で`node_modules/`を除外します。
+配布前に `npm test` を実行し、すべてのテストの成功を確認してください。v0.1.21ではNode.js 22.16.0、TypeScript 5.8.3で175件のテストに成功しました。用語・版数の期待値を更新し、既存の計算アサーションは維持しています。v0.1.20では166件に9件を追加しました。`plan-consistency.test.mjs`、`schema.test.mjs`、`map-render.test.mjs` に正則性・未完了レグ・保存範囲・ID出力・編集の確定順序に関する回帰試験を統合しました。既存のID照合を検査する静的アサーション1件は可逆トークンの照合に合わせて更新し、数値精度基準は変更していません。Node.js 24実機、実DOM・IndexedDB（Chromiumでローカル検証ページへのアクセスが管理ポリシーにより拒否）、WordPress実サイト、FFFTP転送、PDF実印刷は別途確認が必要です。`source/.gitignore`で`node_modules/`を除外します。
 
 ### 7.2 テストの探し方
 
@@ -170,8 +170,10 @@ git check-ignore -v --no-index -- source/node_modules/typescript/package.json
 git add -- source/tests/plan-consistency.test.mjs
 git diff --cached --check
 git diff --cached --stat
-git commit -m "fix: stabilize connector validity, partial results, persistence and HTML output for v0.1.20"
+git commit -m "refactor: clarify Japanese flight guidance and turn input labels for v0.1.21"
 ```
+
+UIでは `heading` を「機首方位指定」、`ground-track` を「航跡方位指定」と表示します。`angle` は「旋回角を指定」、`target` は離脱側の「旋回後の…を指定」または着陸側の「旋回前の…を指定」です。内部識別子と計算定義は変更しません。
 
 スキーマ1.3は維持します。既存レグの`guidance`と新規レグの`ground-track`既定値は変更しません。正常な旧計画は読込可能ですが、計算適用範囲により不成立になる場合があります。プラグイン・パッケージ・配布アセットの版数を整合させます。
 
@@ -179,14 +181,14 @@ git commit -m "fix: stabilize connector validity, partial results, persistence a
 
 - [ ] 新規計画が**離脱側0件・着陸側0件・接続なし**で始まり、方向ガイドが計算に入らない。
 - [ ] 着陸側最初のレグ追加・左右場周で自動接続し、着陸側0件に戻せば接続を外す。
-- [ ] レグ編集、機首方位指定／進行方向指定、変化量指定／方向指定、多周旋回が既存テストで維持される。
+- [ ] レグ編集、機首方位指定／航跡方位指定、旋回角指定／旋回前後の方位指定、多周旋回が既存テストで維持される。
 - [ ] 簡易抗力式の沈下率、必要高度と予想高度、診断・評価不可が維持される。
 - [ ] スキーマ1.3のJSON／IndexedDB復元、旧形式の拒否、Undo/Redoを確認する。
 - [ ] TypeScriptソース変更時は`assets/js`を再生成し、相対importの版数が揃っている。
 - [ ] `npm test`が成功し、`git diff --check`に問題がない。
 - [ ] WordPress実機の地図／パネル／PDF・キャッシュを確認する（**自動テストで代替しない**）。
 
-### v0.1.20のデータ契約と出力境界
+### 現行のデータ契約と出力境界
 
 - `model/limits.ts` はハンドル長の包含範囲1〜50,000 mを共有する。自動候補は範囲外を除外し、有限な手動ドラッグは範囲に制限する。非有限の操作値と不正JSONは拒否する。計算不成立は保存拒否の理由にしない。
 - 編集・復元では候補を用意し、入力検証、計算、解決済み旋回角等の反映、最終検証を終えてから履歴と計画を確定する。自動保存でも保存前に検証する。Undo/Redo・JSON読込・自動保存復元で再最適化しない。

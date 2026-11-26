@@ -33,7 +33,7 @@ test('turn editor removes auto-calculation label but keeps readonly and target e
   app.project.departureLegs=[{...makeTurn('right',450),angleInputMode:'target',targetDirectionDeg:180}];
   app.plan=buildPlan(app.project);
   const targetHtml=app.legEditor('departure',app.project.departureLegs[0],0);
-  assert.match(targetHtml, /進行方向変化量 <em>°<\/em><\/span><input type="number" readonly/);
+  assert.match(targetHtml, /旋回角 <em>°<\/em><\/span><input type="number" readonly/);
   assert.match(targetHtml,/data-path="departureLegs\.0\.targetDirectionDeg"/);
   assert.doesNotMatch(targetHtml,/（自動計算）/);
   app.project.departureLegs[0].angleInputMode='angle';
@@ -41,7 +41,7 @@ test('turn editor removes auto-calculation label but keeps readonly and target e
   app.plan=buildPlan(app.project);
   const angleHtml=app.legEditor('departure',app.project.departureLegs[0],0);
   assert.match(angleHtml,/data-path="departureLegs\.0\.angleDeg"/);
-  assert.match(angleHtml,/旋回後の進行方向 <em>°<\/em><\/span><input type="number" readonly/);
+  assert.match(angleHtml,/旋回後の航跡方位 <em>°<\/em><\/span><input type="number" readonly/);
   assert.doesNotMatch(angleHtml,/（自動計算）/);
 });
 

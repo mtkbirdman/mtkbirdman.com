@@ -1,8 +1,8 @@
-import { validHandle, clampHandle } from '../model/limits.js?v=0.1.20';
-import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal, signed, inLocalRange } from '../geometry/geo.js?v=0.1.20';
-import { point, derivative, curvature, controlPoints, selfIntersects, curveInRange, curveRegular, TANGENT_MIN_M } from '../geometry/bezier.js?v=0.1.20';
-import { windVector, GRAVITY, groundSpeedValid, headingForTrack, airGround } from '../flight/core.js?v=0.1.20';
-import { createSinkModel, checkedSink } from '../flight/sink.js?v=0.1.20';
+import { validHandle, clampHandle } from '../model/limits.js?v=0.1.21';
+import { headingVector, courseOf, rad, deg, dot, magnitude, mul, add, sub, leftNormal, signed, inLocalRange } from '../geometry/geo.js?v=0.1.21';
+import { point, derivative, curvature, controlPoints, selfIntersects, curveInRange, curveRegular, TANGENT_MIN_M } from '../geometry/bezier.js?v=0.1.21';
+import { windVector, GRAVITY, groundSpeedValid, headingForTrack, airGround } from '../flight/core.js?v=0.1.21';
+import { createSinkModel, checkedSink } from '../flight/sink.js?v=0.1.21';
 const EPS = 1e-8;
 /** Conditions common to every handle candidate, independent of curve geometry. */
 export function connectorBoundaryValid(start, end, project) {
@@ -173,7 +173,7 @@ export function evaluateConnector(start, endBoundary, project, a, b, skipHeavy =
         const actualEnd = airGround(endBoundary.headingDeg, endBoundary.speedMps, project.wind);
         if (diffA > .3 || Math.abs(signed(samples[0].trackDeg - start.trackDeg)) > .3 || Math.abs(signed(end.trackDeg - endBoundary.trackDeg)) > .3 || (same && diffB > .3) || (!same && (!groundSpeedValid(actualEnd.speed) || Math.abs(signed(actualEnd.track - endBoundary.trackDeg)) > .3 || diffB >= 179.7))) {
             invalid = true;
-            notices.push({ code: 'BOUNDARY_STATE_INVALID', level: 'error', message: 'Bezier境界の機首方位または進行方向が不連続です。' });
+            notices.push({ code: 'BOUNDARY_STATE_INVALID', level: 'error', message: 'Bezier境界の機首方位または航跡方位が不連続です。' });
         }
         else if (!same)
             notices.push({ code: 'SPEED_STEP_IDEALIZED', level: 'warning', message: 'Bezier終点で速度・機首方位の瞬間変更を仮定します。' });

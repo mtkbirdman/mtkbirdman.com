@@ -1,4 +1,4 @@
-export const ENGINE_VERSION = '0.1.20-test';
+export const ENGINE_VERSION = '0.1.21-test';
 // Educational initial coordinates, not surveyed runway or touchdown points.
 // See docs/THEORY.md for the initial-condition references and limitations.
 export const INITIAL_LANDING_POINT = { latDeg: 36.17943, lonDeg: 137.31361 };

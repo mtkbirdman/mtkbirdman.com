@@ -10,7 +10,7 @@ const read=(relative)=>readFileSync(new URL(relative,import.meta.url),'utf8');
 
 test('v0.1.4: new plan and newly added turns start at 30 degrees, handles default off',()=>{
   const p=createDemo();
-  assert.equal(ENGINE_VERSION,'0.1.20-test');
+  assert.equal(ENGINE_VERSION,'0.1.21-test');
   assert.equal(p.engineVersion,ENGINE_VERSION);
   assert.equal(p.name,'新規計画');
   assert.equal(p.display.showHandles,false);
@@ -59,5 +59,5 @@ test('v0.1.4: left menu no fixed height, table no vertical inner scroll',()=>{
   assert.match(css,/\.glp-sidebar-scroll\{position:sticky;top:40px;max-height:calc\(100dvh - 52px\)/);
   assert.match(css,/\.glp-tablewrap\{max-height:none;overflow-x:auto;overflow-y:visible/);
   assert.doesNotMatch(css,/height:min\(1050px/);
-  assert.match(read('../../glider-landing-planner.php'),/Version: 0\.1\.20/);
+  assert.match(read('../../glider-landing-planner.php'),/Version: 0\.1\.21/);
 });

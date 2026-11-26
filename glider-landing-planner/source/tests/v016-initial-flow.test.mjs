@@ -167,10 +167,10 @@ test('saved current-schema project retains its existing legs and connector, whil
 
 test('version and shortcode stay aligned for FF FTP release',()=>{
  const php=readFileSync(new URL('../../glider-landing-planner.php',import.meta.url),'utf8');
- assert.match(php,/Version: 0\.1\.20/);
+ assert.match(php,/Version: 0\.1\.21/);
  assert.match(php,/add_shortcode\('glider_landing_planner'/);
  const changelog=readFileSync(new URL('../../CHANGELOG.md',import.meta.url),'utf8');
- assert.match(changelog,/## \[0\.1\.20\]/);
+ assert.match(changelog,/## \[0\.1\.21\]/);
 });
 
 

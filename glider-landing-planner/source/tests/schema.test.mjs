@@ -90,14 +90,14 @@ test('straight editor and PDF use the same new guidance names',()=>{
  const p=createDemo(),app=Object.create(App.prototype);
  p.departureLegs=[makeStraight(),{...makeStraight(),guidance:'heading'}];
  Object.assign(app,{project:p,plan:buildPlan(p)});
- for(const [i,name] of ['進行方向','機首方位'].entries()){
+ for(const [i,name] of ['航跡方位','機首方位'].entries()){
    const html=app.legEditor('departure',p.departureLegs[i],i);
    assert.ok(html.includes(`<span>${name} <em>°</em>`));
    assert.doesNotMatch(html,/目標方位|風で偏流|風を補正|対地航跡指定/);
  }
  const mapCopy={querySelectorAll:()=>[],removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div class="leaflet"></div>'};
  const html=reportHtml({project:p,plan:app.plan,mapEl:{clientWidth:900,clientHeight:420,cloneNode:()=>mapCopy},metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:ENGINE_VERSION});
- assert.match(html,/<td>進行方向指定<\/td>/);assert.match(html,/<td>機首方位指定<\/td>/);assert.doesNotMatch(html,/対地航跡指定/);
+ assert.match(html,/進入真方位/);assert.match(html,/<td>航跡方位指定<\/td>/);assert.match(html,/<td>機首方位指定<\/td>/);assert.doesNotMatch(html,/対地航跡指定|進行方向指定/);
 });
 
 test('GLP-017: inclusive handle bounds and transaction rollback after derived values',()=>{

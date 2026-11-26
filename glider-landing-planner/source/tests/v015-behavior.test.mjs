@@ -7,7 +7,7 @@ import {checkpointTable} from '../../assets/js/ui/checkpoints.js';
 const read=(p)=>readFileSync(new URL(p,import.meta.url),'utf8');
 
 test('v0.1.5 default limit is 60 degrees; existing record remains user-editable',()=>{
- const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.20-test');assert.equal(p.maxBankDeg,60);
+ const p=createDemo();assert.equal(ENGINE_VERSION,'0.1.21-test');assert.equal(p.maxBankDeg,60);
  p.maxBankDeg=45;assert.equal(buildPlan(p).notices.find(n=>n.code==='invalid-maximum-bank')?.level,undefined);
 });
 

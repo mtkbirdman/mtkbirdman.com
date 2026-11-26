@@ -9,11 +9,11 @@ const read=file=>readFileSync(new URL(file,import.meta.url),'utf8');
 const close=(a,b,tol=1e-7)=>assert.ok(Math.abs(a-b)<tol,`${a} differs from ${b}`);
 
 test('v0.1.10 versions agree across source, WordPress, print, and documentation',()=>{
- assert.equal(ENGINE_VERSION,'0.1.20-test');
- assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.20/);
- assert.match(read('../src/main.ts'),/テスト版 v0\.1\.20/);
- assert.match(read('../src/ui/print.ts'),/ver=0\.1\.20/);
- assert.match(read('../../README.md'),/v0\.1\.20/);
+ assert.equal(ENGINE_VERSION,'0.1.21-test');
+ assert.match(read('../../glider-landing-planner.php'),/Version:\s*0\.1\.21/);
+ assert.match(read('../src/main.ts'),/テスト版 v0\.1\.21/);
+ assert.match(read('../src/ui/print.ts'),/ver=0\.1\.21/);
+ assert.match(read('../../README.md'),/v0\.1\.21/);
 });
 
 test('v0.1.9 displays inherited baseline speed without converting it to an override',()=>{
@@ -81,7 +81,7 @@ test('v0.1.9 import of legacy heading-mode preset does not silently rewrite it',
 
 test('v0.1.9 form and report labels use updated wording without changing data keys',()=>{
  const main=read('../src/main.ts');const print=read('../src/ui/print.ts');
- for(const word of ['基準対気速度','飛行方式','進行方向','滑空速度','旋回速度'])assert.ok(main.includes(word),word);
+ for(const word of ['基準対気速度','飛行方式','航跡方位','滑空速度','旋回速度'])assert.ok(main.includes(word),word);
  for(const word of ['共通対気速度','風補正方式','指定方位（空欄＝継承）','多周旋回可','速度を空欄にした場合'])assert.ok(!main.includes(word),word);
  assert.match(main,/effectiveLegSpeedMps\(this\.project,\s*leg\)/);
  assert.match(main,/effectiveStraightDirectionDeg\(this\.project,\s*this\.plan,\s*side,\s*leg\)/);

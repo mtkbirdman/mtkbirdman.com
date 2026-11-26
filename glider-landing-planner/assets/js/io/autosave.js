@@ -1,4 +1,4 @@
-import { validateProject } from './project.js?v=0.1.20';
+import { validateProject } from './project.js?v=0.1.21';
 const DB = 'glp-autosave-v1', STORE = 'snapshots';
 function openDb() {
     return new Promise((res, rej) => {
