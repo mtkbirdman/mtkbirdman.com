@@ -1,3 +1,4 @@
+import { validHandle } from '../model/limits.js?v=0.1.20';
 const between = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 function obj(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -16,9 +17,9 @@ function validateLegs(legs, ids, label) {
         const id = leg.id;
         check(typeof id === 'string' && id.length > 0 && id.length <= 80 && !ids.has(id), label + ': レグIDが不正または重複しています。');
         ids.add(id);
-        check(['heading', 'ground-track'].includes(String(leg.guidance)), label + ': 飛行方式が不正です。');
+        check((leg.guidance === 'heading' || leg.guidance === 'ground-track'), label + ': 飛行方式が不正です。');
         check(leg.speedOverrideMps === null || between(leg.speedOverrideMps, 5, 100), label + ': 速度上書きが不正です。');
-        check(leg.directionDeg === null || leg.directionDeg === undefined || between(leg.directionDeg, 0, 360), label + ': 方位指定が不正です。');
+        check(leg.directionDeg === null || between(leg.directionDeg, 0, 360), label + ': 方位指定が不正です。');
         if (leg.checkpointLabel !== undefined) {
             check(typeof leg.checkpointLabel === 'string' && leg.checkpointLabel.length <= 70, label + ': チェックポイント名が長すぎます。');
         }
@@ -29,7 +30,7 @@ function validateLegs(legs, ids, label) {
             check(between(leg.lengthM, 1, 50000), label + ': 直線距離が不正です。');
         }
         else if (leg.type === 'turn') {
-            check(['left', 'right'].includes(String(leg.direction)), label + ': 旋回方向が不正です。');
+            check((leg.direction === 'left' || leg.direction === 'right'), label + ': 旋回方向が不正です。');
             check(typeof leg.angleDeg === 'number' && Number.isFinite(leg.angleDeg) && leg.angleDeg > 0 && between(leg.bankDeg, 1, 70), label + ': 旋回角・バンク角が不正です。');
             check(leg.angleInputMode === 'angle' || leg.angleInputMode === 'target', label + ': 旋回の入力方式が不正です。');
             check(leg.targetDirectionDeg === null || between(leg.targetDirectionDeg, 0, 360), label + ': 旋回の目標方位が不正です。');
@@ -69,11 +70,11 @@ export function validateProject(input) {
     if (p.connector !== null) {
         const connector = obj(p.connector);
         check(connector.type === 'bezier_connector' && connector.curvaturePolicy === 'match-neighbors', '接続曲線種別が不正です。');
-        check(between(connector.handleStartM, 1, 50000) && between(connector.handleEndM, 1, 50000), 'Bezierハンドル長が不正です。');
-        check(['auto', 'manual'].includes(String(connector.adjustmentMode)), 'Bezier調整モードが不正です。');
+        check(validHandle(connector.handleStartM) && validHandle(connector.handleEndM), 'Bezierハンドル長が不正です。');
+        check((connector.adjustmentMode === 'auto' || connector.adjustmentMode === 'manual'), 'Bezier調整モードが不正です。');
     }
     const display = obj(p.display);
-    check(['m', 'ft'].includes(String(display.altitudeUnit)), '高度単位が不正です。');
+    check((display.altitudeUnit === 'm' || display.altitudeUnit === 'ft'), '高度単位が不正です。');
     for (const key of ['showDistanceRings', 'showBearingLines', 'showWindArrow', 'showHandles', 'showDownwindMargin', 'showCheckpointAltitudes']) {
         check(typeof display[key] === 'boolean', '表示設定 ' + key + ' が不正です。');
     }

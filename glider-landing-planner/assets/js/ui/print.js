@@ -1,6 +1,6 @@
-import { chartSvg, fmtAlt } from './chart.js?v=0.1.17';
-import { checkpointTable } from './checkpoints.js?v=0.1.17';
-import { escapeHtml } from './escape-html.js?v=0.1.17';
+import { chartSvg, fmtAlt } from './chart.js?v=0.1.20';
+import { checkpointTable } from './checkpoints.js?v=0.1.20';
+import { escapeHtml } from './escape-html.js?v=0.1.20';
 const num = (value, digits = 1) => Number(value.toFixed(digits)).toLocaleString('ja-JP');
 const speed = (value) => `${num(value * 3.6)} km/h`;
 const legLabel = (leg) => leg.type === 'straight' ? `直線 ${num(leg.lengthM, 0)} m` : `${leg.direction === 'right' ? '右' : '左'}旋回 ${num(leg.angleDeg, 0)}°、バンク ${num(leg.bankDeg, 0)}°`;
@@ -37,18 +37,20 @@ export function printableMapHtml(mapEl) {
 function legTable(title, legs, defaultSpeedMps, solvedAngles) {
     if (!legs.length)
         return '';
-    const rows = legs.map((leg, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(legLabel(leg.type === 'turn' ? { ...leg, angleDeg: solvedAngles.get(leg.id) ?? leg.angleDeg } : leg))}</td><td>${escapeHtml(leg.guidance === 'heading' ? '機首方位指定' : '対地航跡指定')}</td><td>${speed(leg.speedOverrideMps ?? defaultSpeedMps)}</td></tr>`).join('');
+    const rows = legs.map((leg, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(legLabel(leg.type === 'turn' ? { ...leg, angleDeg: solvedAngles.get(leg.id) ?? leg.angleDeg } : leg))}${leg.type === 'turn' && leg.angleInputMode === 'target' && !solvedAngles.has(leg.id) ? '（変化量未確定）' : ''}</td><td>${escapeHtml(leg.guidance === 'heading' ? '機首方位指定' : '進行方向指定')}</td><td>${speed(leg.speedOverrideMps ?? defaultSpeedMps)}</td></tr>`).join('');
     return `<section class="glp-report-section glp-report-section-legs"><h2>${escapeHtml(title)}</h2><table class="glp-report-table"><thead><tr><th>No.</th><th>内容</th><th>飛行方式</th><th>速度</th></tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 export function reportHtml(req) {
     const { project: p, plan, metricsHtml, diagnosticsHtml, title, engineVersion } = req;
     const map = printableMapHtml(req.mapEl);
     const unit = p.display.altitudeUnit;
-    const solvedAngles = new Map([...plan.departure.segments, ...plan.arrival.segments].filter(s => s.leg.type === 'turn').map(s => [s.leg.id, s.leg.type === 'turn' ? s.leg.angleDeg : 0]));
+    const solvedAngles = new Map([...plan.departure.segments, ...plan.arrival.segments].filter(s => s.completed && s.leg.type === 'turn').map(s => [s.leg.id, s.leg.type === 'turn' ? s.leg.angleDeg : 0]));
     const attrs = [
         ['離脱高度（MSL）', fmtAlt(p.departure.altitudeMSLM, unit)],
         ['着陸標高（MSL）', fmtAlt(p.landing.elevationMSLM, unit)],
         ['基準対気速度', speed(p.defaultSpeedMps)],
+        ['ファイナル実効速度', speed(plan.finalStart.speedMps)],
+        ['計算状態', plan.status === 'valid' ? '計算成立' : plan.status === 'unplanned' ? '未設計' : '不成立'],
         ['最大バンク', `${p.maxBankDeg}°`],
         ['風向・風速', `${p.wind.fromDeg}°から / ${p.wind.speedMps} m/s`],
         ['最大滑空比', String(p.performance.bestLD)],
@@ -61,7 +63,7 @@ export function reportHtml(req) {
     ];
     const conditions = attrs.map(([key, value]) => `<div class="glp-report-data-item"><small>${escapeHtml(key)}</small><strong>${escapeHtml(value)}</strong></div>`).join('');
     const leafletCss = (document.querySelector('link[href*="leaflet.css"]')?.href ?? 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css');
-    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.17';
+    const printCss = new URL('../../css/print.css', import.meta.url).href + '?ver=0.1.20';
     const time = new Date().toLocaleString('ja-JP');
     return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(p.name)} - ${escapeHtml(title)} PDF印刷</title><link rel="stylesheet" href="${escapeHtml(leafletCss)}"><link rel="stylesheet" href="${escapeHtml(printCss)}"></head>
  <body class="glp-report"><div class="glp-report-screen-toolbar"><span>印刷専用プレビュー｜地図のタイルが読み込まれたら「印刷 / PDF保存」を選択してください。</span><button type="button" onclick="window.print()">印刷 / PDF保存</button></div>

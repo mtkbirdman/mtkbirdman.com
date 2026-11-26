@@ -1,6 +1,6 @@
-# 開発者ガイド — Glider Landing Planner v0.1.17
+# 開発者ガイド — Glider Landing Planner v0.1.20
 
-**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v0.1.17ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
+**対象：** ソースの変更・検証・配布を担当する開発者。**目的：** 変更箇所を特定し、ビルド／テスト／WordPress更新まで安全に実施できること。本文は同梱の**v0.1.20ソースコード**を基準にしています。利用者操作は[README](../README.md)、数式は[THEORY](THEORY.md)、変更経緯は[CHANGELOG](../CHANGELOG.md)を参照してください。
 
 ## 1. 全体像と動作環境
 
@@ -28,6 +28,7 @@ glider-landing-planner/
 │   ├── css/print.css          # 印刷専用CSS
 │   └── js/                    # 実際に読み込まれるコンパイル済みES Modules
 └── source/
+    ├── .gitignore            # node_modulesの除外
     ├── package.json          # build:offline / build:vite / test
     ├── tsconfig.json
     ├── version-assets.mjs     # 相対importへ版数クエリを付加
@@ -50,7 +51,7 @@ glider-landing-planner/
 | 変更したいもの | 入口 | 主な参照先 |
 |---|---|---|
 | 保存対象となる計画項目 | `model/types.ts`の`ProjectV1`、`FlightLeg` | `model/defaults.ts`、`io/project.ts` |
-| 初期位置・高度・速度・左右場周 | `model/defaults.ts`の`createDemo()`、`trafficPreset()` | `main.ts`の`new`、`preset-left/right` |
+| 初期位置・高度・速度・新規レグ・左右場周 | `model/defaults.ts`の`createDemo()`、`makeStraight()`、`makeTurn()`、`trafficPreset()` | `main.ts`の`new`、`preset-left/right` |
 | 入力と編集・Undo/Redo | `main.ts`の`handleChange()`、`handleAction()` | `edit()`、`applyProject()` |
 | 計算全体・高度余裕・チェックポイント | `planning/plan.ts`の`buildPlan()` | `flight/core.ts`、`planning/connector.ts` |
 | 風・直線・旋回・実効旋回角 | `flight/core.ts`の`simulateLeg()` | `headingForTrack()`、`simulatePath()` |
@@ -93,7 +94,9 @@ glider-landing-planner/
 - `simulatePath()`は**複数レグ**を指定順（着陸側は逆順）に繰り返し、サンプル・セグメント・診断を統合。
 - `evaluateConnector()`は**指定済みの制御ハンドル長**で曲線を生成し、曲率・必要バンク・風・沈下・自己交差を評価。
 - `chooseConnector()`はハンドル長の有限候補探索によって接続の候補を選ぶ。探索が成功しても実際の成立を保証しない。
-- `buildPlan()`は離脱側を順方向、着陸側をファイナル開始点から逆方向に計算し、接続後を順方向で再評価。予想高度系列と必要高度系列、ファイナル目標線、チェックポイント・診断をまとめる。
+- `buildPlan()`は離脱側を順方向、着陸側をファイナル開始点から逆方向に計算し、着陸側の逆算済み経路を正本として予想高度を構築。ファイナル速度・風補正は共通化し、全制約確認後に`status`と`metrics`を確定。予想高度系列と必要高度系列、ファイナル目標線、チェックポイント・診断をまとめる。
+
+`SegmentResult.start/end`は実サンプル両端、`completed`は水平経路の完了を示します。`PlanResult.metrics`は成立時のみ数値、不成立・未設計時はnullです。`checkedSink()`は純粋な沈下式と適用範囲を分離します。
 
 `main.ts`の`render()`が`PlannerMap.redraw()`、`chartSvg()`、`checkpointTable()`へ`PlanResult`を渡します。`printReport()`は`openPrintReport()`へ計画・計算・地図DOM・集計HTMLを渡します。数式の詳細は[THEORY](THEORY.md)を参照してください。
 
@@ -101,7 +104,7 @@ glider-landing-planner/
 
 - **`ui/map.ts`：** Leafletの淡色タイル、レグ線、距離リング、方位線、風向矢印、地点・「＋」・Bezierハンドルを描画。地図背景はパン可能。地点・距離・ファイナル長のドラッグ編集は**廃止済み**。新規計画の青い250 m方向ガイドは描画専用で、飛行計算に投入しない。
 - **`ui/responsive.ts`：** `matchMedia`でコンパクトレイアウトを判定。PCでは左サイドバーの該当編集欄へスクロール、コンパクト画面では下部パネルを表示。分岐はCSS幅だけでなくJavaScriptで制御。
-- **`ui/chart.ts`：** `altitudeTimeSeries()`が逆算した着陸側の時間座標を、接続の終端時刻へ表示用にずらす。`chartSvg()`は青・緑を別系列で描画。未設計時は案内メッセージを描く。
+- **`ui/chart.ts`：** `altitudeTimeSeries()`は計算済みの正本時刻を使用し、無効高度をまたいで線を結ばない。`chartSvg()`は青・緑を別系列で描画。未設計時は案内メッセージを描く。
 - **`ui/checkpoints.ts`：** MSL高度と「着陸標高との差」である滑空場基準高度を区別し、ダウンウィンド開始の高度余裕行を生成する。AGLではない。
 - **`ui/print.ts`：** 表示中のLeaflet DOM（画像タイル・SVG重ね描き）を複製して、別タブに独立した印刷HTMLを出力。地図範囲は印刷ボタンを押した時点の表示範囲。印刷は`window.print()`／ブラウザ側のPDF保存であり、サーバーPDF生成ではない。
 
@@ -109,7 +112,7 @@ glider-landing-planner/
 
 | 処理 | 実装 | 要点 |
 |---|---|---|
-| 現行値の検証 | `validateProject(input)` | 入力を変異させず、スキーマ1.3・数値範囲・配列・IDを検査 |
+| 現行値の検証 | `validateProject(input)` | 入力を変異させず、スキーマ1.3・数値範囲・配列・ID・必須値・列挙型を厳密に検査 |
 | 計画読込 | `loadProject(input)` | `structuredClone()`後にスキーマ1.3を検証。旧形式の移行なし |
 | ファイル読込 | `parseProject(text)` | JSON構文解析、2,000,000文字上限、`loadProject()` |
 | ファイル書出し | `serializeProject()`→`downloadProject()` | 現行形式を整形JSONとしてダウンロード（`.glp.json`） |
@@ -122,18 +125,18 @@ glider-landing-planner/
 
 ### 7.1 必要条件
 
-Node.jsとnpmを用意します。`source/package.json`は開発依存に`typescript: 5.8.3`、`vite: 8.3.8`を指定しています。**配布ZIPに`node_modules`と`package-lock.json`は同梱されていません。** 開発環境では次のように依存関係を準備します（レジストリへの接続が必要です）。
+Node.js 22.16以降（24系も対象）とnpmを用意します。`source/package.json`は開発依存に`typescript: 5.8.3`、`vite: 8.3.8`を指定しています。**配布ZIPに`node_modules`と`package-lock.json`は同梱されていません。** 開発環境では次のように依存関係を準備します（レジストリへの接続が必要です）。
 
 ```powershell
 Set-Location .\glider-landing-planner\source
-npm install
+npm install --include=dev --no-package-lock
 npm run build:offline
 npm test
 ```
 
-`npm run build:offline`は`tsc -p tsconfig.json && node version-assets.mjs`を実行し、`../assets/js`にJSを生成して相対importへ`?v=0.1.17`を付加します。`npm test`は`pretest`で同じビルドを行った後、`node --test tests/*.test.mjs`を実行します。`npm run build:vite`は任意・将来用であり、**現行配布方式との互換性を確認せず本番アセットへ置き換えない**でください。
+`npm run build:offline`は`tsc -p tsconfig.json && node version-assets.mjs`を実行し、`../assets/js`にJSを生成して相対importへ`?v=0.1.20`を付加します。`npm test`は`pretest`で同じビルドを行った後、`node --test tests/*.test.mjs`を実行します。`npm run build:vite`は任意・将来用であり、**現行配布方式との互換性を確認せず本番アセットへ置き換えない**でください。
 
-配布前に `npm test` を実行し、すべてのテストの成功を確認してください。v0.1.17の整備時にはNode.js 22.16.0、TypeScript 5.8.3で145件すべての成功を確認しました。WordPress実サイトでの操作、FFFTP転送、PDFの実ブラウザ印刷は別途確認が必要です。
+配布前に `npm test` を実行し、すべてのテストの成功を確認してください。v0.1.20ではNode.js 22.16.0、TypeScript 5.8.3で175件のテストに成功しました（基準166件、追加9件）。`plan-consistency.test.mjs`、`schema.test.mjs`、`map-render.test.mjs` に正則性・未完了レグ・保存範囲・ID出力・編集の確定順序に関する回帰試験を統合しました。既存のID照合を検査する静的アサーション1件は可逆トークンの照合に合わせて更新し、数値精度基準は変更していません。Node.js 24実機、実DOM・IndexedDB（Chromiumでローカル検証ページへのアクセスが管理ポリシーにより拒否）、WordPress実サイト、FFFTP転送、PDF実印刷は別途確認が必要です。`source/.gitignore`で`node_modules/`を除外します。
 
 ### 7.2 テストの探し方
 
@@ -159,24 +162,33 @@ npm test
 
 ```powershell
 git status --short
-git switch -c release/v0.1.17
 # 変更ファイルを配置してから
 npm --prefix source test
-git add -A
+git add -u -- .
+# 除外設定を確認し、必要な新規ファイルだけを登録
+git check-ignore -v --no-index -- source/node_modules/typescript/package.json
+git add -- source/tests/plan-consistency.test.mjs
 git diff --cached --check
 git diff --cached --stat
-git commit -m "refactor!: simplify sink model and update defaults for v0.1.17"
+git commit -m "fix: stabilize connector validity, partial results, persistence and HTML output for v0.1.20"
 ```
 
-旧形式との互換性を持たないリリースです。スキーマ・プラグイン・パッケージ・配布アセットの版数を整合させます。
+スキーマ1.3は維持します。既存レグの`guidance`と新規レグの`ground-track`既定値は変更しません。正常な旧計画は読込可能ですが、計算適用範囲により不成立になる場合があります。プラグイン・パッケージ・配布アセットの版数を整合させます。
 
 ## 10. リリース前チェック
 
 - [ ] 新規計画が**離脱側0件・着陸側0件・接続なし**で始まり、方向ガイドが計算に入らない。
 - [ ] 着陸側最初のレグ追加・左右場周で自動接続し、着陸側0件に戻せば接続を外す。
-- [ ] レグ編集、機首方位指定／対地航跡指定、旋回角指定／目標方位指定、多周旋回が既存テストで維持される。
+- [ ] レグ編集、機首方位指定／進行方向指定、変化量指定／方向指定、多周旋回が既存テストで維持される。
 - [ ] 簡易抗力式の沈下率、必要高度と予想高度、診断・評価不可が維持される。
 - [ ] スキーマ1.3のJSON／IndexedDB復元、旧形式の拒否、Undo/Redoを確認する。
 - [ ] TypeScriptソース変更時は`assets/js`を再生成し、相対importの版数が揃っている。
 - [ ] `npm test`が成功し、`git diff --check`に問題がない。
 - [ ] WordPress実機の地図／パネル／PDF・キャッシュを確認する（**自動テストで代替しない**）。
+
+### v0.1.20のデータ契約と出力境界
+
+- `model/limits.ts` はハンドル長の包含範囲1〜50,000 mを共有する。自動候補は範囲外を除外し、有限な手動ドラッグは範囲に制限する。非有限の操作値と不正JSONは拒否する。計算不成立は保存拒否の理由にしない。
+- 編集・復元では候補を用意し、入力検証、計算、解決済み旋回角等の反映、最終検証を終えてから履歴と計画を確定する。自動保存でも保存前に検証する。Undo/Redo・JSON読込・自動保存復元で再最適化しない。
+- `completed` のレグだけ正式チェックポイントを生成する。未完了の部分経路は破線とし、非正則Bezierの点列は幾何プレビューとしてのみ扱う。
+- レグIDはHTML属性出力時に `htmlLegId()` でエスケープし、CR・NUL・サロゲート等を含むIDと予約接頭辞の衝突を可逆トークンで処理する。DOMからの操作と選択照合は `readLegId()` で元のIDを復元する。JSONのIDは変更しない。計画名、ラベル、診断、ツールチップ、PDFを含めて出力文脈を限定レビューした。WordPress全体のセキュリティ監査ではない。

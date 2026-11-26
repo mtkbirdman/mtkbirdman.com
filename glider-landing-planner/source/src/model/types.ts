@@ -17,8 +17,8 @@ export interface ProjectV1 {schemaVersion:'1.3';engineVersion:string;projectId:s
 export interface Sample {e:number;n:number;h:number;headingDeg:number;trackDeg:number;bankDeg:number;speedMps:number;groundMps:number;altitudeValid?:boolean;tS:number;sM:number; segmentId:string;group:'departure'|'arrival'|'connector'|'final'}
 export interface State extends Omit<Sample,'segmentId'|'group'> {}
 export interface Notice {code:string;level:'info'|'warning'|'error';message:string;legId?:string}
-export interface SegmentResult {leg:FlightLeg;samples:Sample[];start:State;end:State}
-export interface PathResult {samples:Sample[];segments:SegmentResult[];start:State;end:State;notices:Notice[]}
+export interface SegmentResult {completed:boolean;leg:FlightLeg;samples:Sample[];start:State;end:State}
+export interface PathResult {completed:boolean;samples:Sample[];segments:SegmentResult[];start:State;end:State;notices:Notice[]}
 export interface ConnectionResult {points:Point2[];samples:Sample[];end:State;lengthM:number;lossM:number;maxBankDeg:number;feasible:boolean;altitudeValid?:boolean;notices:Notice[];handleStartM:number;handleEndM:number}
 export interface Checkpoint {id:string;label:string;kind:'departure-start'|'departure-end'|'arrival-start'|'final-start'|'landing';group:'departure'|'arrival'|'final';e:number;n:number;altitudeM:number;altitudeType:'predicted'|'required'|'target';legId?:string;checkpointKind?:'downwind-start';predictedM?:number;requiredM?:number;marginM?:number;altitudeValid?:boolean;}
-export interface PlanResult {departure:PathResult;arrival:PathResult;connector:ConnectionResult|null;forwardAll:Sample[];requiredAll:Sample[];finalTarget:Sample[];checkpoints:Checkpoint[];notices:Notice[];arrivalStart:State;finalStart:State;landing:Point2;valid:boolean;altitudeValid?:boolean}
+export interface PlanResult {status:'unplanned'|'invalid'|'valid';metrics:{totalDistanceM:number|null;totalTimeS:number|null;connectionMarginM:number|null};departureInRange:boolean;connectorReady:boolean;departure:PathResult;arrival:PathResult;connector:ConnectionResult|null;forwardAll:Sample[];requiredAll:Sample[];finalTarget:Sample[];checkpoints:Checkpoint[];notices:Notice[];arrivalStart:State;finalStart:State;landing:Point2;valid:boolean;altitudeValid?:boolean}

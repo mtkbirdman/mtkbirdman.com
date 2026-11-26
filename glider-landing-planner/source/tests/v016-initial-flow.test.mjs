@@ -167,10 +167,10 @@ test('saved current-schema project retains its existing legs and connector, whil
 
 test('version and shortcode stay aligned for FF FTP release',()=>{
  const php=readFileSync(new URL('../../glider-landing-planner.php',import.meta.url),'utf8');
- assert.match(php,/Version: 0\.1\.17/);
+ assert.match(php,/Version: 0\.1\.20/);
  assert.match(php,/add_shortcode\('glider_landing_planner'/);
  const changelog=readFileSync(new URL('../../CHANGELOG.md',import.meta.url),'utf8');
- assert.match(changelog,/## \[0\.1\.17\]/);
+ assert.match(changelog,/## \[0\.1\.20\]/);
 });
 
 
@@ -206,4 +206,20 @@ test('real preset action opens connector; deleting last arrival leg and Undo res
    for(let i=0;i<3;i++) app.handleAction('undo',{});
    assert.deepEqual(app.project,saved);
  }finally{globalThis.window=prevWindow;}
+});
+
+test('manual addition on either side defaults to ground-track without rewriting saved legs',()=>{
+ const p=createDemo();p.engineVersion='0.1.17-test';p.wind={fromDeg:270,speedMps:5};
+ p.departureLegs=[{...makeStraight(),guidance:'heading'}];
+ const old=parseProject(serializeProject(p));assert.deepEqual(old,p);
+ const app=withApp(old);app.selectLeg=()=>{};
+ for(const side of ['departure','arrival']) for(const type of ['straight','turn']){
+   app.handleAction(`add-${type}`,{side});
+   const added=side==='departure'?app.project.departureLegs.at(-1):app.project.arrivalLegs[0];
+   assert.equal(added.type,type);assert.equal(added.guidance,'ground-track');
+   assert.equal(added.directionDeg,null);
+   if(type==='turn')assert.equal(added.angleInputMode,'angle');
+ }
+ assert.deepEqual(app.project.departureLegs[0],p.departureLegs[0]);
+ assert.deepEqual(parseProject(serializeProject(app.project)),app.project);
 });

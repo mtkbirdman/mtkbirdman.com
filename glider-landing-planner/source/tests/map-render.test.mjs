@@ -78,3 +78,57 @@ test('v0.1.3 checkpoint altitudes and downwind margin labels can be disabled ind
  assert.equal(circles.filter(c=>c.tooltipOptions?.permanent===true).length,1,'only downwind label permanent');
  delete globalThis.L;
 });
+
+test('wind arrow points downwind in all eight directions and obeys display controls',async()=>{
+ const {LocalFrame}=await import('../../assets/js/geometry/geo.js');
+ const {PlannerMap}=await import('../../assets/js/ui/map.js');
+ const paths=[];const prev=globalThis.L;
+ const layer=(points,options)=>({points,options,addTo(){if(options.color==='#c2410c')paths.push(this);return this;},on(){return this;},bindTooltip(text){this.tooltip=text;return this;}});
+ globalThis.L={map(){return {setView(){return this;},on(){return this;},invalidateSize(){}};},svg(){return {};},tileLayer(){return {addTo(){}};},layerGroup(){return {addTo(){return this;},clearLayers(){}};},polyline:layer,circle:layer,circleMarker:layer,marker:layer,divIcon(x){return x;}};
+ try{
+  const p=createDemo(),frame=new LocalFrame(p.landing.point);
+  const map=new PlannerMap({innerHTML:''},{onPick(){},onHandle(){}});
+  const local=([latDeg,lonDeg])=>frame.toLocal({latDeg,lonDeg});
+  const near=(a,b)=>assert.ok(Math.abs(a-b)<.002,`${a} != ${b}`);
+  for(let fromDeg=0;fromDeg<360;fromDeg+=45){
+   p.wind={fromDeg,speedMps:10};p.display.magneticDeclinationDeg=15;paths.length=0;
+   map.redraw(p,buildPlan(p));assert.equal(paths.length,2);
+   const [shaft,head]=paths;assert.equal(shaft.points.length,2);assert.equal(head.points.length,3);
+   assert.deepEqual(head.points[1],shaft.points[1]);
+   assert.match(shaft.tooltip,new RegExp(`${fromDeg}°から 10 m/s`));
+   const [a,b]=shaft.points.map(local),[l,t,r]=head.points.map(local);
+   const e=-Math.sin(fromDeg*Math.PI/180),n=-Math.cos(fromDeg*Math.PI/180);
+   near(b.e-a.e,160*e);near(b.n-a.n,160*n);
+   for(const wing of [l,r])near((wing.e-t.e)*e+(wing.n-t.n)*n,-45);
+   near((l.e-t.e)*(-n)+(l.n-t.n)*e,32);
+   near((r.e-t.e)*(-n)+(r.n-t.n)*e,-32);
+   assert.equal(head.options.renderer,shaft.options.renderer);
+  }
+  paths.length=0;p.wind.speedMps=0;map.redraw(p,buildPlan(p));assert.equal(paths.length,0);
+  p.wind.speedMps=10;p.display.showWindArrow=false;map.redraw(p,buildPlan(p));assert.equal(paths.length,0);
+ }finally{globalThis.L=prev;}
+});
+
+test('GLP-015/016/017: invalid preview, partial selected routes, fit and bounded drag',async()=>{
+ const {makeStraight}=await import('../../assets/js/model/defaults.js');
+ const {LocalFrame}=await import('../../assets/js/geometry/geo.js');
+ const {PlannerMap}=await import('../../assets/js/ui/map.js');
+ const prevL=globalThis.L,prevW=globalThis.window;
+ const layers=[],fits=[],calls=[];
+ const make=(kind)=>(points,options)=>({kind,points,options,handlers:{},addTo(){layers.push(this);return this},on(k,f){this.handlers[k]=f;return this},bindTooltip(){return this}});
+ globalThis.window={matchMedia:()=>({matches:true})};
+ globalThis.L={map(){return {setView(){return this},on(){return this},invalidateSize(){},fitBounds(v){fits.push(v)}}},svg(){return {}},tileLayer(){return {addTo(){}}},layerGroup(){return {addTo(){return this},clearLayers(){}}},polyline:make('line'),marker:make('marker'),circle:make('circle'),circleMarker:make('checkpoint'),divIcon(v){return v},latLngBounds(v){return v}};
+ try{
+   const p=createDemo();p.landing.point={latDeg:0,lonDeg:0};p.landing.runwayTrackDeg=90;p.arrivalLegs=[makeStraight(300)];p.departure={...p.departure,latDeg:0,lonDeg:Math.asin(-1900/6378137)*180/Math.PI,headingDeg:90};p.connector={type:'bezier_connector',handleStartM:200,handleEndM:590.6251,curvaturePolicy:'match-neighbors',adjustmentMode:'manual'};p.display.showHandles=true;
+   const plan=buildPlan(p);assert.equal(plan.connector.samples.length,0);const map=new PlannerMap({innerHTML:''},{onPick(){},onHandle(...a){calls.push(a)},onSelectLeg(id){calls.push(id)}});
+   map.redraw(p,plan);map.fit(p,plan);assert.ok(layers.some(l=>l.kind==='line'&&l.options.color==='#8b5cf6'&&l.options.dashArray==='8,5'));assert.ok(fits.at(-1).length>4);
+   const handles=layers.filter(l=>l.kind==='marker'&&l.options.title==='Bezier制御ハンドル');assert.equal(handles.length,2);
+   const frame=new LocalFrame(p.landing.point),A=plan.departure.end;
+   for(const e of [A.e-100,A.e+55000,NaN]){const q=Number.isFinite(e)?frame.toGeo({e,n:A.n}):{latDeg:NaN,lonDeg:NaN};handles[0].handlers.dragend({target:{getLatLng(){return {lat:q.latDeg,lng:q.lonDeg}}}});}
+   assert.deepEqual(calls.slice(0,2),[['start',1],['start',50000]]);assert.equal(calls[2][0],'start');assert.ok(!Number.isFinite(calls[2][1]));
+   p.connector=null;p.arrivalLegs=[];p.departure={...p.departure,latDeg:.442,lonDeg:0,headingDeg:0};p.departureLegs=[makeStraight(100),makeStraight(2000)];const partial=buildPlan(p);const id=p.departureLegs[1].id;layers.length=0;map.redraw(p,partial,id);
+   for(const color of ['#2563eb','#fff','#f59e0b'])assert.ok(layers.some(l=>l.kind==='line'&&l.options.color===color&&l.options.dashArray==='8,5'));
+   assert.ok(layers.some(l=>l.kind==='line'&&l.options.color==='#2563eb'&&!l.options.dashArray&&l.options.weight===3.5));
+   const hit=layers.filter(l=>l.options.weight===22).at(-1);assert.ok(hit);hit.handlers.click({});assert.equal(calls.at(-1),id);
+ }finally{globalThis.L=prevL;globalThis.window=prevW;}
+});

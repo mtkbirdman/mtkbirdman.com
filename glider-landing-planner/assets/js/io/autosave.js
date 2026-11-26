@@ -1,3 +1,4 @@
+import { validateProject } from './project.js?v=0.1.20';
 const DB = 'glp-autosave-v1', STORE = 'snapshots';
 function openDb() {
     return new Promise((res, rej) => {
@@ -13,6 +14,7 @@ function openDb() {
     });
 }
 export async function saveSnapshot(project) {
+    validateProject(project);
     const db = await openDb();
     try {
         await new Promise((res, rej) => { const tx = db.transaction(STORE, 'readwrite'), store = tx.objectStore(STORE); store.put({ savedAt: Date.now(), project }); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error ?? Error('DB save failed')); });

@@ -85,3 +85,67 @@ test('README example works through the real edit handler and current JSON round-
     assert.deepEqual(parseProject(serializeProject(app.project)),app.project);
   }finally{globalThis.window=priorWindow;}
 });
+
+test('straight editor and PDF use the same new guidance names',()=>{
+ const p=createDemo(),app=Object.create(App.prototype);
+ p.departureLegs=[makeStraight(),{...makeStraight(),guidance:'heading'}];
+ Object.assign(app,{project:p,plan:buildPlan(p)});
+ for(const [i,name] of ['進行方向','機首方位'].entries()){
+   const html=app.legEditor('departure',p.departureLegs[i],i);
+   assert.ok(html.includes(`<span>${name} <em>°</em>`));
+   assert.doesNotMatch(html,/目標方位|風で偏流|風を補正|対地航跡指定/);
+ }
+ const mapCopy={querySelectorAll:()=>[],removeAttribute(){},classList:{add(){}},style:{},outerHTML:'<div class="leaflet"></div>'};
+ const html=reportHtml({project:p,plan:app.plan,mapEl:{clientWidth:900,clientHeight:420,cloneNode:()=>mapCopy},metricsHtml:'',diagnosticsHtml:'',title:'GLP',engineVersion:ENGINE_VERSION});
+ assert.match(html,/<td>進行方向指定<\/td>/);assert.match(html,/<td>機首方位指定<\/td>/);assert.doesNotMatch(html,/対地航跡指定/);
+});
+
+test('GLP-017: inclusive handle bounds and transaction rollback after derived values',()=>{
+  const p=createDemo();p.connector={type:'bezier_connector',handleStartM:1,handleEndM:50000,curvaturePolicy:'match-neighbors',adjustmentMode:'manual'};
+  assert.deepEqual(parseProject(serializeProject(p)),p);
+  for(const v of [0.999,50000.001,NaN,Infinity,'100']){
+    const q=structuredClone(p);q.connector.handleStartM=v;assert.throws(()=>validateProject(q),/Bezierハンドル長/);
+  }
+  const app=Object.create(App.prototype),history=[structuredClone(p)],future=[structuredClone(p)],plan=buildPlan(p);
+  let saves=0;
+  Object.assign(app,{project:p,plan,history,future,editRevision:0,notice:'',render(){},renderResults(){},scheduleSave(){saves++},recalculate(q){q.connector.handleEndM=50001;return buildPlan(p)}});
+  assert.equal(app.edit(q=>q.defaultSpeedMps=26),false);assert.equal(app.project,p);assert.equal(app.plan,plan);
+  assert.equal(app.history,history);assert.equal(app.future,future);assert.equal(history.length,1);assert.equal(future.length,1);assert.equal(saves,0);
+  assert.match(app.notice,/Bezierハンドル長/);
+  // A candidate with invalid history content must not move history entries either.
+  history[0].connector.handleStartM=NaN;app.handleAction('undo',{});assert.equal(app.project,p);assert.equal(history.length,1);assert.equal(future.length,1);assert.equal(saves,0);
+  delete app.recalculate;
+  assert.equal(app.edit(q=>q.name='正常な編集'),true);assert.equal(app.history.length,2);assert.equal(app.future.length,0);assert.equal(saves,1);
+  app.handleAction('undo',{});assert.equal(app.project.name,p.name);app.handleAction('redo',{});assert.equal(app.project.name,'正常な編集');
+});
+
+test('GLP-018: lossless ID tokens and safe markup for PC, mobile and checkpoint table',async()=>{
+  const {htmlLegId,readLegId}=await import('../../assets/js/ui/escape-html.js');
+  const {checkpointTable}=await import('../../assets/js/ui/checkpoints.js');
+  const decodeHtml=s=>s.replace(/&(?:amp|quot|lt|gt|#39);/g,x=>({'&amp;':'&','&quot;':'"','&lt;':'<','&gt;':'>','&#39;':"'"})[x]);
+  for(const id of ['chosen-123','日本語 & " data-audit="safe < > \' &quot;','a\r\u0000b','~glp-id:0061','🛩️','\ud800']){
+    const p=createDemo();p.departureLegs=[{...makeStraight(),id}];const app=Object.create(App.prototype);
+    Object.assign(app,{project:p,plan:buildPlan(p),selected:id});
+    const html=app.legList('departure')+checkpointTable(app.plan,p);
+    assert.equal(readLegId(decodeHtml(htmlLegId(id))),id);assert.doesNotMatch(html,/\sdata-audit="safe/);
+    for(const m of html.matchAll(/data-(?:leg-)?id="([^"]*)"/g))assert.equal(readLegId(decodeHtml(m[1])),id);
+    assert.deepEqual(parseProject(serializeProject(p)),p);
+  }
+});
+
+test('GLP-018: mobile attributes, boundary disables and decoded actions for distinct IDs',async()=>{
+ const {htmlLegId,readLegId}=await import('../../assets/js/ui/escape-html.js');
+ const decode=s=>s.replace(/&(?:amp|quot|lt|gt|#39);/g,x=>({'&amp;':'&','&quot;':'"','&lt;':'<','&gt;':'>','&#39;':"'"})[x]);
+ const prev=globalThis.window;globalThis.window={matchMedia:()=>({matches:true})};
+ try{for(const side of ['departure','arrival']){
+  const p=createDemo(),key=side+'Legs',id='a\r\u0000b',other='a\n\ufffdb';p[key]=[{...makeStraight(),id},{...makeStraight(),id:other}];
+  const panel={hidden:false},head={innerHTML:''},body={innerHTML:'',scrollTop:0};panel.querySelector=s=>s.includes('head')?head:body;
+  const app=Object.create(App.prototype);Object.assign(app,{project:p,plan:buildPlan(p),selected:id,mobilePanel:{kind:'leg',id},root:{querySelector:()=>panel},history:[],future:[],editRevision:0,render(){},renderSidebar(){},renderResults(){},updateCheckpointSelection(){},map:{redraw(){}},scheduleSave(){}});
+  app.renderMobilePanel();const html=body.innerHTML;
+  assert.match(html,/data-action="move-up"[^>]* disabled/);assert.doesNotMatch(html,/data-action="move-down"[^>]* disabled/);
+  for(const m of html.matchAll(/data-id="([^"]+)"/g))assert.equal(readLegId(decode(m[1])),id);
+  const token=decode(htmlLegId(id));app.handleAction('move-down',{side,id:readLegId(token)});assert.deepEqual(app.project[key].map(l=>l.id),[other,id]);
+  app.handleAction('delete-leg',{side,id:readLegId(token)});assert.deepEqual(app.project[key].map(l=>l.id),[other]);
+  app.handleAction('undo',{});assert.deepEqual(app.project[key].map(l=>l.id),[other,id]);
+ }}finally{globalThis.window=prev;}
+});

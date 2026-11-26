@@ -1,3 +1,4 @@
+import { clampHandle, validHandle } from './model/limits.js';
 import type { ProjectV1, FlightLeg, Side, PlanResult } from './model/types.js';
 import { isCompactLayout, COMPACT_LAYOUT_QUERY } from './ui/responsive.js';
 import { createDemo, makeStraight, makeTurn, trafficPreset, ENGINE_VERSION } from './model/defaults.js';
@@ -6,11 +7,11 @@ import { chooseConnector } from './planning/connector.js';
 import { validateProject, loadProject, parseProject, downloadProject } from './io/project.js';
 import { saveSnapshot, latestSnapshot } from './io/autosave.js';
 import { PlannerMap } from './ui/map.js';
-import { chartSvg, fmtAlt, altitudeTimeSeries, fmtElapsed } from './ui/chart.js';
+import { chartSvg, fmtAlt, fmtElapsed } from './ui/chart.js';
 import { openPrintReport } from './ui/print.js';
 import { checkpointTable } from './ui/checkpoints.js';
 import { heightInputText, FEET_PER_METER } from './ui/height-units.js';
-import { escapeHtml } from './ui/escape-html.js';
+import { escapeHtml, htmlLegId, readLegId } from './ui/escape-html.js';
 import { effectiveLegSpeedMps, effectiveStraightDirectionDeg, effectiveTurnValues } from './ui/leg-display.js';
 const n = (value: number, d = 2) => Number.isFinite(value) ? Number(value.toFixed(d)) : 0;
 const options = (items: [
@@ -52,13 +53,13 @@ export class App {
                 p.landing.point.latDeg = lat;
                 p.landing.point.lonDeg = lon;
             } }); this.openMobilePanel({ kind: 'point', point: type }); this.scrollSidebarToPoint(type); },
-            onHandle: (end, lengthM) => this.edit(p => { if (p.connector) {
+            onHandle: (end, lengthM) => { const changed=this.edit(p => { if (p.connector) {
                 p.connector.adjustmentMode = 'manual';
                 if (end === 'start')
-                    p.connector.handleStartM = lengthM;
+                    p.connector.handleStartM = clampHandle(lengthM);
                 else
-                    p.connector.handleEndM = lengthM;
-            } }),
+                    p.connector.handleEndM = clampHandle(lengthM);
+            } }); if(!changed)this.map.redraw(this.project,this.plan,this.selected); },
             onSelectLeg: (id) => this.selectLeg(id, true),
             onSelectPoint: (point) => { this.selected = null; this.renderSidebar(); this.map.redraw(this.project, this.plan, null); this.updateCheckpointSelection(); this.openMobilePanel({ kind: 'point', point }); this.scrollSidebarToPoint(point); },
             onAddAtEnd: (side, type) => {
@@ -68,7 +69,7 @@ export class App {
         });
         root.addEventListener('click', e => { const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-action]'); if (btn) {
             e.preventDefault();
-            this.handleAction(btn.dataset.action ?? '', btn.dataset);
+            this.handleAction(btn.dataset.action ?? '', { ...btn.dataset, id: readLegId(btn.dataset.id) });
         } });
         root.addEventListener('change', e => {
             const el = e.target as HTMLInputElement | HTMLSelectElement;
@@ -85,17 +86,17 @@ export class App {
         void latestSnapshot().then(p => {
             if (!p || this.editRevision !== revisionAtStartup)
                 return; // Don't overwrite edits made while IndexedDB was loading.
-            let valid: ProjectV1;
+            let valid: ProjectV1, plan: PlanResult;
             try {
                 valid = loadProject(p);
+                plan = this.prepareProject(valid);
             }
             catch (e) {
                 this.notice = '自動保存データを復元できません（新規計画を表示）: ' + (e instanceof Error ? e.message : String(e));
                 this.renderResults();
                 return;
             }
-            this.plan = buildPlan(valid);
-            rememberResolvedTurnAngles(valid, this.plan);
+            this.plan = plan;
             this.project = valid;
             this.history = [];
             this.future = [];
@@ -128,21 +129,23 @@ export class App {
         const modeOpts: [
             string,
             string
-        ][] = [['heading', '機首方位指定（風で偏流）'], ['ground-track', '対地航跡指定（風を補正）']];
+        ][] = [['heading', '機首方位指定'], ['ground-track', '進行方向指定']];
         const base = `${side === 'departure' ? 'departureLegs' : 'arrivalLegs'}.${i}`;
         // Nullable model values retain their inherited meaning even when the form shows a number.
         const speedInForce = effectiveLegSpeedMps(this.project, leg);
         const directionInForce = effectiveStraightDirectionDeg(this.project, this.plan, side, leg);
         const turnValues = leg.type === 'turn' ? effectiveTurnValues(this.plan, side, leg) : null;
-        const turnTargetLabel = side === 'departure' ? '旋回後の目標方位' : '旋回前の目標方位';
+        const directionName = leg.guidance === 'heading' ? '機首方位' : '進行方向';
+        const turnAngleLabel = `${directionName}変化量`;
+        const turnTargetLabel = `旋回${side === 'departure' ? '後' : '前'}の${directionName}`;
         const turnAngleField = leg.type === 'turn' && leg.angleInputMode === 'target'
-            ? `<label class="glp-field"><span>旋回角 <em>°</em></span><input type="number" readonly value="${n(turnValues!.angleDeg, 5)}"></label>`
-            : this.control(base + '.angleDeg', '旋回角', '°');
+            ? `<label class="glp-field"><span>${turnAngleLabel} <em>°</em></span><input type="number" readonly value="${turnValues!.completed?n(turnValues!.angleDeg, 5):''}" placeholder="評価不可"></label>`
+            : this.control(base + '.angleDeg', turnAngleLabel, '°');
         const targetField = leg.type === 'turn' && leg.angleInputMode === 'target'
             ? this.control(base + '.targetDirectionDeg', turnTargetLabel, '°')
             : `<label class="glp-field"><span>${turnTargetLabel} <em>°</em></span><input type="number" readonly value="${turnValues?.boundaryDeg === null || turnValues === null ? '' : n(turnValues.boundaryDeg, 5)}" placeholder="評価不可"></label>`;
         return `<div class="glp-leg-edit"><div class="glp-two">${this.select(base + '.guidance', '飛行方式', modeOpts)}${this.control(base + '.speedOverrideMps', leg.type === 'turn' ? '旋回速度' : '滑空速度', 'km/h', '0.1', 3.6, speedInForce)}</div>
-    ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', '目標方位', '°', 'any', 1, directionInForce)}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.bankDeg', 'バンク角', '°')}</div>${this.select(base + '.angleInputMode', '入力方式', [['angle', '旋回角を指定'], ['target', '目標方位を指定']])}<div class="glp-two">${turnAngleField}${targetField}</div>`}
+    ${leg.type === 'straight' ? `<div class="glp-two">${this.control(base + '.lengthM', '直線距離', 'm')}${this.control(base + '.directionDeg', directionName, '°', 'any', 1, directionInForce)}</div>` : `<div class="glp-two">${this.select(base + '.direction', '旋回方向', [['right', '右'], ['left', '左']])}${this.control(base + '.bankDeg', 'バンク角', '°')}</div>${this.select(base + '.angleInputMode', '入力方式', [['angle', `${turnAngleLabel}を指定`], ['target', `${directionName}を指定`]])}<div class="glp-two">${turnAngleField}${targetField}</div>`}
     <label class="glp-field"><span>チェックポイント名</span><input type="text" maxlength="70" value="${escapeHtml(leg.checkpointLabel ?? '')}" data-path="${base}.checkpointLabel"></label></div>`;
     }
     private legList(side: Side): string {
@@ -151,8 +154,8 @@ export class App {
             const active = this.selected === leg.id;
             const effectiveAngle = leg.type === 'turn' ? effectiveTurnValues(this.plan, side, leg).angleDeg : 0;
             const title = leg.type === 'straight' ? `直線 ${Math.round(leg.lengthM)} m` : `${leg.direction === 'right' ? '右' : '左'}旋回 ${n(effectiveAngle, 2)}° / バンク${leg.bankDeg}°`;
-            return `<div class="glp-leg ${active ? 'glp-leg-active' : ''}" data-leg-id="${escapeHtml(leg.id)}"><div class="glp-leg-line"><button class="glp-leg-title" data-action="select-leg" data-id="${leg.id}" title="編集"><span class="glp-leg-symbol">${leg.type === 'straight' ? '━' : '⤷'}</span><span>${i + 1}. ${escapeHtml(title)}</span></button><span class="glp-leg-buttons"><button title="上に移動" data-action="move-up" data-side="${side}" data-id="${leg.id}">↑</button><button title="下に移動" data-action="move-down" data-side="${side}" data-id="${leg.id}">↓</button><button title="削除" data-action="delete-leg" data-side="${side}" data-id="${leg.id}">×</button></span></div>
-       ${active ? this.legEditor(side, leg, i) + `<div class="glp-desktop-leg-actions"><button class="glp-btn glp-btn-sub glp-desktop-remove" data-action="delete-leg" data-side="${side}" data-id="${escapeHtml(leg.id)}">このレグを削除</button></div>` : ''}</div>`;
+            return `<div class="glp-leg ${active ? 'glp-leg-active' : ''}" data-leg-id="${htmlLegId(leg.id)}"><div class="glp-leg-line"><button class="glp-leg-title" data-action="select-leg" data-id="${htmlLegId(leg.id)}" title="編集"><span class="glp-leg-symbol">${leg.type === 'straight' ? '━' : '⤷'}</span><span>${i + 1}. ${escapeHtml(title)}</span></button><span class="glp-leg-buttons"><button title="上に移動" data-action="move-up" data-side="${side}" data-id="${htmlLegId(leg.id)}">↑</button><button title="下に移動" data-action="move-down" data-side="${side}" data-id="${htmlLegId(leg.id)}">↓</button><button title="削除" data-action="delete-leg" data-side="${side}" data-id="${htmlLegId(leg.id)}">×</button></span></div>
+       ${active ? this.legEditor(side, leg, i) + `<div class="glp-desktop-leg-actions"><button class="glp-btn glp-btn-sub glp-desktop-remove" data-action="delete-leg" data-side="${side}" data-id="${htmlLegId(leg.id)}">このレグを削除</button></div>` : ''}</div>`;
         }).join('');
         const adds = `<div class="glp-adds"><button class="glp-btn glp-btn-sub" data-action="add-straight" data-side="${side}">＋ 直線</button><button class="glp-btn glp-btn-sub" data-action="add-turn" data-side="${side}">＋ 旋回</button></div>`;
         const list = `<div class="glp-leg-list">${lines || '<p class="glp-muted">まだレグがありません。</p>'}</div>`;
@@ -167,7 +170,7 @@ export class App {
         if (next && isCompactLayout())
             this.openMobilePanel({ kind: 'leg', id: next });
         else if (next && fromMap)
-            this.scrollSidebarTo(Array.from(this.root.querySelectorAll<HTMLElement>('.glp-leg[data-leg-id]')).find(el => el.dataset.legId === next) ?? null);
+            this.scrollSidebarTo(Array.from(this.root.querySelectorAll<HTMLElement>('.glp-leg[data-leg-id]')).find(el => readLegId(el.dataset.legId) === next) ?? null);
         else if (!next && this.mobilePanel?.kind === 'leg')
             this.openMobilePanel(null);
     }
@@ -220,7 +223,7 @@ export class App {
             const leg = (side === 'departure' ? this.project.departureLegs : this.project.arrivalLegs)[index];
             title = `${side === 'departure' ? '離脱側' : '着陸側'} ${leg.type === 'turn' ? '旋回' : '直線'} ${index + 1}`;
             const list = side === 'departure' ? this.project.departureLegs : this.project.arrivalLegs;
-            contents = this.legEditor(side, leg, index) + `<div class="glp-mobile-leg-actions"><button class="glp-btn glp-btn-quiet" data-action="move-up" data-side="${side}" data-id="${leg.id}" ${index === 0 ? 'disabled' : ''}>↑ 上に移動</button><button class="glp-btn glp-btn-quiet" data-action="move-down" data-side="${side}" data-id="${leg.id}" ${index === list.length - 1 ? 'disabled' : ''}>↓ 下に移動</button><button class="glp-btn glp-btn-sub glp-mobile-remove" data-action="delete-leg" data-side="${side}" data-id="${leg.id}">このレグを削除</button></div>`;
+            contents = this.legEditor(side, leg, index) + `<div class="glp-mobile-leg-actions"><button class="glp-btn glp-btn-quiet" data-action="move-up" data-side="${side}" data-id="${htmlLegId(leg.id)}" ${index === 0 ? 'disabled' : ''}>↑ 上に移動</button><button class="glp-btn glp-btn-quiet" data-action="move-down" data-side="${side}" data-id="${htmlLegId(leg.id)}" ${index === list.length - 1 ? 'disabled' : ''}>↓ 下に移動</button><button class="glp-btn glp-btn-sub glp-mobile-remove" data-action="delete-leg" data-side="${side}" data-id="${htmlLegId(leg.id)}">このレグを削除</button></div>`;
         }
         else if (target.kind === 'point') {
             if (target.point === 'departure') {
@@ -266,34 +269,33 @@ export class App {
         sidebarScroll.scrollTop = preservedScroll;
     }
     private renderToolbar() {
-        (this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.17</span></div></div><div class="glp-tool-group">
+        (this.root.querySelector('.glp-toolbar') as HTMLElement).innerHTML = `<div class="glp-brand"><div class="glp-logo">GLP</div><div><strong>Glider Landing Planner</strong><span>飛行経路シミュレーター / テスト版 v0.1.20</span></div></div><div class="glp-tool-group">
   <input type="text" class="glp-project-name" data-path="name" value="${escapeHtml(this.project.name)}" aria-label="プロジェクト名" maxlength="120">
   <button class="glp-btn glp-btn-quiet" data-action="new">新規</button><button class="glp-btn glp-btn-quiet" data-action="undo" ${!this.history.length ? 'disabled' : ''}>元に戻す</button><button class="glp-btn glp-btn-quiet" data-action="redo" ${!this.future.length ? 'disabled' : ''}>やり直す</button><button class="glp-btn glp-btn-quiet" data-action="export" >JSON保存</button><button class="glp-btn glp-btn-quiet" data-action="import">JSON読込</button><button class="glp-btn glp-btn-primary" data-action="print" >PDF印刷</button></div><div class="glp-save-state">● ${escapeHtml(this.status)}</div>`;
     }
     private renderResults() {
         const p = this.plan, unit = this.project.display.altitudeUnit;
-        const unplanned = !p.connector && !this.project.arrivalLegs.length;
+        const unplanned = p.status === 'unplanned';
         const downwind = p.checkpoints.find(c => c.checkpointKind === 'downwind-start');
         const connected = p.connector?.feasible && downwind?.marginM !== undefined;
-        const totalKm = (p.forwardAll.at(-1)?.sM ?? 0) / 1000;
-        const gapM = p.connector && p.altitudeValid !== false ? p.departure.end.h - p.connector.lossM - p.arrival.start.h : null;
-        const flightTime = altitudeTimeSeries(p);
-        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${p.connector && Number.isFinite(totalKm) ? totalKm.toFixed(2) + ' km' : '—'}</strong></div><div class="glp-stat"><small>推定飛行時間${p.connector && flightTime.timingProvisional ? '（暫定）' : ''}</small><strong>${p.connector ? fmtElapsed(flightTime.durationS) : '—'}</strong></div><div class="glp-stat"><small>高度余裕</small><strong>${p.connector?.feasible && p.valid && gapM !== null ? fmtAlt(gapM, unit) : this.project.arrivalLegs.length ? '評価不可' : '—'}</strong></div>`;
+        const missing=unplanned?'—':'評価不可';
+        const {totalDistanceM,totalTimeS,connectionMarginM}=p.metrics;
+        const m = `<div class="glp-stat"><small>離脱高度 MSL</small><strong>${fmtAlt(this.project.departure.altitudeMSLM, unit)}</strong></div><div class="glp-stat"><small>推定総距離</small><strong>${totalDistanceM===null?missing:(totalDistanceM/1000).toFixed(2)+' km'}</strong></div><div class="glp-stat"><small>推定飛行時間</small><strong>${totalTimeS===null?missing:fmtElapsed(totalTimeS)}</strong></div><div class="glp-stat"><small>高度余裕</small><strong>${connectionMarginM===null?missing:fmtAlt(connectionMarginM,unit)}</strong></div>`;
         (this.root.querySelector('.glp-chart') as HTMLElement).innerHTML = chartSvg(p, this.project);
         (this.root.querySelector('.glp-metrics') as HTMLElement).innerHTML = m;
         (this.root.querySelector('.glp-checkpoints') as HTMLElement).innerHTML = `<div class="glp-overview-top"><strong>チェックポイント高度</strong><small>滑空場基準高度（着陸標高を0とする相対高度）／MSL高度</small></div><div class="glp-tablewrap">${checkpointTable(p, this.project)}</div><p class="glp-tip">高度余裕は接続点での予想・必要高度の差です。着陸地点基準の高さではありません。</p>${downwind && !connected ? '<p class="glp-tip">ダウンウィンド開始の高度余裕は、接続条件が成立していないため評価不可です。</p>' : ''}`;
         const distinct = new Map<string, string>();
         for (const notice of p.notices)
-            distinct.set(notice.code + notice.message, notice.message);
+            distinct.set(JSON.stringify([notice.code,notice.level,notice.legId,notice.message]), notice.message);
         const top = p.notices.filter(i => i.level === 'error');
         const warnings = p.notices.filter(i => i.level === 'warning');
-        (this.root.querySelector('.glp-diagnostics') as HTMLElement).innerHTML = `<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length ? 'glp-status-bad' : warnings.length ? 'glp-status-warn' : 'glp-status-note'}">${top.length ? '不成立の条件あり' : warnings.length ? '警告あり' : unplanned ? '未設計' : '近似モデル'}</span></div>
- <div class="glp-diagnostic-bank">Bezier接続最大必要バンク：<strong>${p.connector ? p.connector.maxBankDeg.toFixed(1) + '°' : '—'}</strong>（設定上限 ${this.project.maxBankDeg.toFixed(1)}°）</div>${this.notice ? `<div class="glp-inline-message">${escapeHtml(this.notice)}</div>` : ''}<div class="glp-alerts">${[...distinct.values()].slice(0, 12).map(t => `<div class="glp-alert">${escapeHtml(t)}</div>`).join('') || '<p>計算エラーは報告されていません。</p>'}</div>`;
+        (this.root.querySelector('.glp-diagnostics') as HTMLElement).innerHTML = `<div class="glp-overview-top"><strong>計算上の診断</strong><span class="glp-status-chip ${top.length ? 'glp-status-bad' : warnings.length ? 'glp-status-warn' : 'glp-status-note'}">${p.status==='invalid' ? '不成立の条件あり' : unplanned ? '未設計' : warnings.length ? '計算成立（警告あり）' : '計算成立（近似モデル）'}</span></div>
+ <div class="glp-diagnostic-bank">Bezier接続最大必要バンク：<strong>${p.connector?.samples.length ? p.connector.maxBankDeg.toFixed(1) + '°' : p.status==='invalid'?'評価不可':'—'}</strong>（設定上限 ${this.project.maxBankDeg.toFixed(1)}°）</div>${this.notice ? `<div class="glp-inline-message">${escapeHtml(this.notice)}</div>` : ''}<div class="glp-alerts">${top.length ? `<p>エラー ${top.length} 件</p>` : ''}${[...distinct.values()].slice(0, 12).map(t => `<div class="glp-alert">${escapeHtml(t)}</div>`).join('') || '<p>計算エラーは報告されていません。</p>'}${distinct.size>12?`<p>ほか ${distinct.size-12} 件省略</p>`:''}</div>`;
         this.updateCheckpointSelection();
     }
     private updateCheckpointSelection() {
         for (const row of this.root.querySelectorAll<HTMLElement>('.glp-checkpoints tr[data-leg-id]')) {
-            row.classList.toggle('glp-checkpoint-active', !!this.selected && row.dataset.legId === this.selected);
+            row.classList.toggle('glp-checkpoint-active', !!this.selected && readLegId(row.dataset.legId) === this.selected);
         }
     }
     private printReport() {
@@ -339,20 +341,28 @@ export class App {
     }
     private recalculate(p: ProjectV1, previous: ProjectV1): PlanResult {
         const preliminary = buildPlan(p);
-        if (!p.connector || p.connector.adjustmentMode !== 'auto')
+        if (!p.connector || p.connector.adjustmentMode !== 'auto' || !preliminary.connectorReady)
             return preliminary;
         const modeChanged = previous.connector?.adjustmentMode !== 'auto';
         const shapeChanged = this.optimizationSignature(previous) !== this.optimizationSignature(p);
         if (!modeChanged && !shapeChanged)
             return preliminary;
         const optimized = chooseConnector(preliminary.departure.end, preliminary.arrivalStart, p);
+        if(!validHandle(optimized.handleStartM)||!validHandle(optimized.handleEndM))throw Error('自動生成したBezierハンドル長が不正です。');
         p.connector.handleStartM = optimized.handleStartM;
         p.connector.handleEndM = optimized.handleEndM;
         return buildPlan(p);
     }
-    /** Common completion path for edit, import, undo, and redo. History is handled by callers. */
+    /** Prepare an isolated candidate before changing history or persisted state. */
+    private prepareProject(project: ProjectV1, plan?: PlanResult): PlanResult {
+        validateProject(project);
+        const result=plan??buildPlan(project);
+        rememberResolvedTurnAngles(project,result);
+        validateProject(project);
+        return result;
+    }
+    /** Common completion path for validated candidates; history is handled by callers. */
     private applyProject(project: ProjectV1, plan: PlanResult, status: string): void {
-        rememberResolvedTurnAngles(project, plan);
         this.project = project;
         this.plan = plan;
         this.notice = '';
@@ -383,7 +393,7 @@ export class App {
             // Name and display changes don't affect the flight result. Checkpoint labels do.
             const flightInputsChanged = JSON.stringify({ ...project, name: undefined, display: undefined }) !==
                 JSON.stringify({ ...original, name: undefined, display: undefined });
-            const plan = flightInputsChanged ? this.recalculate(project, original) : this.plan;
+            const plan = this.prepareProject(project, flightInputsChanged ? this.recalculate(project, original) : this.plan);
             this.history.push(structuredClone(original));
             if (this.history.length > 50)
                 this.history.shift();
@@ -393,7 +403,7 @@ export class App {
         }
         catch (error) {
             this.notice = '変更を適用できません: ' + (error instanceof Error ? error.message : String(error));
-            this.renderResults();
+            this.render();
             return false;
         }
     }
@@ -460,7 +470,7 @@ export class App {
             if (oldLeg?.type !== 'turn' || (value !== 'angle' && value !== 'target')) return;
             const turn = effectiveTurnValues(this.plan, side, oldLeg);
             if (value === 'target' && turn.boundaryDeg === null) {
-                this.notice = '旋回境界の方位を評価できないため、目標方位指定に切り替えられません。';
+                this.notice = '旋回境界の方向を評価できないため、方向指定に切り替えられません。';
                 this.renderResults();
                 return;
             }
@@ -524,22 +534,29 @@ export class App {
             return;
         }
         // Undo and redo select an already validated project; do not optimize its saved handles.
-        if (action === 'undo' && this.history.length) {
-            this.editRevision++;
-            this.future.push(structuredClone(this.project));
-            const project = this.history.pop()!;
-            this.applyProject(project, buildPlan(project), '未保存');
-            return;
-        }
-        if (action === 'redo' && this.future.length) {
-            this.editRevision++;
-            this.history.push(structuredClone(this.project));
-            const project = this.future.pop()!;
-            this.applyProject(project, buildPlan(project), '未保存');
+        if ((action === 'undo' && this.history.length) || (action === 'redo' && this.future.length)) {
+            const source=action==='undo'?this.history:this.future;
+            const dest=action==='undo'?this.future:this.history;
+            try {
+                const project=structuredClone(source.at(-1)!);
+                const plan=this.prepareProject(project);
+                this.editRevision++;
+                dest.push(structuredClone(this.project));
+                source.pop();
+                this.applyProject(project,plan,'未保存');
+            } catch(error) {
+                this.notice='履歴を復元できません: '+String(error);
+                this.renderResults();
+            }
             return;
         }
         if (action === 'new') {
             if (window.confirm('現在の計画を破棄して新規計画を作成しますか？（先にJSON保存を推奨）')) {
+                const project = createDemo();
+                let plan: PlanResult;
+                try { plan=this.prepareProject(project); } catch(error) {
+                    this.notice='新規計画を作成できません: '+String(error);this.renderResults();return;
+                }
                 // A new plan starts with the same unoptimized control handles as first launch.
                 // Import/restore/undo continue to preserve their saved connector geometry.
                 this.editRevision++;
@@ -550,8 +567,7 @@ export class App {
                 this.pick = null;
                 this.map.setPick(null);
                 this.mobilePanel = null;
-                const project = createDemo();
-                this.applyProject(project, buildPlan(project), '未保存');
+                this.applyProject(project, plan, '未保存');
                 this.map.showNewProject(project);
             }
             return;
@@ -650,7 +666,7 @@ export class App {
                     return;
                 }
                 const span = Math.hypot(this.plan.arrivalStart.e - this.plan.departure.end.e, this.plan.arrivalStart.n - this.plan.departure.end.n);
-                const handle = Math.max(20, span * 0.35);
+                const handle = Number.isFinite(span)?clampHandle(Math.max(20, span * 0.35)):70;
                 project.connector = {
                     type: 'bezier_connector', handleStartM: handle, handleEndM: handle,
                     curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto'
@@ -659,8 +675,10 @@ export class App {
             return;
         }
         if (action === 'optimize') {
-            const result = chooseConnector(this.plan.departure.end, this.plan.arrivalStart, this.project);
+            if (!this.plan.connectorReady) return;
             this.edit(project => {
+                const result = chooseConnector(this.plan.departure.end, this.plan.arrivalStart, project);
+                if(!validHandle(result.handleStartM)||!validHandle(result.handleEndM))throw Error('自動生成したBezierハンドル長が不正です。');
                 project.connector = {
                     type: 'bezier_connector', handleStartM: result.handleStartM, handleEndM: result.handleEndM,
                     curvaturePolicy: 'match-neighbors', adjustmentMode: 'auto'
@@ -677,7 +695,7 @@ export class App {
                 throw Error('ファイルサイズ上限は2MBです。');
             const rawText = await file.text();
             const project = parseProject(rawText);
-            const plan = buildPlan(project);
+            const plan = this.prepareProject(project);
             if (!window.confirm('JSONの内容で現在のプロジェクトを置き換えますか？'))
                 return;
             this.editRevision++;

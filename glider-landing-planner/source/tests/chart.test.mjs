@@ -14,14 +14,16 @@ test('v0.1.3 altitude chart has independent blue/green paths and time ticks',()=
  assert.doesNotMatch(svg,/接続区間（高度線なし）/);
  assert.doesNotMatch(svg,/累積計画経路距離/);
  assert.match(svg,/未接続・制約未成立：着陸側時刻は仮配置/);
- assert.match(svg,/計画時間 \d+:\d\d/);
+ assert.match(svg,/計画時間 評価不可/);
  assert.match(svg,/高度\(ft, MSL\)/);
  assert.match(svg,/>0:00</);
 });
 test('v0.1.3 connector time and altitude are included in departure blue line, no cumulative double offset',()=>{
  const p=previouslyPlannedProject();p.arrivalLegs=trafficPreset('left');p.wind.speedMps=5;
+ // Previous 70/70 m fixture exceeded 83° bank; use a feasible manual shape.
+ p.connector.handleStartM=598;p.connector.handleEndM=165;
  const plan=buildPlan(p), series=altitudeTimeSeries(plan);
- assert.ok(plan.connector);
+ assert.ok(plan.connector);assert.equal(plan.status,'valid',JSON.stringify(plan.notices));
  assert.equal(series.departure.length,plan.departure.samples.length+plan.connector.samples.length-1);
  near(series.departure.at(-1).tS,plan.connector.end.tS);
  near(series.departure.at(-1).h,plan.connector.end.h);

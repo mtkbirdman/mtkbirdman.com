@@ -1,9 +1,10 @@
-import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue } from '../geometry/geo.js?v=0.1.17';
-import { windVector } from '../flight/core.js?v=0.1.17';
-import { isCompactLayout } from './responsive.js?v=0.1.17';
-import { escapeHtml } from './escape-html.js?v=0.1.17';
-import { fmtAlt } from './chart.js?v=0.1.17';
-import { INITIAL_LANDING_POINT, INITIAL_MAP_ZOOM } from '../model/defaults.js?v=0.1.17';
+import { clampHandle } from '../model/limits.js?v=0.1.20';
+import { LocalFrame, headingVector, dot, sub, add, mul, magneticToTrue, inLocalRange } from '../geometry/geo.js?v=0.1.20';
+import { windVector } from '../flight/core.js?v=0.1.20';
+import { isCompactLayout } from './responsive.js?v=0.1.20';
+import { escapeHtml } from './escape-html.js?v=0.1.20';
+import { fmtAlt } from './chart.js?v=0.1.20';
+import { INITIAL_LANDING_POINT, INITIAL_MAP_ZOOM } from '../model/defaults.js?v=0.1.20';
 const marginText = (m, unit) => `${m > 0 ? '+' : ''}${fmtAlt(m, unit)}`;
 export class PlannerMap {
     cb;
@@ -49,8 +50,11 @@ export class PlannerMap {
         if (!this.ready)
             return;
         const frame = new LocalFrame(project.landing.point);
-        const pts = [project.departure, project.landing.point, ...[...plan.departure.samples, ...(plan.connector?.samples ?? []), ...plan.arrival.samples, ...plan.finalTarget].filter((_, i) => i % Math.max(1, Math.ceil((plan.forwardAll.length + plan.requiredAll.length) / 120)) === 0).map(p => frame.toGeo(p))];
-        this.map.fitBounds(L.latLngBounds(pts.map(p => [p.latDeg, p.lonDeg])), { padding: [45, 45], maxZoom: 16 });
+        const groups = [plan.departure.samples, plan.connector?.points ?? [], plan.arrival.samples, plan.finalTarget];
+        const stride = Math.max(1, Math.ceil(groups.reduce((n, g) => n + g.length, 0) / 120));
+        const pts = [...(plan.departureInRange ? [project.departure] : []), project.landing.point,
+            ...groups.flatMap(g => g.filter((p, i) => (i % stride === 0 || i === g.length - 1) && inLocalRange(p)).map(p => frame.toGeo(p)))];
+        this.map.fitBounds(L.latLngBounds(pts.filter(p => Number.isFinite(p.latDeg) && Number.isFinite(p.lonDeg)).map(p => [p.latDeg, p.lonDeg])), { padding: [45, 45], maxZoom: 16 });
     }
     redraw(project, plan, selectedLegId = null) {
         if (!this.ready)
@@ -62,7 +66,10 @@ export class PlannerMap {
         const draw = (points, color, weight = 3, dashArray, legId) => {
             if (points.length < 2)
                 return;
-            const line = L.polyline(points.map(loc), { color, weight, opacity: .95, dashArray, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, interactive: !!legId, bubblingMouseEvents: false });
+            const coordinates = points.map(loc);
+            if (!coordinates.every(p => p.every(Number.isFinite)))
+                return;
+            const line = L.polyline(coordinates, { color, weight, opacity: .95, dashArray, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, interactive: !!legId, bubblingMouseEvents: false });
             if (legId && this.cb.onSelectLeg) {
                 // A wider, nearly transparent hit target makes narrow curved legs tappable on phones.
                 const click = (ev) => {
@@ -75,26 +82,28 @@ export class PlannerMap {
                 };
                 line.on('click', click);
                 if (isCompactLayout())
-                    L.polyline(points.map(loc), { color, weight: 22, opacity: .002, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, bubblingMouseEvents: false }).on('click', click).addTo(this.graphics);
+                    L.polyline(coordinates, { color, weight: 22, opacity: .002, lineCap: 'round', lineJoin: 'round', smoothFactor: 0, renderer: this.vectorRenderer, bubblingMouseEvents: false }).on('click', click).addTo(this.graphics);
             }
             line.addTo(this.graphics);
         };
         // With no actual departure legs, show a non-interactive 250 m heading guide.
         // This line is not a simulated leg and never contributes to distance or height loss.
-        if (!project.departureLegs.length) {
+        if (!project.departureLegs.length && plan.departureInRange) {
             const origin = frame.toLocal(project.departure);
             const course = project.departure.headingDeg;
             const tip = add(origin, mul(headingVector(course), 250));
-            draw([origin, tip], '#2563eb', 2.5, '7,6');
-            draw([add(tip, mul(headingVector(course + 150), 22)), tip,
-                add(tip, mul(headingVector(course - 150), 22))], '#2563eb', 2);
+            if (inLocalRange(tip)) {
+                draw([origin, tip], '#2563eb', 2.5, '7,6');
+                draw([add(tip, mul(headingVector(course + 150), 22)), tip,
+                    add(tip, mul(headingVector(course - 150), 22))], '#2563eb', 2);
+            }
         }
         for (const seg of plan.departure.segments)
-            draw(seg.samples, '#2563eb', 3.5, undefined, seg.leg.id);
+            draw(seg.samples, '#2563eb', 3.5, seg.completed ? undefined : '8,5', seg.leg.id);
         if (plan.connector)
             draw(plan.connector.points, '#8b5cf6', 3.5, plan.connector.feasible ? undefined : '8,5');
         for (const seg of plan.arrival.segments)
-            draw(seg.samples, '#059669', 3.5, undefined, seg.leg.id);
+            draw(seg.samples, '#059669', 3.5, seg.completed ? undefined : '8,5', seg.leg.id);
         const end = plan.finalTarget[plan.finalTarget.length - 1];
         if (end) {
             draw([plan.finalStart, end], '#059669', 4, '9,4');
@@ -110,8 +119,8 @@ export class PlannerMap {
         if (selected && selected.samples.length > 1) {
             // White halo + orange overlay remains visible on every basemap without changing the underlying leg colors.
             const pts = selected.samples.map(loc);
-            L.polyline(pts, { color: '#fff', weight: 11, opacity: .95, interactive: false, smoothFactor: 0, lineJoin: 'round', lineCap: 'round', renderer: this.vectorRenderer }).addTo(this.graphics);
-            L.polyline(pts, { color: '#f59e0b', weight: 5.5, opacity: 1, interactive: false, smoothFactor: 0, lineJoin: 'round', lineCap: 'round', renderer: this.vectorRenderer }).addTo(this.graphics);
+            L.polyline(pts, { color: '#fff', dashArray: selected.completed ? undefined : '8,5', weight: 11, opacity: .95, interactive: false, smoothFactor: 0, lineJoin: 'round', lineCap: 'round', renderer: this.vectorRenderer }).addTo(this.graphics);
+            L.polyline(pts, { color: '#f59e0b', dashArray: selected.completed ? undefined : '8,5', weight: 5.5, opacity: 1, interactive: false, smoothFactor: 0, lineJoin: 'round', lineCap: 'round', renderer: this.vectorRenderer }).addTo(this.graphics);
         }
         const depIcon = L.divIcon({ className: 'glp-map-point', html: '<span class="glp-point glp-point-blue">離</span>', iconSize: [25, 25], iconAnchor: [12, 12] });
         const landIcon = L.divIcon({ className: 'glp-map-point', html: '<span class="glp-point glp-point-green">着</span>', iconSize: [25, 25], iconAnchor: [12, 12] });
@@ -149,7 +158,7 @@ export class PlannerMap {
             .on('click', () => {
             if (this.picking)
                 return;
-            if (project.departureLegs.length || !this.cb.onAddAtEnd) {
+            if (!plan.departureInRange || project.departureLegs.length || !this.cb.onAddAtEnd) {
                 this.cb.onSelectPoint?.('departure');
             }
             else if (compact) {
@@ -167,7 +176,7 @@ export class PlannerMap {
         if (this.cb.onAddAtEnd) {
             const size = compact ? 44 : 36;
             for (const [side, point, color] of [['departure', plan.departure.end, 'blue'], ['arrival', plan.arrival.start, 'green']]) {
-                if (!(side === 'departure' ? project.departureLegs.length : project.arrivalLegs.length))
+                if (!(side === 'departure' ? project.departureLegs.length && plan.departure.completed : project.arrivalLegs.length && plan.arrival.completed))
                     continue;
                 const label = side === 'departure' ? '離脱側' : '着陸側';
                 const icon = L.divIcon({
@@ -187,12 +196,14 @@ export class PlannerMap {
             }
         }
         const smallIcon = (name) => L.divIcon({ className: 'glp-map-point', html: '<span class="glp-handle">' + escapeHtml(name) + '</span>', iconSize: [19, 19], iconAnchor: [9, 9] });
-        if (plan.connector && project.display.showHandles) {
+        if (plan.connector && plan.connectorReady && plan.connector.points.length && project.display.showHandles) {
             const A = plan.departure.end, B = plan.arrival.start, da = headingVector(A.trackDeg), db = headingVector(B.trackDeg);
             const p1 = add(A, mul(da, project.connector.handleStartM)), p4 = sub(B, mul(db, project.connector.handleEndM));
             for (const [name, p, base, unit, end] of [['A', p1, A, da, 'start'], ['B', p4, B, mul(db, -1), 'end']]) {
+                if (!inLocalRange(p))
+                    continue;
                 L.polyline([loc(base), loc(p)], { color: '#9333ea', dashArray: '3,5', weight: 1.5, opacity: .8, smoothFactor: 0, renderer: this.vectorRenderer }).addTo(this.controls);
-                L.marker(loc(p), { draggable: true, icon: smallIcon(name), title: 'Bezier制御ハンドル' }).on('dragend', (ev) => { const ll = ev.target.getLatLng(), q = frame.toLocal({ latDeg: ll.lat, lonDeg: ll.lng }); this.cb.onHandle(end, Math.max(1, dot(sub(q, base), unit))); }).addTo(this.controls);
+                L.marker(loc(p), { draggable: true, icon: smallIcon(name), title: 'Bezier制御ハンドル' }).on('dragend', (ev) => { const ll = ev.target.getLatLng(), q = frame.toLocal({ latDeg: ll.lat, lonDeg: ll.lng }); const length = dot(sub(q, base), unit); this.cb.onHandle(end, Number.isFinite(length) ? clampHandle(length) : length); }).addTo(this.controls);
             }
         }
         // Merge checkpoints sharing one map coordinate, so downwind start is not covered by a redundant connector marker.
@@ -244,6 +255,12 @@ export class PlannerMap {
         if (project.display.showWindArrow && project.wind.speedMps > 0) {
             const v = windVector(project.wind), unit = mul(v, 1 / Math.hypot(v.e, v.n)), center = add(plan.landing, { e: 150, n: 150 }), tail = add(center, mul(unit, -80)), head = add(center, mul(unit, 80));
             L.polyline([loc(tail), loc(head)], { color: '#c2410c', weight: 3, renderer: this.vectorRenderer }).bindTooltip('風: ' + project.wind.fromDeg + '°から ' + project.wind.speedMps + ' m/s').addTo(this.rings);
+            // The arrow tip points downwind; use a wide head so it is visible at the initial zoom.
+            const back = mul(unit, -45), wing = { e: -unit.n * 32, n: unit.e * 32 };
+            L.polyline([loc(add(head, add(back, wing))), loc(head), loc(add(head, sub(back, wing)))], {
+                color: '#c2410c', weight: 3, lineCap: 'round', lineJoin: 'round', smoothFactor: 0,
+                interactive: false, renderer: this.vectorRenderer
+            }).addTo(this.rings);
         }
     }
 }

@@ -1,4 +1,4 @@
-export const ENGINE_VERSION = '0.1.17-test';
+export const ENGINE_VERSION = '0.1.20-test';
 // Educational initial coordinates, not surveyed runway or touchdown points.
 // See docs/THEORY.md for the initial-condition references and limitations.
 export const INITIAL_LANDING_POINT = { latDeg: 36.17943, lonDeg: 137.31361 };
@@ -14,8 +14,8 @@ const INITIAL_REFERENCE_AIRSPEED_MPS = 90 / 3.6;
 const INITIAL_BEST_LD = 34;
 let nextId = 0;
 export function newId() { nextId += 1; return 'leg-' + Date.now().toString(36) + '-' + nextId.toString(36); }
-export function makeStraight(lengthM = 300) { return { id: newId(), type: 'straight', lengthM, guidance: 'heading', speedOverrideMps: null, directionDeg: null }; }
-export function makeTurn(direction = 'right', angleDeg = 90) { return { id: newId(), type: 'turn', direction, angleDeg, bankDeg: 30, angleInputMode: 'angle', targetDirectionDeg: null, guidance: 'heading', speedOverrideMps: null, directionDeg: null }; }
+export function makeStraight(lengthM = 300) { return { id: newId(), type: 'straight', lengthM, guidance: 'ground-track', speedOverrideMps: null, directionDeg: null }; }
+export function makeTurn(direction = 'right', angleDeg = 90) { return { id: newId(), type: 'turn', direction, angleDeg, bankDeg: 30, angleInputMode: 'angle', targetDirectionDeg: null, guidance: 'ground-track', speedOverrideMps: null, directionDeg: null }; }
 export function createDemo() {
     const landingPoint = { ...INITIAL_LANDING_POINT };
     const departurePoint = { ...INITIAL_DEPARTURE_POINT };
@@ -35,9 +35,9 @@ export function createDemo() {
 }
 export function trafficPreset(side) {
     return [
-        { ...makeStraight(700), guidance: 'ground-track', checkpointLabel: 'ダウンウィンド開始', checkpointKind: 'downwind-start' },
-        { ...makeTurn(side, 90), guidance: 'ground-track', checkpointLabel: 'ベースターン開始' },
-        { ...makeStraight(500), guidance: 'ground-track', checkpointLabel: 'ベースレグ開始' },
-        { ...makeTurn(side, 90), guidance: 'ground-track', checkpointLabel: 'ファイナルターン開始' }
+        { ...makeStraight(700), checkpointLabel: 'ダウンウィンド開始', checkpointKind: 'downwind-start' },
+        { ...makeTurn(side, 90), checkpointLabel: 'ベースターン開始' },
+        { ...makeStraight(500), checkpointLabel: 'ベースレグ開始' },
+        { ...makeTurn(side, 90), checkpointLabel: 'ファイナルターン開始' }
     ];
 }
